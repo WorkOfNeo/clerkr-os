@@ -3,6 +3,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import bcrypt from "bcryptjs";
 
+import { ensureProtocol } from "./base-url";
 import { db } from "./db";
 
 const BCRYPT_COST = 10;
@@ -12,7 +13,7 @@ const allowedEmails = (process.env.ALLOWED_EMAILS ?? "")
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
 
-const baseURL = process.env.BETTER_AUTH_URL || "http://localhost:3000";
+const baseURL = ensureProtocol(process.env.BETTER_AUTH_URL) ?? "http://localhost:3000";
 
 export const auth = betterAuth({
   database: prismaAdapter(db, { provider: "postgresql" }),

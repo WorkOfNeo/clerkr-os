@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { ClerkrLogo } from "@/components/ClerkrLogo";
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/lib/auth-client";
 
@@ -18,8 +19,9 @@ export function AppNav({ email }: { email: string }) {
   return (
     <header className="border-b border-border bg-card/50 backdrop-blur">
       <div className="container flex h-14 items-center justify-between">
-        <Link href="/grid" className="text-sm font-semibold">
-          Clerkr Ideas
+        <Link href="/grid" className="flex items-center gap-2 text-sm font-semibold">
+          <ClerkrLogo className="h-4 w-auto" />
+          <span>Ideas</span>
         </Link>
         <nav className="flex items-center gap-1 text-sm">
           <Link
