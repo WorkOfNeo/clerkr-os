@@ -1,16 +1,19 @@
 import { headers } from "next/headers";
 
 import { listApiTokens } from "@/lib/api-tokens";
+import { ensureProtocol } from "@/lib/base-url";
 import { requireSession } from "@/lib/session";
 
 import { AppNav } from "@/components/AppNav";
 
+import { ConnectGuide } from "./ConnectGuide";
 import { CreateTokenForm } from "./CreateTokenForm";
+import { SkillSection } from "./SkillSection";
 import { TokenList } from "./TokenList";
 
 async function deriveOrigin() {
-  const fromEnv = process.env.BETTER_AUTH_URL;
-  if (fromEnv) return fromEnv.replace(/\/$/, "");
+  const fromEnv = ensureProtocol(process.env.BETTER_AUTH_URL);
+  if (fromEnv) return fromEnv;
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host");
   const proto = h.get("x-forwarded-proto") ?? "http";
@@ -27,38 +30,51 @@ export default async function SettingsPage() {
   return (
     <div className="min-h-screen">
       <AppNav email={session.user.email} />
-      <main className="container max-w-3xl space-y-8 py-8">
+      <main className="container max-w-3xl space-y-10 py-8">
         <div>
           <h1 className="text-xl font-semibold">Settings</h1>
           <p className="text-sm text-muted-foreground">
-            Personal API tokens for the MCP server. Each token is tied to your
-            account and identifies your posts on the board.
+            Personal API tokens for the MCP server, plus the setup guide for
+            connecting Claude to the board.
           </p>
         </div>
 
-        <section className="space-y-2">
-          <h2 className="text-sm font-medium">Create a new token</h2>
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-base font-semibold">Step 1 &mdash; Create a token</h2>
+            <p className="text-xs text-muted-foreground">
+              Tokens are tied to your account. Posts created from a token are
+              attributed to you.
+            </p>
+          </div>
           <CreateTokenForm origin={origin} />
         </section>
 
-        <section className="space-y-2">
-          <h2 className="text-sm font-medium">Active tokens</h2>
-          <TokenList tokens={tokens} />
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-base font-semibold">Step 2 &mdash; Connect Claude</h2>
+            <p className="text-xs text-muted-foreground">
+              Pick the client you use. Both work; pick whichever you actually
+              talk to.
+            </p>
+          </div>
+          <ConnectGuide origin={origin} />
         </section>
 
-        <section className="space-y-2 rounded-lg border border-border bg-secondary/40 p-4 text-sm">
-          <h2 className="font-medium">How the MCP server works</h2>
-          <p className="text-muted-foreground">
-            The MCP exposes <strong>full CRUD</strong> over posts:{" "}
-            <code className="font-mono text-xs">create_post</code>,{" "}
-            <code className="font-mono text-xs">list_posts</code>,{" "}
-            <code className="font-mono text-xs">get_post</code>,{" "}
-            <code className="font-mono text-xs">update_post</code>,{" "}
-            <code className="font-mono text-xs">delete_post</code>,{" "}
-            <code className="font-mono text-xs">search_posts</code>. Use Claude
-            to scrape a URL and add it to the board — the server&apos;s
-            instructions describe what fields to fill.
-          </p>
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-base font-semibold">Step 3 &mdash; Install the skill</h2>
+            <p className="text-xs text-muted-foreground">
+              Tells Claude when to use the tools and how to fill the fields
+              (URL crawl, image OCR, find / edit / delete).
+            </p>
+          </div>
+          <SkillSection />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-base font-semibold">Your active tokens</h2>
+          <TokenList tokens={tokens} />
         </section>
       </main>
     </div>

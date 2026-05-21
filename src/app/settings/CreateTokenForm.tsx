@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { useActionState } from "react";
 
+import { CopyBlock } from "@/components/CopyBlock";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,67 +51,30 @@ function TokenReveal({
   name: string;
   origin: string;
 }) {
-  const claudeCodeCmd = `claude mcp add --transport http --scope user clerkr-internal \\\n  ${origin}/api/mcp \\\n  --header "Authorization: Bearer ${raw}"`;
   const claudeAiUrl = `${origin}/api/mcp/${raw}`;
+  const claudeCodeCmd = `claude mcp add --transport http --scope user clerkr-ideas \\\n  ${origin}/api/mcp \\\n  --header "Authorization: Bearer ${raw}"`;
 
   return (
-    <div className="space-y-4 rounded-lg border border-foreground/20 bg-foreground/[0.03] p-4">
+    <div className="space-y-4 rounded-lg border-2 border-foreground/30 bg-foreground/[0.04] p-4">
       <div>
         <p className="text-sm font-medium">Token &ldquo;{name}&rdquo; created.</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          This is shown <strong>once</strong> — copy it now. If you lose it, revoke
-          it and create a new one.
+          The raw token is shown <strong>once</strong>. Copy what you need now;
+          if you lose it, revoke this token and create a new one.
         </p>
       </div>
 
       <CopyBlock label="Raw token" value={raw} mono />
 
-      <CopyBlock label="Claude Code (header auth)" value={claudeCodeCmd} mono />
-
-      <CopyBlock label="Claude.ai web (URL auth)" value={claudeAiUrl} mono />
-    </div>
-  );
-}
-
-function CopyBlock({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <Label className="text-xs">{label}</Label>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={copy}
-          className="h-6 gap-1.5 px-2 text-xs"
-        >
-          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Connector URL (Claude.ai web — paste this)</Label>
+        <CopyBlock value={claudeAiUrl} mono />
       </div>
-      <pre
-        className={`overflow-x-auto rounded border border-border bg-background p-2 text-xs ${
-          mono ? "font-mono" : ""
-        }`}
-      >
-        {value}
-      </pre>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs">Claude Code CLI command</Label>
+        <CopyBlock value={claudeCodeCmd} mono />
+      </div>
     </div>
   );
 }
