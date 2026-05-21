@@ -1,0 +1,125 @@
+// Pinned to Prisma v6 — v7 removed `url`/`directUrl` from schema.prisma
+// (wiki cmowr3gzo0004pr15awevff3h).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Better-Auth-managed models ─────────────────────────────────────────────
+// Every id must have @default(uuid()) — Better-Auth's Prisma adapter omits
+// `id` on create. The global `advanced.database.generateId: "uuid"` does NOT
+// cover User (wiki cmp1usxah0004pf15nzrmtlnj). Set it on every model to be safe.
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  name          String   @default("")
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  sessions  Session[]
+  accounts  Account[]
+  apiTokens ApiToken[]
+  posts     Post[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  expiresAt             DateTime?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @default(now()) @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ─── App-owned models ───────────────────────────────────────────────────────
+
+model ApiToken {
+  id          String    @id @default(uuid())
+  userId      String
+  name        String
+  tokenHash   String    @unique
+  tokenPrefix String    @unique
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("api_token")
+}
+
+model Post {
+  id          String    @id @default(uuid())
+  url         String
+  title       String
+  description String?
+  imageUrl    String?
+  category    String?
+  todo        String?
+  painPoint   String?
+  priority    Int       @default(3)
+  postedAt    DateTime?
+  authorId    String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  author User @relation(fields: [authorId], references: [id])
+
+  @@index([createdAt])
+  @@index([priority])
+  @@index([authorId])
+  @@map("post")
+}
