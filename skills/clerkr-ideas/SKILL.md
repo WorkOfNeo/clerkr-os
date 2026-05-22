@@ -25,13 +25,14 @@ unclear.
 ## Add from a URL
 
 1. Fetch the page (your web fetch tool / browser).
-2. Extract these fields from the page metadata + content:
+2. Extract these fields:
    - `url` — canonical (prefer `<meta property="og:url">`; else the user's URL)
    - `title` — prefer `<meta property="og:title">`
    - `description` — 1–3 sentence plain-English summary of the page
-   - `imageUrl` — `<meta property="og:image">` or the most prominent hero image.
-     If the page has no usable image, fall back to the **Abstract image fallback
-     pool** below.
+   - `imageUrl` — `<meta property="og:image">` or the most prominent hero
+     image URL. If the page has no usable image, **leave unset** — the card
+     will render text-only. (Optionally pick one from the **Abstract image
+     pool** below if you want visual weight.)
    - `postedAt` — the article's publish date if visible (ISO 8601). Don't
      invent it; leave unset if not stated.
 3. Reason about the post:
@@ -42,59 +43,55 @@ unclear.
    - `painPoint` — one sentence: what user problem it addresses
    - `priority` — 1–5; default 3. Use 5 only when the user flags it
      explicitly ("important", "must check this", "blocker idea").
-4. Call `clerkr-internal:create_post` with all of the above.
+4. Call `clerkr-internal:create_post`.
 5. Reply with one line confirming what landed: title + the resulting post id.
 
-## Add from an image (screenshot / photo / pasted)
+## Add from a pasted image (screenshot / photo)
 
-1. Describe what's visible in the image. Cover:
-   - product name / brand if recognizable
+You **cannot** upload image bytes through this MCP — there's no tool that
+accepts raw bytes or base64. `imageUrl` is a URL string only. So:
+
+1. **Describe** what's visible in the image. Cover:
+   - product / brand if recognizable
    - the obvious pattern, idea, or layout being shown
    - any visible text (OCR button labels, headlines, captions)
-   - if the image clearly references a known site (Linear, Figma, Notion,
-     Vercel dashboards, etc.), name it
-2. **Get a hostable image URL.** The image bytes Claude can see are not
-   addressable from the web — you must upload them to the app first:
-   - Call `upload_image` with `base64` (the pasted image bytes, base64-encoded)
-     and `mimeType` (`image/png`, `image/jpeg`, `image/webp`, or `image/gif`).
-     Strip any `data:<mime>;base64,` prefix before passing.
-   - The tool returns `{ url, id, size, mimeType }`. Use that `url` for
-     `imageUrl` on the post.
-   - If `upload_image` fails (>8 MB, unsupported MIME), fall back to the
-     **Abstract image fallback pool** below.
-3. URL handling for the post's `url` field:
-   - If the user provided a source URL alongside the image → use it for `url`.
+   - if the image references a known site (Linear, Figma, Notion, Vercel
+     dashboards, etc.), name it
+2. **URL handling for the post's `url` field**:
+   - If the user provided a source URL alongside the image → use it.
    - If no source URL → ask once: *"Do you have a source URL for this, or
-     should I file it image-only?"*
+     should I file it as a text-only entry?"*
    - If the user has no source URL or says image-only → set `url` to
-     `https://unsplash.com/s/photos/abstract` (a stable referent).
-4. Populate:
-   - `title` — your one-line summary of what's in the image
-   - `description` — 1–3 sentences of detail
-   - `category`, `todo`, `painPoint`, `priority` as in the URL flow
-   - `imageUrl` — **always** the URL from `upload_image` if the user pasted
-     an image; only fall back to the Abstract pool if upload was impossible
+     `https://unsplash.com/s/photos/abstract` (a stable referent for text-only
+     entries).
+3. **imageUrl**:
+   - Leave **unset** for text-only cards (the UI handles this fine; the card
+     just shows the title + description + meta).
+   - **Optionally** pick a URL from the Abstract image pool below to give
+     the card a visual hero. Match the mood to the post, or rotate.
+   - Never paste base64 or inline bytes into `imageUrl` — it's a URL field
+     and will be rejected or stored as a broken string.
+4. Populate `title`, `description`, `category`, `todo`, `painPoint`,
+   `priority` from what you described.
 5. Call `create_post` and confirm in one line.
 
 ## Add from a verbal description only
 
-If the user just says "save this idea: X", treat it like the image case
+If the user just says *"save this idea: X"*, treat it like the image case
 without an image:
 
 1. Ask once if there's a source URL or reference you should fetch.
 2. If yes → run the URL flow.
-3. If no → set `url` to `https://unsplash.com/s/photos/abstract`, set
-   `imageUrl` to one from the Abstract image fallback pool below (pick one
-   that vibes with the idea, or rotate), and populate the rest from what
-   the user described.
-4. Call `create_post` and confirm what you stored in one line.
+3. If no → set `url` to `https://unsplash.com/s/photos/abstract`, leave
+   `imageUrl` unset (or pick from the pool below for visual flavour), and
+   populate the rest from what the user described.
+4. Call `create_post` and confirm in one line.
 
-## Abstract image fallback pool
+## Abstract image pool (optional flourish)
 
-When there's no source-page hero image AND no user-provided image, pick one
-of these abstract Unsplash images for `imageUrl`. Choose one whose mood
-roughly fits the post (cool/calm, bold/red, organic, geometric, etc.) — or
-just rotate. They're all safe to embed directly.
+When you want to give a card visual weight but there's no real source image,
+you can use one of these. Purely cosmetic — leaving `imageUrl` unset is
+also fine (text-only cards look clean).
 
 - https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1664&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D
 - https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?q=80&w=987&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D
@@ -107,11 +104,9 @@ just rotate. They're all safe to embed directly.
 - https://images.unsplash.com/photo-1637825891028-564f672aa42c?q=80&w=1770&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D
 - https://images.unsplash.com/photo-1653299832314-5d3dc1e5a83c?q=80&w=927&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D
 
-If you want a more topic-specific abstract, browse
-`https://unsplash.com/s/photos/abstract` (or a more specific search term) and
-use the resulting `images.unsplash.com/...` URL. Avoid linking to the
-Unsplash page itself for `imageUrl` — it needs to resolve directly to an
-image.
+You can also browse `https://unsplash.com/s/photos/abstract` for a more
+topic-relevant abstract — but use the resulting `images.unsplash.com/...`
+URL, not the page URL.
 
 ## Find / edit / delete
 
@@ -128,9 +123,9 @@ image.
 - **Fill every field you reasonably can.** A post with empty `todo` and
   `painPoint` is half-useless. If the source doesn't say it explicitly,
   infer honestly: "this is X; you might use it for Y".
-- **Never leave a card image-less.** If no hero image exists on the source
-  and the user didn't provide one, fall back to the Abstract image pool
-  above — never leave `imageUrl` empty.
+- **`imageUrl` is a URL string only.** Never paste base64 / bytes / data
+  URIs. If you don't have a hostable URL, leave the field unset or pick
+  from the abstract pool above.
 - **Never fabricate dates.** Leave `postedAt` unset if the source doesn't
   state one.
 - **Prefer canonical URLs.** `og:url` beats the user-supplied URL when they
@@ -152,4 +147,3 @@ image.
 | `search_posts` | Free-text across title/description/todo/painPoint/category |
 | `update_post` | Change any field on an existing post |
 | `delete_post` | Remove a post (intentional — this is the canonical editor) |
-| `upload_image` | Upload pasted/attached image bytes → returns a public URL to use as `imageUrl` |

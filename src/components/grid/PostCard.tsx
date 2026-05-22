@@ -35,39 +35,33 @@ export function PostCard({ post }: Props) {
     >
       <div className="flip-inner">
         {/* FRONT */}
-        <div className="flip-face">
-          <div className="relative">
-            {post.imageUrl ? (
-              // Plain <img> — image URLs are arbitrary and we don't want next/image's
-              // remote-loader hop. Tailwind's aspect-* keeps masonry layout stable.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={post.imageUrl}
-                alt=""
-                className="w-full object-cover"
-                loading="lazy"
-              />
-            ) : (
-              <div className="flex aspect-[5/3] items-center justify-center bg-muted text-xs text-muted-foreground">
-                No image
-              </div>
-            )}
+        <div className="flip-face relative">
+          {post.imageUrl && (
+            // Plain <img> — image URLs are arbitrary and we don't want next/image's
+            // remote-loader hop.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={post.imageUrl}
+              alt=""
+              className="block w-full object-cover"
+              loading="lazy"
+            />
+          )}
 
-            <button
-              type="button"
-              onClick={() => setFlipped(true)}
-              className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/90 text-foreground shadow-sm transition hover:bg-background"
-              aria-label="Edit"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
+          <button
+            type="button"
+            onClick={() => setFlipped(true)}
+            className="absolute right-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/90 text-foreground shadow-sm transition hover:bg-background"
+            aria-label="Edit"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
 
-            {post.priority >= 4 && (
-              <div className="absolute left-2 top-2 rounded-full bg-foreground px-2 py-0.5 text-xs font-medium text-background shadow-sm">
-                ★ {post.priority}
-              </div>
-            )}
-          </div>
+          {post.priority >= 4 && (
+            <div className="absolute left-2 top-2 z-10 rounded-full bg-foreground px-2 py-0.5 text-xs font-medium text-background shadow-sm">
+              ★ {post.priority}
+            </div>
+          )}
 
           <div className="p-3">
             <a

@@ -30,7 +30,6 @@ class CaptureTransport implements Transport {
 async function main() {
   const server = buildServer({
     userId: "probe-user",
-    origin: "https://example.com",
   });
   const t = new CaptureTransport();
   await server.connect(t);

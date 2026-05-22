@@ -36,12 +36,12 @@ intentional — the user has full control over the board via these tools.
 The author of each created post is automatically set to the owner of the
 API token you're using to call this server.
 
-If the user pastes or attaches an image and there is no good source-page
-image to reference, call \`upload_image\` first with the base64-encoded bytes
-plus the mime type. The tool returns a \`url\` which you then pass as
-\`imageUrl\` to \`create_post\`. Supports png/jpeg/webp/gif up to 8 MB.`;
+\`imageUrl\` is just a public URL string. If the source page has an og:image,
+use that. If the user pasted an image with no source URL, leave \`imageUrl\`
+unset — the card will render as text-only. (Do not try to inline image bytes
+or base64 into any field.)`;
 
-export function buildServer({ userId, origin }: ToolContext): Server {
+export function buildServer({ userId }: ToolContext): Server {
   const server = new Server(
     { name: "clerkr-internal", version: "0.1.0" },
     {
@@ -69,7 +69,7 @@ export function buildServer({ userId, origin }: ToolContext): Server {
     try {
       const result = await tool.handler(
         (req.params.arguments ?? {}) as Record<string, unknown>,
-        { userId, origin },
+        { userId },
       );
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
