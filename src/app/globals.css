@@ -53,7 +53,11 @@
   }
 }
 
-/* Card flip — `.flip-card` is the perspective container, `.flip-inner` is the rotator. */
+/* Card flip — `.flip-card` is the perspective container, `.flip-inner` is the
+ * rotator. CRITICAL: `.flip-inner` must NOT have `overflow: hidden` — combined
+ * with `transform-style: preserve-3d` it flattens the children, killing the
+ * 3D rotation. All visual clipping (rounded corners, borders, overflow)
+ * lives on `.flip-face` instead. */
 .flip-card {
   perspective: 1200px;
 }
@@ -72,10 +76,17 @@
 .flip-face {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  border-radius: 0.75rem;            /* matches rounded-xl */
+  overflow: hidden;
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 }
 
 .flip-back {
   position: absolute;
   inset: 0;
   transform: rotateY(180deg);
+  display: flex;
+  flex-direction: column;
 }

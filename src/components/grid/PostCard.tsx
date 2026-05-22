@@ -33,7 +33,7 @@ export function PostCard({ post }: Props) {
         flipped && "is-flipped",
       )}
     >
-      <div className="flip-inner overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="flip-inner">
         {/* FRONT */}
         <div className="flip-face">
           <div className="relative">
@@ -122,7 +122,7 @@ export function PostCard({ post }: Props) {
         </div>
 
         {/* BACK */}
-        <div className="flip-face flip-back bg-card">
+        <div className="flip-face flip-back">
           <button
             type="button"
             onClick={() => setFlipped(false)}
@@ -131,7 +131,7 @@ export function PostCard({ post }: Props) {
           >
             <X className="h-4 w-4" />
           </button>
-          {flipped && <PostEditForm post={post} onDone={() => setFlipped(false)} />}
+          <PostEditForm post={post} onDone={() => setFlipped(false)} />
         </div>
       </div>
     </div>
