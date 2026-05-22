@@ -106,7 +106,8 @@ export function PostCard({ post }: Props) {
               <span title={post.author.email}>{post.author.email.split("@")[0]}</span>
               <span aria-hidden>·</span>
               <span>
-                {new Date(post.createdAt).toLocaleDateString(undefined, {
+                {/* Fixed locale to avoid SSR/CSR hydration mismatch (React error #418) */}
+                {new Date(post.createdAt).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
                 })}

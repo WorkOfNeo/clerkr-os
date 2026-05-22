@@ -151,31 +151,27 @@ export function PostEditForm({ post, onDone }: Props) {
 function DeleteButton({ id, onDone }: { id: string; onDone: () => void }) {
   const [pending, setPending] = useState(false);
   return (
-    <form
-      action={async (fd) => {
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+      disabled={pending}
+      onClick={async () => {
         if (!confirm("Delete this post? This can also be done from Claude via the MCP.")) {
           return;
         }
         setPending(true);
         try {
-          await deletePost(fd);
+          await deletePost(id);
           onDone();
         } finally {
           setPending(false);
         }
       }}
     >
-      <input type="hidden" name="id" value={id} />
-      <Button
-        type="submit"
-        variant="ghost"
-        size="sm"
-        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-        disabled={pending}
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-        {pending ? "Deleting..." : "Delete"}
-      </Button>
-    </form>
+      <Trash2 className="h-3.5 w-3.5" />
+      {pending ? "Deleting..." : "Delete"}
+    </Button>
   );
 }

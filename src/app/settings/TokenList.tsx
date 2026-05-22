@@ -55,12 +55,13 @@ function TokenRow({ token }: { token: Token }) {
         {token.tokenPrefix}…
       </td>
       <td className="px-4 py-2 text-muted-foreground">
+        {/* Fixed locale to avoid SSR/CSR hydration mismatch (React error #418) */}
         {token.lastUsedAt
-          ? new Date(token.lastUsedAt).toLocaleString()
+          ? new Date(token.lastUsedAt).toLocaleString("en-US")
           : "Never"}
       </td>
       <td className="px-4 py-2 text-muted-foreground">
-        {new Date(token.createdAt).toLocaleDateString()}
+        {new Date(token.createdAt).toLocaleDateString("en-US")}
       </td>
       <td className="px-4 py-2 text-right">
         <form

@@ -42,9 +42,11 @@ export async function updatePost(formData: FormData) {
   revalidatePath("/grid");
 }
 
-export async function deletePost(formData: FormData) {
+// Plain-id signature (not FormData) so it can be called from an onClick
+// handler without nesting a <form> inside PostEditForm's <form>. Nested
+// forms cause React's "unexpectedly submitted" warning + DOM re-parenting.
+export async function deletePost(id: string) {
   await requireSession();
-  const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("id required");
   await db.post.delete({ where: { id } });
   revalidatePath("/grid");
