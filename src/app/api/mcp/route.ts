@@ -1,5 +1,6 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 
+import { ensureProtocol } from "@/lib/base-url";
 import { authenticateMcp, extractBearerToken } from "@/lib/mcp/auth";
 import { buildServer } from "@/lib/mcp/server";
 
@@ -8,6 +9,16 @@ import { buildServer } from "@/lib/mcp/server";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+function deriveOrigin(req: Request): string {
+  const fromEnv = ensureProtocol(process.env.BETTER_AUTH_URL);
+  if (fromEnv) return fromEnv;
+  try {
+    return new URL(req.url).origin;
+  } catch {
+    return "";
+  }
+}
 
 async function handle(req: Request): Promise<Response> {
   const raw = extractBearerToken(req);
@@ -23,7 +34,7 @@ async function handle(req: Request): Promise<Response> {
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
   });
-  const server = buildServer({ userId });
+  const server = buildServer({ userId, origin: deriveOrigin(req) });
   await server.connect(transport);
   return transport.handleRequest(req);
 }

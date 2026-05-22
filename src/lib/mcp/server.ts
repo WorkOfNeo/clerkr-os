@@ -34,9 +34,14 @@ When the user asks to find, edit, or delete posts, use \`list_posts\`,
 \`search_posts\`, \`update_post\`, \`delete_post\`. All edit actions are
 intentional — the user has full control over the board via these tools.
 The author of each created post is automatically set to the owner of the
-API token you're using to call this server.`;
+API token you're using to call this server.
 
-export function buildServer({ userId }: ToolContext): Server {
+If the user pastes or attaches an image and there is no good source-page
+image to reference, call \`upload_image\` first with the base64-encoded bytes
+plus the mime type. The tool returns a \`url\` which you then pass as
+\`imageUrl\` to \`create_post\`. Supports png/jpeg/webp/gif up to 8 MB.`;
+
+export function buildServer({ userId, origin }: ToolContext): Server {
   const server = new Server(
     { name: "clerkr-internal", version: "0.1.0" },
     {
@@ -64,7 +69,7 @@ export function buildServer({ userId }: ToolContext): Server {
     try {
       const result = await tool.handler(
         (req.params.arguments ?? {}) as Record<string, unknown>,
-        { userId },
+        { userId, origin },
       );
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {

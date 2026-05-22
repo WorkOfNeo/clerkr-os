@@ -29,6 +29,7 @@ model User {
   accounts  Account[]
   apiTokens ApiToken[]
   posts     Post[]
+  images    Image[]
 
   @@map("user")
 }
@@ -99,6 +100,22 @@ model ApiToken {
 
   @@index([userId])
   @@map("api_token")
+}
+
+// User-uploaded image bytes (pastes / screenshots when no source URL exists).
+// Bytes stored inline in Postgres bytea — simplest infra; no volume, no S3.
+// For an internal team idea board, this is fine up to ~hundreds of images.
+model Image {
+  id           String   @id @default(uuid())
+  mimeType     String                     // image/png | image/jpeg | image/webp | image/gif
+  bytes        Bytes                      // raw image data
+  size         Int                        // byte length, for monitoring
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+
+  @@index([uploadedById])
+  @@map("image")
 }
 
 model Post {

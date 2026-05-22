@@ -53,21 +53,28 @@ unclear.
    - any visible text (OCR button labels, headlines, captions)
    - if the image clearly references a known site (Linear, Figma, Notion,
      Vercel dashboards, etc.), name it
-2. URL handling:
-   - If the user provided a URL alongside the image → use it for `url`, and
-     use the publicly hosted image URL (if you have one) for `imageUrl`.
-   - If no URL → ask once: *"Do you have a source URL for this, or should I
-     file it image-only?"*
+2. **Get a hostable image URL.** The image bytes Claude can see are not
+   addressable from the web — you must upload them to the app first:
+   - Call `upload_image` with `base64` (the pasted image bytes, base64-encoded)
+     and `mimeType` (`image/png`, `image/jpeg`, `image/webp`, or `image/gif`).
+     Strip any `data:<mime>;base64,` prefix before passing.
+   - The tool returns `{ url, id, size, mimeType }`. Use that `url` for
+     `imageUrl` on the post.
+   - If `upload_image` fails (>8 MB, unsupported MIME), fall back to the
+     **Abstract image fallback pool** below.
+3. URL handling for the post's `url` field:
+   - If the user provided a source URL alongside the image → use it for `url`.
+   - If no source URL → ask once: *"Do you have a source URL for this, or
+     should I file it image-only?"*
    - If the user has no source URL or says image-only → set `url` to
-     `https://unsplash.com/s/photos/abstract` (a stable referent), and use
-     the publicly hosted image URL for `imageUrl` if they gave you one.
-3. Populate:
+     `https://unsplash.com/s/photos/abstract` (a stable referent).
+4. Populate:
    - `title` — your one-line summary of what's in the image
    - `description` — 1–3 sentences of detail
    - `category`, `todo`, `painPoint`, `priority` as in the URL flow
-   - `imageUrl` — the publicly-accessible image URL if you have one; **else**
-     pick one from the Abstract image fallback pool below
-4. Call `create_post` and confirm.
+   - `imageUrl` — **always** the URL from `upload_image` if the user pasted
+     an image; only fall back to the Abstract pool if upload was impossible
+5. Call `create_post` and confirm in one line.
 
 ## Add from a verbal description only
 
@@ -145,3 +152,4 @@ image.
 | `search_posts` | Free-text across title/description/todo/painPoint/category |
 | `update_post` | Change any field on an existing post |
 | `delete_post` | Remove a post (intentional — this is the canonical editor) |
+| `upload_image` | Upload pasted/attached image bytes → returns a public URL to use as `imageUrl` |

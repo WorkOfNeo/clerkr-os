@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 
 export interface ToolContext {
   userId: string;
+  origin: string;       // e.g. "https://clerkr-os-production.up.railway.app"
 }
 
 export interface ToolDef {
@@ -68,6 +69,12 @@ const searchSchema = z.object({
   query: z.string().min(1),
   limit: z.number().int().min(1).max(200).optional(),
 });
+
+const uploadSchema = z.object({
+  base64: z.string().min(8),
+  mimeType: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif"]),
+});
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB hard cap
 
 function orderBy(sortBy: z.infer<typeof listSchema>["sortBy"]) {
   switch (sortBy) {
@@ -276,6 +283,59 @@ export const TOOLS: ToolDef[] = [
       const { id } = idSchema.parse(args);
       await db.post.delete({ where: { id } });
       return { ok: true, id };
+    },
+  },
+
+  {
+    name: "upload_image",
+    description:
+      "Upload an image (base64-encoded) and get back a public URL you can pass as " +
+      "`imageUrl` to `create_post` / `update_post`. Use this when the user pastes " +
+      "or attaches an image and there is no good source-page image to reference. " +
+      "Supports png, jpeg, webp, gif. Max 8 MB. The returned URL is permanent and " +
+      "scoped to this app; do not hand it to third parties.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        base64: {
+          type: "string",
+          description:
+            "Base64-encoded image bytes. A leading `data:<mime>;base64,` prefix is tolerated and stripped.",
+        },
+        mimeType: {
+          type: "string",
+          enum: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+          description: "MIME type of the image being uploaded.",
+        },
+      },
+      required: ["base64", "mimeType"],
+    },
+    handler: async (args, ctx) => {
+      const input = uploadSchema.parse(args);
+      const cleaned = input.base64.replace(/^data:[^;]+;base64,/i, "").trim();
+      const bytes = Buffer.from(cleaned, "base64");
+      if (bytes.length === 0) throw new Error("Decoded image is empty.");
+      if (bytes.length > MAX_IMAGE_BYTES) {
+        throw new Error(
+          `Image is ${(bytes.length / 1024 / 1024).toFixed(2)} MB; max ${MAX_IMAGE_BYTES / 1024 / 1024} MB.`,
+        );
+      }
+      const row = await db.image.create({
+        data: {
+          mimeType: input.mimeType,
+          bytes,
+          size: bytes.length,
+          uploadedById: ctx.userId,
+        },
+        select: { id: true, createdAt: true },
+      });
+      return {
+        id: row.id,
+        url: `${ctx.origin}/api/images/${row.id}`,
+        size: bytes.length,
+        mimeType: input.mimeType,
+        createdAt: row.createdAt,
+      };
     },
   },
 
