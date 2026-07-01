@@ -76,6 +76,19 @@ export default async function SettingsPage() {
           <h2 className="text-base font-semibold">Your active tokens</h2>
           <TokenList tokens={tokens} />
         </section>
+
+        <section className="space-y-2 border-t pt-6">
+          <h2 className="text-base font-semibold">AI prompts</h2>
+          <p className="text-xs text-muted-foreground">
+            Edit the system prompts the AI reads before structuring meetings and answering in chat.
+          </p>
+          <a
+            href="/settings/prompts"
+            className="inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Edit AI prompts →
+          </a>
+        </section>
       </main>
     </div>
   );

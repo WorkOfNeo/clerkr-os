@@ -364,19 +364,21 @@ enum SignalStatus {
 }
 
 model Meeting {
-  id           String      @id @default(uuid())
-  slug         String      @unique
+  id           String                       @id @default(uuid())
+  slug         String                       @unique
   title        String
-  kind         MeetingKind @default(INTERNAL)
+  kind         MeetingKind                  @default(INTERNAL)
   meetingDate  DateTime
-  attendees    String[]    @default([])
+  attendees    String[]                     @default([])
   transcript   String // raw pasted transcript / summary
   tldr         String? // AI-generated brief summary
   structuredAt DateTime? // set when the brief was last extracted
+  embedding    Unsupported("vector(1536)")? // semantic-search vector (raw SQL writes)
+  embeddedAt   DateTime?
   authorId     String
-  author       User        @relation(fields: [authorId], references: [id])
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @default(now()) @updatedAt
+  author       User                         @relation(fields: [authorId], references: [id])
+  createdAt    DateTime                     @default(now())
+  updatedAt    DateTime                     @default(now()) @updatedAt
 
   decisions      Decision[]
   featureSignals FeatureSignal[]
@@ -484,16 +486,18 @@ model Cluster {
 }
 
 model Feature {
-  id          String        @id @default(uuid())
-  slug        String        @unique
+  id          String                       @id @default(uuid())
+  slug        String                       @unique
   title       String
   description String?
-  status      FeatureStatus @default(IDEA)
-  tags        String[]      @default([])
+  status      FeatureStatus                @default(IDEA)
+  tags        String[]                     @default([])
   clusterId   String?
-  cluster     Cluster?      @relation(fields: [clusterId], references: [id])
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @default(now()) @updatedAt
+  cluster     Cluster?                     @relation(fields: [clusterId], references: [id])
+  embedding   Unsupported("vector(1536)")? // semantic-search + dedupe vector (raw SQL writes)
+  embeddedAt  DateTime?
+  createdAt   DateTime                     @default(now())
+  updatedAt   DateTime                     @default(now()) @updatedAt
 
   signals      FeatureSignal[] // meeting signals promoted/linked to this feature
   roadmapItems RoadmapItem[]
@@ -527,6 +531,19 @@ enum RoadmapLane {
   NOW
   NEXT
   LATER
+}
+
+// ─── App settings ────────────────────────────────────────────────────────────
+// Key/value store for editable config the AI reads before firing — e.g. the
+// meeting-extraction system prompt and the Copilot system prompt. Falls back to
+// code defaults (src/lib/ai/prompts.ts) when a key is absent.
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("app_setting")
 }
 
 model RoadmapItem {

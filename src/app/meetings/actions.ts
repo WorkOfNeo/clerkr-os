@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { enrichMeeting, type EnrichSignal } from "@/lib/ai/enrich-meeting";
 import { extractBrief } from "@/lib/ai/extract-brief";
 import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { db } from "@/lib/db";
@@ -76,7 +77,7 @@ export async function structureMeeting(id: string): Promise<{ error?: string }> 
   }
 
   // Re-runnable: clear the prior extraction (our own child rows — safe to
-  // delete) and re-create it in one transaction.
+  // delete) and re-create everything except signals in one transaction.
   await db.$transaction([
     db.decision.deleteMany({ where: { meetingId: id } }),
     db.featureSignal.deleteMany({ where: { meetingId: id } }),
@@ -93,14 +94,6 @@ export async function structureMeeting(id: string): Promise<{ error?: string }> 
             owner: d.owner ?? null,
           })),
         },
-        featureSignals: {
-          create: brief.featureSignals.map((f) => ({
-            title: f.title,
-            detail: f.detail ?? null,
-            status: f.status,
-            tags: f.tags,
-          })),
-        },
         actionItems: {
           create: brief.actionItems.map((a) => ({
             content: a.content,
@@ -115,8 +108,42 @@ export async function structureMeeting(id: string): Promise<{ error?: string }> 
     }),
   ]);
 
+  // Feature signals are created individually so we can capture their ids and
+  // cluster hints for the enrichment pass (embed + cluster + dedupe + promote).
+  const enrichSignals: EnrichSignal[] = [];
+  for (const f of brief.featureSignals) {
+    const sig = await db.featureSignal.create({
+      data: {
+        meetingId: id,
+        title: f.title,
+        detail: f.detail ?? null,
+        status: f.status,
+        tags: f.tags,
+      },
+      select: { id: true },
+    });
+    enrichSignals.push({
+      id: sig.id,
+      title: f.title,
+      detail: f.detail ?? null,
+      status: f.status,
+      tags: f.tags,
+      cluster: f.cluster ?? null,
+    });
+  }
+
+  // Embed the meeting and auto-cluster / categorize / dedupe / promote signals.
+  // Best-effort — never fail the structuring if enrichment hiccups.
+  try {
+    await enrichMeeting(id, enrichSignals);
+  } catch (err) {
+    console.warn("[structureMeeting] enrichment failed:", err);
+  }
+
   revalidatePath("/meetings");
   revalidatePath(`/meetings/${id}`);
+  revalidatePath("/features");
+  revalidatePath("/knowledge");
   return {};
 }
 

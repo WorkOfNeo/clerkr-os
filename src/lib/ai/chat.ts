@@ -1,6 +1,13 @@
 import { db } from "@/lib/db";
 
+import {
+  semanticSearchFeatures,
+  semanticSearchMeetings,
+  type FeatureHit,
+  type MeetingHit,
+} from "./embed-entities";
 import { CHAT_MODEL, getOpenAI } from "./openai";
+import { getChatPrompt } from "./prompts";
 import { semanticSearchWiki } from "./wiki-search";
 
 export interface SprintContextLite {
@@ -47,6 +54,17 @@ export async function runChatTurn(params: {
     console.warn("[chat] semanticSearchWiki failed:", err);
   }
 
+  let meetingHits: MeetingHit[] = [];
+  let featureHits: FeatureHit[] = [];
+  try {
+    [meetingHits, featureHits] = await Promise.all([
+      semanticSearchMeetings(userMessage, 3),
+      semanticSearchFeatures(userMessage, 5),
+    ]);
+  } catch (err) {
+    console.warn("[chat] entity semantic search failed:", err);
+  }
+
   const recent = await db.chatMessage.findMany({
     where: { sessionId },
     orderBy: { createdAt: "desc" },
@@ -55,8 +73,11 @@ export async function runChatTurn(params: {
   });
   const prior = recent.reverse().slice(0, -1);
 
-  const product = await loadProductContext();
-  const systemPrompt = buildSystemPrompt(sprint ?? null, focusTask ?? null, citedNotes, product);
+  const [product, basePrompt] = await Promise.all([loadProductContext(), getChatPrompt()]);
+  const systemPrompt = buildSystemPrompt(basePrompt, sprint ?? null, focusTask ?? null, citedNotes, product, {
+    meetings: meetingHits,
+    features: featureHits,
+  });
   const messages = [
     { role: "system" as const, content: systemPrompt },
     ...prior.map((m) => ({
@@ -136,23 +157,16 @@ async function loadProductContext(): Promise<ProductContext> {
 }
 
 function buildSystemPrompt(
+  basePrompt: string,
   sprint: SprintContextLite | null,
   focusTask: FocusTaskLite | null,
   notes: { id: string; title: string; body: string }[],
   product: ProductContext,
+  semantic: { meetings: MeetingHit[]; features: FeatureHit[] },
 ): string {
   const parts: string[] = [];
 
-  parts.push(
-    "You are the Copilot for NEO Labs' internal Product OS (sprint board, roadmap, feature library and meeting briefs). " +
-      "Sprints are two weeks; the first Thursday and the next-week Wed + Fri are testing days. " +
-      "Be concise and direct. Use the PRODUCT CONTEXT below to answer questions like " +
-      "'is this already on the roadmap?', 'do we have a feature for X?', or 'what did we decide?' — " +
-      "always cite the specific roadmap item, feature, or meeting by its exact title, and say plainly when something is NOT yet tracked. " +
-      "If wiki notes are provided below, reference them by their numbered index when relevant. " +
-      "When the user shares a learning or decision worth keeping, suggest a wiki note title and tags " +
-      "and ask them to confirm — do not silently write to the wiki yourself.",
-  );
+  parts.push(basePrompt);
 
   if (sprint) {
     const range = `${sprint.startDate.toISOString().slice(0, 10)} → ${sprint.endDate
@@ -193,6 +207,24 @@ function buildSystemPrompt(
           product.meetings
             .map((m) => `- ${m.title} (${m.date})${m.tldr ? `: ${m.tldr}` : ""}`)
             .join("\n"),
+      );
+    }
+  }
+
+  if (semantic.features.length || semantic.meetings.length) {
+    parts.push("MOST RELEVANT TO THIS QUESTION (semantic search — prefer these):");
+    if (semantic.features.length) {
+      parts.push(
+        "Features —\n" +
+          semantic.features
+            .map((f) => `- ${f.title} [${f.status}]${f.description ? `: ${f.description}` : ""}`)
+            .join("\n"),
+      );
+    }
+    if (semantic.meetings.length) {
+      parts.push(
+        "Meetings —\n" +
+          semantic.meetings.map((m) => `- ${m.title}${m.tldr ? `: ${m.tldr}` : ""}`).join("\n"),
       );
     }
   }
