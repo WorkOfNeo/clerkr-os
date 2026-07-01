@@ -1,0 +1,1037 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NEO · Product OS — Concept Mockups</title>
+<style>
+  :root{
+    --radius:14px;
+    --radius-sm:10px;
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  /* ===== Light theme (default) — also used when OS is light or user forces light ===== */
+  :root, :root[data-theme="light"]{
+    --bg:#f5f6f9;
+    --surface:#ffffff;
+    --surface-2:#f0f2f6;
+    --surface-3:#e5e9ef;
+    --line:#dbe0e8;
+    --line-soft:#e9ecf2;
+    --txt:#161922;
+    --txt-2:#4b5263;
+    --txt-3:#838b9a;
+    --accent:#6d5efc;
+    --accent-2:#5848d8;
+    --accent-soft:rgba(109,94,252,.12);
+    --green:#1f9d6b;  --green-soft:rgba(31,157,107,.13);
+    --amber:#bd8217;  --amber-soft:rgba(189,130,23,.15);
+    --red:#d6483f;    --red-soft:rgba(214,72,63,.12);
+    --blue:#2b7fd4;   --blue-soft:rgba(43,127,212,.12);
+    --pink:#c33d96;   --pink-soft:rgba(195,61,150,.12);
+    --shadow:0 8px 30px rgba(20,23,33,.12);
+    --code-bg:#f3f5f8;
+    --topbar-bg:rgba(245,246,249,.82);
+  }
+  /* ===== Dark theme — applied when OS prefers dark (unless user forces light) ===== */
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0b0d12;
+      --surface:#13161d;
+      --surface-2:#181c25;
+      --surface-3:#1f2430;
+      --line:#272d3a;
+      --line-soft:#1e2330;
+      --txt:#e7eaf0;
+      --txt-2:#aab2c2;
+      --txt-3:#727b8d;
+      --accent:#6d5efc;
+      --accent-2:#8b7dff;
+      --accent-soft:rgba(109,94,252,.14);
+      --green:#39c08a;  --green-soft:rgba(57,192,138,.14);
+      --amber:#f1b34a;  --amber-soft:rgba(241,179,74,.14);
+      --red:#f06868;    --red-soft:rgba(240,104,104,.14);
+      --blue:#52a8ff;   --blue-soft:rgba(82,168,255,.14);
+      --pink:#f078c4;   --pink-soft:rgba(240,120,196,.14);
+      --shadow:0 8px 30px rgba(0,0,0,.35);
+      --code-bg:#0e1117;
+      --topbar-bg:rgba(11,13,18,.82);
+    }
+  }
+  /* ===== Forced dark (user toggle) — wins regardless of OS setting ===== */
+  :root[data-theme="dark"]{
+    --bg:#0b0d12;
+    --surface:#13161d;
+    --surface-2:#181c25;
+    --surface-3:#1f2430;
+    --line:#272d3a;
+    --line-soft:#1e2330;
+    --txt:#e7eaf0;
+    --txt-2:#aab2c2;
+    --txt-3:#727b8d;
+    --accent:#6d5efc;
+    --accent-2:#8b7dff;
+    --accent-soft:rgba(109,94,252,.14);
+    --green:#39c08a;  --green-soft:rgba(57,192,138,.14);
+    --amber:#f1b34a;  --amber-soft:rgba(241,179,74,.14);
+    --red:#f06868;    --red-soft:rgba(240,104,104,.14);
+    --blue:#52a8ff;   --blue-soft:rgba(82,168,255,.14);
+    --pink:#f078c4;   --pink-soft:rgba(240,120,196,.14);
+    --shadow:0 8px 30px rgba(0,0,0,.35);
+    --code-bg:#0e1117;
+    --topbar-bg:rgba(11,13,18,.82);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg);
+    color:var(--txt);
+    font-family:var(--font);
+    font-size:14px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--accent-soft)}
+  /* ---------- shell ---------- */
+  .app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+  .side{
+    background:var(--surface);
+    border-right:1px solid var(--line-soft);
+    padding:18px 14px;
+    display:flex;flex-direction:column;gap:6px;
+    position:sticky;top:0;height:100vh;
+  }
+  .brand{display:flex;align-items:center;gap:10px;padding:6px 8px 16px}
+  .brand .logo{
+    width:30px;height:30px;border-radius:9px;
+    background:linear-gradient(135deg,var(--accent),#b07dff);
+    display:grid;place-items:center;font-weight:800;color:#fff;font-size:15px;
+    box-shadow:0 4px 14px rgba(109,94,252,.45);
+  }
+  .brand b{font-size:14.5px;letter-spacing:.2px}
+  .brand span{display:block;font-size:11px;color:var(--txt-3);font-weight:500}
+  .nav-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.9px;color:var(--txt-3);padding:14px 10px 6px;font-weight:600}
+  .nav-item{
+    display:flex;align-items:center;gap:11px;
+    padding:8px 10px;border-radius:9px;color:var(--txt-2);
+    cursor:pointer;font-weight:500;border:1px solid transparent;
+  }
+  .nav-item:hover{background:var(--surface-2);color:var(--txt)}
+  .nav-item.active{background:var(--accent-soft);color:#fff;border-color:rgba(109,94,252,.35)}
+  .nav-item .ic{width:18px;height:18px;flex:0 0 18px;opacity:.9}
+  .nav-item .count{margin-left:auto;font-size:11px;color:var(--txt-3);background:var(--surface-3);padding:1px 7px;border-radius:20px}
+  .nav-item.active .count{color:#fff;background:rgba(255,255,255,.12)}
+  .side .spacer{flex:1}
+  .me{display:flex;align-items:center;gap:10px;padding:8px;border-top:1px solid var(--line-soft);margin-top:8px}
+  .avatar{border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:11px;flex:0 0 auto}
+  /* ---------- main ---------- */
+  .main{min-width:0}
+  .topbar{
+    position:sticky;top:0;z-index:5;
+    background:var(--topbar-bg);backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--line-soft);
+    display:flex;align-items:center;gap:14px;padding:14px 26px;
+  }
+  .topbar h1{font-size:17px;margin:0;font-weight:650;letter-spacing:.2px}
+  .topbar .sub{color:var(--txt-3);font-size:12.5px}
+  .search{
+    margin-left:auto;display:flex;align-items:center;gap:8px;
+    background:var(--surface-2);border:1px solid var(--line);
+    padding:7px 12px;border-radius:10px;color:var(--txt-3);width:280px;font-size:13px;
+  }
+  .btn{
+    display:inline-flex;align-items:center;gap:7px;
+    background:var(--surface-2);border:1px solid var(--line);
+    color:var(--txt);padding:7px 13px;border-radius:9px;cursor:pointer;font-weight:550;font-size:13px;
+  }
+  .btn:hover{border-color:var(--accent)}
+  .btn.primary{background:linear-gradient(135deg,var(--accent),#8b6dff);border:none;box-shadow:0 4px 14px rgba(109,94,252,.4)}
+  .btn.ghost{background:transparent}
+  .wrap{padding:24px 26px 60px;max-width:1180px}
+  .screen{display:none;animation:fade .25s ease}
+  .screen.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  /* ---------- generic ---------- */
+  .card{background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--radius);padding:18px}
+  .grid{display:grid;gap:16px}
+  .muted{color:var(--txt-3)}
+  .row{display:flex;align-items:center;gap:10px}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap}
+  .p-accent{background:var(--accent-soft);color:var(--accent-2)}
+  .p-green{background:var(--green-soft);color:var(--green)}
+  .p-amber{background:var(--amber-soft);color:var(--amber)}
+  .p-red{background:var(--red-soft);color:var(--red)}
+  .p-blue{background:var(--blue-soft);color:var(--blue)}
+  .p-pink{background:var(--pink-soft);color:var(--pink)}
+  .p-grey{background:var(--surface-3);color:var(--txt-2)}
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+  .sec-title{font-size:13px;font-weight:650;letter-spacing:.2px;margin:0 0 2px}
+  .sec-sub{font-size:12px;color:var(--txt-3);margin:0 0 14px}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;font-size:11.5px;
+    background:var(--surface-2);border:1px solid var(--line);
+    padding:3px 9px;border-radius:8px;color:var(--txt-2);cursor:pointer;
+  }
+  .chip:hover{border-color:var(--accent);color:var(--txt)}
+  .chip .lnk{color:var(--accent-2);font-weight:600}
+  .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px}
+  .seg button{background:transparent;border:none;color:var(--txt-3);padding:6px 13px;border-radius:7px;cursor:pointer;font-weight:550;font-size:12.5px;font-family:var(--font)}
+  .seg button.on{background:var(--accent-soft);color:#fff}
+  .subview{display:none}
+  .subview.on{display:block}
+  /* ---------- dashboard ---------- */
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .stat{background:var(--surface);border:1px solid var(--line-soft);border-radius:12px;padding:15px 16px}
+  .stat .n{font-size:26px;font-weight:720;letter-spacing:-.5px}
+  .stat .l{font-size:12px;color:var(--txt-3);margin-top:2px}
+  .stat .d{font-size:11px;margin-top:8px;font-weight:600}
+  .progress{height:8px;background:var(--surface-3);border-radius:20px;overflow:hidden}
+  .progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#9d7dff);border-radius:20px}
+  .feed-item{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--line-soft)}
+  .feed-item:last-child{border-bottom:none}
+  .feed-ic{width:30px;height:30px;border-radius:8px;flex:0 0 30px;display:grid;place-items:center;font-size:13px}
+  /* ---------- meetings ---------- */
+  .split{display:grid;grid-template-columns:300px 1fr;gap:18px;align-items:start}
+  .mlist{display:flex;flex-direction:column;gap:8px}
+  .mcard{background:var(--surface);border:1px solid var(--line-soft);border-radius:11px;padding:13px;cursor:pointer}
+  .mcard:hover{border-color:var(--line)}
+  .mcard.sel{border-color:var(--accent);background:var(--surface-2)}
+  .mcard h4{margin:0 0 3px;font-size:13.5px;font-weight:600}
+  .mcard .meta{font-size:11px;color:var(--txt-3);display:flex;gap:8px;align-items:center}
+  .brief-block{border:1px solid var(--line-soft);border-radius:12px;padding:16px;margin-bottom:14px;background:var(--surface)}
+  .brief-block h3{margin:0 0 10px;font-size:13px;font-weight:650;display:flex;align-items:center;gap:8px}
+  .brief-block h3 .badge{font-size:10.5px;color:var(--txt-3);font-weight:600;margin-left:auto}
+  .li{display:flex;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line-soft);align-items:flex-start}
+  .li:last-child{border-bottom:none}
+  .li .mark{flex:0 0 auto;margin-top:1px}
+  .li .body{flex:1;min-width:0}
+  .li .body .t{font-weight:550}
+  .li .body .s{font-size:12px;color:var(--txt-3);margin-top:2px}
+  .li .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+  .transcript{background:var(--code-bg);border:1px solid var(--line);border-radius:10px;padding:14px;font-size:12.5px;color:var(--txt-2);max-height:230px;overflow:auto;line-height:1.7}
+  .transcript b{color:var(--txt)}
+  .ai-banner{display:flex;align-items:center;gap:11px;background:linear-gradient(90deg,var(--accent-soft),transparent);border:1px solid rgba(109,94,252,.3);border-radius:11px;padding:12px 14px;margin-bottom:14px}
+  /* ---------- chat ---------- */
+  .chat-shell{display:grid;grid-template-columns:1fr 290px;gap:18px;align-items:start}
+  .chat-thread{display:flex;flex-direction:column;gap:16px;min-height:520px}
+  .msg{display:flex;gap:12px;max-width:88%}
+  .msg.user{align-self:flex-end;flex-direction:row-reverse}
+  .msg .bubble{padding:12px 15px;border-radius:14px;font-size:13.5px}
+  .msg.user .bubble{background:var(--accent);color:#fff;border-bottom-right-radius:5px}
+  .msg.ai .bubble{background:var(--surface);border:1px solid var(--line-soft);border-bottom-left-radius:5px}
+  .msg .bubble p{margin:0 0 9px}.msg .bubble p:last-child{margin:0}
+  .cite-row{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
+  .capture-card{border:1px dashed rgba(109,94,252,.5);background:var(--accent-soft);border-radius:11px;padding:13px;margin-top:11px}
+  .capture-card .cls{display:flex;gap:8px;margin:10px 0}
+  .cls-opt{flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;cursor:pointer;background:var(--surface)}
+  .cls-opt.on{border-color:var(--accent);background:var(--surface-2)}
+  .cls-opt .h{font-weight:600;font-size:12.5px}
+  .cls-opt .d{font-size:11px;color:var(--txt-3)}
+  .composer{margin-top:14px;display:flex;gap:10px;align-items:flex-end;background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:11px 12px}
+  .composer textarea{flex:1;background:transparent;border:none;color:var(--txt);resize:none;font-family:var(--font);font-size:13.5px;outline:none;min-height:24px}
+  .session-rail .cap{border:1px solid var(--line-soft);border-radius:10px;padding:11px;margin-bottom:9px;background:var(--surface)}
+  .session-rail .cap .t{font-size:12.5px;font-weight:550;margin-bottom:5px}
+  /* ---------- roadmap ---------- */
+  .lanes{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start}
+  .lane{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:13px;padding:12px;min-height:300px}
+  .lane-head{display:flex;align-items:center;gap:8px;margin-bottom:11px;padding:0 2px}
+  .lane-head .t{font-weight:650;font-size:13px}
+  .lane-head .c{font-size:11px;color:var(--txt-3);background:var(--surface-3);padding:1px 8px;border-radius:20px}
+  .rcard{background:var(--surface);border:1px solid var(--line-soft);border-radius:11px;padding:12px;margin-bottom:10px;cursor:grab}
+  .rcard:hover{border-color:var(--accent)}
+  .rcard h4{margin:0 0 7px;font-size:13px;font-weight:600;line-height:1.35}
+  .rcard .tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:9px}
+  .rcard .foot{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--txt-3);border-top:1px solid var(--line-soft);padding-top:9px}
+  .conf{display:flex;align-items:center;gap:5px}
+  .conf i{width:5px;height:11px;border-radius:2px;background:var(--surface-3);display:inline-block}
+  .conf i.on{background:var(--green)}
+  .timeline{display:none}
+  .tl-row{display:grid;grid-template-columns:160px 1fr;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line-soft)}
+  .tl-track{position:relative;height:34px;background:var(--surface-2);border-radius:8px}
+  .tl-bar{position:absolute;top:5px;height:24px;border-radius:7px;display:flex;align-items:center;padding:0 10px;font-size:11.5px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden}
+  .tl-head{display:grid;grid-template-columns:160px repeat(4,1fr);font-size:11px;color:var(--txt-3);border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:4px;font-weight:600}
+  /* ---------- tasks ---------- */
+  .board{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start}
+  .col{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:13px;padding:11px}
+  .col-head{display:flex;align-items:center;gap:8px;margin-bottom:11px;padding:0 2px;font-weight:600;font-size:12.5px}
+  .col-head .c{margin-left:auto;font-size:11px;color:var(--txt-3)}
+  .tcard{background:var(--surface);border:1px solid var(--line-soft);border-radius:10px;padding:11px;margin-bottom:9px;cursor:pointer}
+  .tcard:hover{border-color:var(--accent)}
+  .tcard .ttl{font-size:12.5px;font-weight:550;margin-bottom:8px;line-height:1.4}
+  .tcard .meta{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--txt-3)}
+  .tcard .meta .est{margin-left:auto;background:var(--surface-3);padding:1px 7px;border-radius:6px;font-weight:600}
+  .avstack{display:flex}.avstack .avatar{margin-left:-6px;border:2px solid var(--surface)}.avstack .avatar:first-child{margin:0}
+  table.tbl{width:100%;border-collapse:collapse}
+  table.tbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--txt-3);padding:9px 12px;border-bottom:1px solid var(--line);font-weight:600}
+  table.tbl td{padding:11px 12px;border-bottom:1px solid var(--line-soft);font-size:13px}
+  table.tbl tr:hover td{background:var(--surface-2)}
+  /* ---------- features ---------- */
+  .feat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .feat{background:var(--surface);border:1px solid var(--line-soft);border-radius:12px;padding:15px}
+  .feat h4{margin:0 0 4px;font-size:14px;font-weight:620}
+  .feat .desc{font-size:12.5px;color:var(--txt-3);margin-bottom:11px}
+  .feat .stat-row{display:flex;gap:14px;font-size:11.5px;color:var(--txt-2);border-top:1px solid var(--line-soft);padding-top:11px;margin-top:4px;align-items:center}
+  .cluster{background:var(--surface);border:1px solid var(--line-soft);border-radius:13px;padding:16px;margin-bottom:14px}
+  .cluster-head{display:flex;align-items:center;gap:11px;margin-bottom:13px}
+  .cluster-head .ic{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:17px}
+  .cluster-head h3{margin:0;font-size:15px;font-weight:650}
+  .cluster-head .sub{font-size:12px;color:var(--txt-3)}
+  .subfeat{display:flex;align-items:center;gap:11px;padding:10px;border-radius:9px;background:var(--surface-2);margin-bottom:8px;border:1px solid var(--line-soft)}
+  .subfeat .nm{font-weight:550;font-size:13px}
+  .subfeat .req{font-size:11px;color:var(--txt-3)}
+  .subfeat.uniq{border-color:rgba(240,120,196,.35);background:linear-gradient(90deg,var(--pink-soft),transparent)}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--txt-3);margin-bottom:16px}
+  .legend span{display:flex;align-items:center;gap:6px}
+  /* note tooltip-ish */
+  .tag{font-size:10.5px;padding:2px 7px;border-radius:6px;font-weight:600;background:var(--surface-3);color:var(--txt-2)}
+  .hr{height:1px;background:var(--line-soft);margin:18px 0}
+  /* ---------- knowledge graph ---------- */
+  .kn-shell{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start}
+  .kn-canvas{position:relative;background:
+      radial-gradient(circle at 1px 1px, var(--line-soft) 1px, transparent 0) 0 0/22px 22px,
+      var(--surface);
+    border:1px solid var(--line-soft);border-radius:14px;height:520px;overflow:auto}
+  .kn-inner{position:relative;width:760px;height:500px;margin:0 auto}
+  .kn-inner svg{position:absolute;inset:0;width:760px;height:500px;pointer-events:none}
+  .khub,.knode{position:absolute;transform:translate(-50%,-50%);cursor:pointer;
+    display:inline-flex;align-items:center;gap:7px;white-space:nowrap;
+    border-radius:11px;font-weight:600;border:1px solid var(--line);background:var(--surface-2);
+    box-shadow:var(--shadow);user-select:none}
+  .khub{padding:10px 14px;font-size:13px;color:var(--txt)}
+  .khub .ic{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:13px}
+  .knode{padding:7px 11px;font-size:12px;color:var(--txt-2)}
+  .knode .nd{width:8px;height:8px;border-radius:50%;flex:0 0 8px}
+  .knode:hover,.khub:hover{border-color:var(--accent);color:var(--txt)}
+  .knode.uniq{border-style:dashed;border-color:var(--pink)}
+  .knode.sel,.khub.sel{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),var(--shadow)}
+  .kn-inspector .ent-type{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .kn-inspector h3{margin:0;font-size:16px;font-weight:650;line-height:1.3}
+  .kn-meta-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line-soft);font-size:12.5px}
+  .kn-meta-row span:first-child{color:var(--txt-3)}
+  .kn-ctrl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+  .kn-ctrl .btn{justify-content:center;width:100%}
+  .kn-ctrl .btn.full{grid-column:1/-1}
+  .kn-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--txt-3);padding:10px 4px 0}
+  .kn-legend span{display:flex;align-items:center;gap:6px}
+  .kbd{font-size:11px;background:var(--surface-3);border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--txt-2)}
+  @media(max-width:1080px){.stat-grid{grid-template-columns:repeat(2,1fr)}.lanes,.board{grid-template-columns:1fr;}.split,.chat-shell,.kn-shell{grid-template-columns:1fr}.feat-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="side">
+    <div class="brand">
+      <div class="logo">N</div>
+      <div><b>NEO · Product OS</b><span>Internal · single workspace</span></div>
+    </div>
+    <div class="nav-label">Workspace</div>
+    <div class="nav-item active" data-nav="dashboard"><span class="ic">◎</span> Dashboard</div>
+    <div class="nav-item" data-nav="meetings"><span class="ic">▤</span> Meetings &amp; Briefs <span class="count">24</span></div>
+    <div class="nav-item" data-nav="chat"><span class="ic">✦</span> Copilot</div>
+    <div class="nav-label">Build</div>
+    <div class="nav-item" data-nav="roadmap"><span class="ic">⌖</span> Roadmap</div>
+    <div class="nav-item" data-nav="tasks"><span class="ic">▦</span> Tasks <span class="count">18</span></div>
+    <div class="nav-item" data-nav="features"><span class="ic">❖</span> Feature Library <span class="count">61</span></div>
+    <div class="nav-item" data-nav="knowledge"><span class="ic">◈</span> Knowledge <span class="count">86</span></div>
+    <div class="spacer"></div>
+    <div class="nav-item" data-nav="dashboard" style="color:var(--txt-3)"><span class="ic">⚙</span> Settings &amp; Taxonomy</div>
+    <div class="me">
+      <div class="avatar" style="width:30px;height:30px;background:#6d5efc">NH</div>
+      <div style="min-width:0"><div style="font-size:12.5px;font-weight:600">Niels Høiberg</div><div style="font-size:11px;color:var(--txt-3)">nh@neo-labs.com</div></div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <h1 id="pgTitle">Dashboard</h1>
+        <div class="sub" id="pgSub">Tuesday, 30 June 2026 · Sprint 14 — “Drafting &amp; Citations”</div>
+      </div>
+      <div class="search">⌕ &nbsp;Ask or search across everything… <span class="kbd" style="margin-left:auto">⌘K</span></div>
+      <button class="btn ghost" id="themeBtn" title="Theme — follows your OS by default">◐ Auto</button>
+      <button class="btn primary" data-nav="meetings">＋ New meeting brief</button>
+    </div>
+
+    <div class="wrap">
+
+      <!-- ===================== DASHBOARD ===================== -->
+      <section class="screen active" id="s-dashboard">
+        <div class="stat-grid" style="margin-bottom:16px">
+          <div class="stat"><div class="n">61</div><div class="l">Features tracked</div><div class="d" style="color:var(--green)">▲ 7 new this sprint</div></div>
+          <div class="stat"><div class="n">14</div><div class="l">On the roadmap</div><div class="d" style="color:var(--txt-3)">3 Now · 5 Next · 6 Later</div></div>
+          <div class="stat"><div class="n">9</div><div class="l">Open feature requests</div><div class="d" style="color:var(--amber)">5 from customer meetings</div></div>
+          <div class="stat"><div class="n">6</div><div class="l">Tasks due this week</div><div class="d" style="color:var(--red)">2 overdue</div></div>
+        </div>
+
+        <div class="grid" style="grid-template-columns:1.4fr 1fr">
+          <div class="card">
+            <div class="row" style="margin-bottom:6px">
+              <h3 class="sec-title">From your last meeting</h3>
+              <span class="pill p-blue" style="margin-left:auto">Auto-structured</span>
+            </div>
+            <p class="sec-sub">Mikenta Law — discovery call · 28 Jun · parsed by Copilot</p>
+            <div class="li"><span class="mark pill p-green">Decision</span><div class="body"><div class="t">Ship citation hover-cards before the EU pilot.</div><div class="s">Owner: Niels · linked to roadmap “Inline citations”.</div></div></div>
+            <div class="li"><span class="mark pill p-accent">Feature signal</span><div class="body"><div class="t">Bulk-redact client names across a matter.</div><div class="s">New — not yet on roadmap · 3rd firm to ask.</div></div></div>
+            <div class="li"><span class="mark pill p-amber">Action</span><div class="body"><div class="t">Send Mikenta the data-residency one-pager.</div><div class="s">Due 2 Jul · assigned to Niels.</div></div></div>
+            <button class="btn ghost" style="margin-top:10px" data-nav="meetings">Open full brief →</button>
+          </div>
+
+          <div class="card">
+            <h3 class="sec-title">Sprint 14 progress</h3>
+            <p class="sec-sub">Day 6 of 14 · Testing days Thu / Wed / Fri</p>
+            <div class="row" style="justify-content:space-between;font-size:12px;margin-bottom:6px"><span>11 of 18 tasks done</span><b>61%</b></div>
+            <div class="progress"><i style="width:61%"></i></div>
+            <div class="hr"></div>
+            <h3 class="sec-title" style="margin-bottom:10px">Recent decisions</h3>
+            <div class="feed-item"><div class="feed-ic p-green">✓</div><div><div style="font-weight:550">Adopt “Now / Next / Later” roadmap</div><div class="muted" style="font-size:11.5px">Team sync · 24 Jun</div></div></div>
+            <div class="feed-item"><div class="feed-ic p-green">✓</div><div><div style="font-weight:550">gpt-4o-mini stays default for chat</div><div class="muted" style="font-size:11.5px">Eng review · 22 Jun</div></div></div>
+            <div class="feed-item"><div class="feed-ic p-amber">~</div><div><div style="font-weight:550">Pricing tiers — revisit after 3 pilots</div><div class="muted" style="font-size:11.5px">Parked · 20 Jun</div></div></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <div class="row"><h3 class="sec-title">What Copilot noticed across your notes</h3><span class="pill p-pink" style="margin-left:auto">Connecting the dots</span></div>
+          <p class="sec-sub">Patterns surfaced from meeting briefs you might want to act on.</p>
+          <div class="grid" style="grid-template-columns:repeat(3,1fr)">
+            <div style="border:1px solid var(--line-soft);border-radius:11px;padding:13px">
+              <div class="pill p-amber" style="margin-bottom:8px">Recurring ask</div>
+              <div style="font-weight:600;margin-bottom:4px">“Redaction” mentioned in 4 meetings</div>
+              <div class="muted" style="font-size:12px">No roadmap item yet. Suggest creating a feature cluster.</div>
+            </div>
+            <div style="border:1px solid var(--line-soft);border-radius:11px;padding:13px">
+              <div class="pill p-blue" style="margin-bottom:8px">Roadmap conflict</div>
+              <div style="font-weight:600;margin-bottom:4px">2 “Now” items both need the search rebuild</div>
+              <div class="muted" style="font-size:12px">Dependency — consider sequencing.</div>
+            </div>
+            <div style="border:1px solid var(--line-soft);border-radius:11px;padding:13px">
+              <div class="pill p-green" style="margin-bottom:8px">Validated</div>
+              <div style="font-weight:600;margin-bottom:4px">Inline citations asked by 6 firms</div>
+              <div class="muted" style="font-size:12px">Strong signal — already in “Now”.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MEETINGS ===================== -->
+      <section class="screen" id="s-meetings">
+        <div class="ai-banner">
+          <div class="avatar" style="width:34px;height:34px;background:linear-gradient(135deg,var(--accent),#b07dff)">✦</div>
+          <div style="flex:1">
+            <div style="font-weight:600">Paste a transcript or summary → Copilot extracts the brief.</div>
+            <div class="muted" style="font-size:12px">Decisions, feature signals, action items and roadmap impact — each linked to existing records.</div>
+          </div>
+          <button class="btn">＋ Paste transcript</button>
+          <button class="btn primary">✦ Structure with AI</button>
+        </div>
+
+        <div class="split">
+          <!-- meeting list -->
+          <div class="mlist">
+            <div class="row" style="justify-content:space-between;margin-bottom:2px"><span class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;font-weight:600">Recent meetings</span><span class="chip">⌕ Filter</span></div>
+            <div class="mcard sel"><div class="row" style="justify-content:space-between"><h4>Mikenta Law — discovery</h4><span class="dot" style="background:var(--green)"></span></div><div class="meta">Customer · 28 Jun · <span>3 signals</span></div></div>
+            <div class="mcard"><h4>Weekly product sync</h4><div class="meta">Internal · 24 Jun · <span>2 decisions</span></div></div>
+            <div class="mcard"><h4>Contrast — pilot feedback</h4><div class="meta">Customer · 21 Jun · <span>5 signals</span></div></div>
+            <div class="mcard"><h4>Eng architecture review</h4><div class="meta">Internal · 22 Jun · <span>1 decision</span></div></div>
+            <div class="mcard"><h4>2BIZ — intro call</h4><div class="meta">Prospect · 19 Jun · <span>4 signals</span></div></div>
+            <div class="mcard"><h4>Werk — renewal QBR</h4><div class="meta">Customer · 17 Jun · <span>2 signals</span></div></div>
+          </div>
+
+          <!-- selected brief -->
+          <div>
+            <div class="card" style="margin-bottom:14px">
+              <div class="row" style="margin-bottom:4px">
+                <div>
+                  <h2 style="margin:0;font-size:18px">Mikenta Law — discovery call</h2>
+                  <div class="muted" style="font-size:12.5px">28 Jun 2026 · 47 min · attendees: Niels, A. Mikkelsen (Mikenta), 2 partners</div>
+                </div>
+                <div style="margin-left:auto;display:flex;gap:8px">
+                  <span class="chip">⤓ Export</span>
+                  <span class="chip">✦ Re-run</span>
+                </div>
+              </div>
+              <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px">
+                <span class="pill p-grey">Customer</span><span class="pill p-blue">EU pilot track</span><span class="pill p-green">3 feature signals</span><span class="pill p-amber">2 actions</span>
+              </div>
+            </div>
+
+            <!-- TLDR -->
+            <div class="brief-block">
+              <h3>�‖ TL;DR <span class="badge">30-second scan</span></h3>
+              <p style="margin:0;color:var(--txt-2)">Mikenta is keen but blocked on <b>EU data residency</b> and wants <b>inline citations</b> they can trust in court filings. Two partners independently asked for <b>bulk redaction of client names</b>. Strong fit for the pilot if we can confirm residency by mid-July.</p>
+            </div>
+
+            <!-- decisions -->
+            <div class="brief-block">
+              <h3><span class="dot" style="background:var(--green)"></span> Decisions made <span class="badge">2</span></h3>
+              <div class="li"><span class="mark pill p-green">Decided</span><div class="body"><div class="t">Prioritise citation hover-cards before EU pilot kickoff.</div><div class="s">Reflected on roadmap → moved “Inline citations” to <b>Now</b>.</div><div class="actions"><span class="chip">⌖ <span class="lnk">Roadmap: Inline citations</span></span><span class="chip">▦ Linked task</span></div></div></div>
+              <div class="li"><span class="mark pill p-green">Decided</span><div class="body"><div class="t">Mikenta pilot gated on EU residency sign-off.</div><div class="s">Owner: Niels · target 15 Jul.</div></div></div>
+            </div>
+
+            <!-- feature signals -->
+            <div class="brief-block">
+              <h3><span class="dot" style="background:var(--accent)"></span> Feature signals <span class="badge">classified automatically</span></h3>
+              <div class="li">
+                <span class="mark pill p-accent">New idea</span>
+                <div class="body">
+                  <div class="t">Bulk-redact client names across an entire matter.</div>
+                  <div class="s">Copilot: <b>not on roadmap.</b> Similar to 3 prior asks (Contrast, 2BIZ, Werk) → suggests a <b>“Redaction” cluster</b>.</div>
+                  <div class="actions">
+                    <span class="chip">＋ Add to Feature Library</span>
+                    <span class="chip">❖ <span class="lnk">Merge into “Redaction” cluster</span></span>
+                    <span class="chip">⌖ Promote to roadmap</span>
+                  </div>
+                </div>
+              </div>
+              <div class="li">
+                <span class="mark pill p-blue">Already tracked</span>
+                <div class="body">
+                  <div class="t">Citations that link back to the source paragraph.</div>
+                  <div class="s">Matches existing feature <b>“Inline citations”</b> · this is the 6th firm to request it.</div>
+                  <div class="actions"><span class="chip">❖ <span class="lnk">Feature: Inline citations</span></span><span class="chip">＋1 to request count</span></div>
+                </div>
+              </div>
+              <div class="li">
+                <span class="mark pill p-pink">Small / unique</span>
+                <div class="body">
+                  <div class="t">Per-firm citation style (OSCOLA vs in-house).</div>
+                  <div class="s">Niche but distinct — captured so it isn’t lost. Tagged <span class="tag">nice-to-have</span> <span class="tag">EU</span>.</div>
+                  <div class="actions"><span class="chip">❖ Keep as sub-feature</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- actions -->
+            <div class="brief-block">
+              <h3><span class="dot" style="background:var(--amber)"></span> Action items → tasks <span class="badge">push to board</span></h3>
+              <div class="li"><span class="mark"><input type="checkbox" checked></span><div class="body"><div class="t">Send Mikenta the data-residency one-pager</div><div class="s">Niels · due 2 Jul</div></div><span class="pill p-grey" style="align-self:center">→ Tasks</span></div>
+              <div class="li"><span class="mark"><input type="checkbox"></span><div class="body"><div class="t">Confirm EU region with infra (Railway/Neon)</div><div class="s">Unassigned · due 10 Jul</div></div><span class="pill p-grey" style="align-self:center">→ Tasks</span></div>
+            </div>
+
+            <!-- open Q -->
+            <div class="brief-block">
+              <h3><span class="dot" style="background:var(--red)"></span> Open questions <span class="badge">unresolved</span></h3>
+              <div class="li"><span class="mark">?</span><div class="body"><div class="t">Do they need on-prem, or is EU-hosted enough?</div></div></div>
+              <div class="li"><span class="mark">?</span><div class="body"><div class="t">Budget owner — managing partner or ops?</div></div></div>
+            </div>
+
+            <!-- source -->
+            <div class="brief-block">
+              <h3>⌕ Source transcript <span class="badge">click any line to cite</span></h3>
+              <div class="transcript">
+                <p><b>A. Mikkelsen:</b> The big thing for us is trust — when the AI says something is in a contract, our partners need to click and see exactly where.</p>
+                <p><b>Niels:</b> That’s our inline-citation work, it’s actually moving up next sprint…</p>
+                <p><b>Partner 2:</b> And honestly if we could just redact all the client names before sharing a matter externally, that alone would save us hours.</p>
+                <p class="muted">… 41 more minutes …</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== CHAT / COPILOT ===================== -->
+      <section class="screen" id="s-chat">
+        <div class="chat-shell">
+          <div>
+            <div class="card" style="padding:0;overflow:hidden">
+              <div class="row" style="padding:13px 16px;border-bottom:1px solid var(--line-soft)">
+                <div class="avatar" style="width:28px;height:28px;background:linear-gradient(135deg,var(--accent),#b07dff)">✦</div>
+                <div><div style="font-weight:600;font-size:13px">Copilot</div><div class="muted" style="font-size:11px">Searches meetings, features, roadmap &amp; wiki · cites sources</div></div>
+                <span class="pill p-green" style="margin-left:auto"><span class="dot" style="background:var(--green)"></span> Live with your data</span>
+              </div>
+
+              <div style="padding:18px 16px">
+                <div class="chat-thread">
+                  <div class="msg user"><div class="bubble">We’re in a call with a property firm. They want to compare two versions of a lease and get a plain-English diff. Is that something we already do or plan to?</div></div>
+
+                  <div class="msg ai">
+                    <div class="avatar" style="width:28px;height:28px;background:linear-gradient(135deg,var(--accent),#b07dff);align-self:flex-start">✦</div>
+                    <div class="bubble">
+                      <p>Short answer: <b>partly planned, not built.</b> Here’s what I found across your records:</p>
+                      <p>• <b>“Document compare”</b> exists as a feature idea (status: <i>Validated</i>) — 2 firms asked before. It’s in <b>Next</b> on the roadmap.<br>
+                      • The <b>“plain-English diff”</b> twist is <i>new</i> — no record of it. Closest is the “Explain this clause” sub-feature.<br>
+                      • A related decision: on 22 Jun you decided summaries stay on gpt-4o-mini, which would cover this.</p>
+                      <p>Want me to log the plain-English diff as a feature signal against this call?</p>
+                      <div class="cite-row">
+                        <span class="chip">❖ <span class="lnk">Feature: Document compare</span> · Validated</span>
+                        <span class="chip">⌖ <span class="lnk">Roadmap: Next</span></span>
+                        <span class="chip">▤ <span class="lnk">Meeting: Contrast pilot · 21 Jun</span></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- capture card -->
+                  <div class="msg user"><div class="bubble">Yes — capture “plain-English lease diff” for this firm.</div></div>
+
+                  <div class="msg ai">
+                    <div class="avatar" style="width:28px;height:28px;background:linear-gradient(135deg,var(--accent),#b07dff);align-self:flex-start">✦</div>
+                    <div class="bubble">
+                      <p>Captured. How should I file it?</p>
+                      <div class="capture-card">
+                        <div style="font-weight:600;font-size:13px">“Plain-English lease diff”</div>
+                        <div class="muted" style="font-size:12px">from live session · 30 Jun</div>
+                        <div class="cls">
+                          <div class="cls-opt on"><div class="h">◆ Possible feature request</div><div class="d">New signal — adds to Feature Library, awaits triage</div></div>
+                          <div class="cls-opt"><div class="h">✓ Already in roadmap</div><div class="d">Link to an existing item instead</div></div>
+                        </div>
+                        <div class="row" style="gap:8px">
+                          <span class="chip">❖ Cluster: <span class="lnk">Document compare</span></span>
+                          <span class="chip">🏷 property</span>
+                          <span class="chip">＋ tag</span>
+                          <button class="btn primary" style="margin-left:auto;padding:6px 12px">Save signal</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="composer">
+                  <textarea placeholder="Type what the customer said, or ask across your data…  e.g. “Have we promised SSO to anyone?”"></textarea>
+                  <span class="chip">📎</span>
+                  <button class="btn primary" style="padding:8px 13px">Send</button>
+                </div>
+                <div class="muted" style="font-size:11px;margin-top:8px;text-align:center">Every answer cites the meeting, feature or roadmap row it came from · nothing is invented.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- session rail -->
+          <div class="session-rail">
+            <div class="card" style="margin-bottom:14px">
+              <h3 class="sec-title" style="margin-bottom:10px">Captured this session</h3>
+              <div class="cap"><div class="t">Plain-English lease diff</div><span class="pill p-accent">Feature request</span></div>
+              <div class="cap"><div class="t">SSO via Microsoft Entra</div><span class="pill p-blue">Linked to roadmap</span></div>
+              <div class="cap"><div class="t">Export matter to PDF bundle</div><span class="pill p-pink">Small / unique</span></div>
+              <button class="btn ghost" style="width:100%;margin-top:4px;justify-content:center">Save all to a brief</button>
+            </div>
+            <div class="card">
+              <h3 class="sec-title" style="margin-bottom:8px">Try asking</h3>
+              <div style="display:flex;flex-direction:column;gap:7px">
+                <span class="chip">What did we promise Contrast?</span>
+                <span class="chip">Which asks have no roadmap item?</span>
+                <span class="chip">Summarise all redaction requests</span>
+                <span class="chip">What’s blocking the Mikenta pilot?</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== ROADMAP ===================== -->
+      <section class="screen" id="s-roadmap">
+        <div class="row" style="margin-bottom:16px">
+          <div><h2 style="margin:0;font-size:18px">Roadmap</h2><div class="muted" style="font-size:12.5px">Drag cards between lanes · changes auto-save and update Copilot’s answers instantly</div></div>
+          <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+            <span class="pill p-green"><span class="dot" style="background:var(--green)"></span> Saved · just now</span>
+            <div class="seg" id="rmSeg">
+              <button class="on" data-sub="rm-lanes">Now / Next / Later</button>
+              <button data-sub="rm-timeline">Timeline</button>
+            </div>
+            <button class="btn">＋ Add item</button>
+          </div>
+        </div>
+
+        <!-- lanes -->
+        <div class="subview on" id="rm-lanes">
+          <div class="lanes">
+            <div class="lane">
+              <div class="lane-head"><span class="dot" style="background:var(--green)"></span><span class="t">Now</span><span class="c">3</span></div>
+              <div class="rcard">
+                <h4>Inline citations with source links</h4>
+                <div class="tags"><span class="pill p-blue">Trust</span><span class="pill p-green">Validated</span></div>
+                <div class="muted" style="font-size:12px;margin-bottom:9px">Click a claim → jump to the exact paragraph in the doc.</div>
+                <div class="foot"><span>▤ 6 meetings</span><span class="conf" title="confidence">conf <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span style="margin-left:auto">Niels</span></div>
+              </div>
+              <div class="rcard">
+                <h4>EU data residency</h4>
+                <div class="tags"><span class="pill p-red">Blocker</span><span class="pill p-amber">Compliance</span></div>
+                <div class="foot"><span>▤ 2 meetings</span><span style="margin-left:auto">⛓ gates Mikenta pilot</span></div>
+              </div>
+              <div class="rcard">
+                <h4>Search rebuild (pgvector HNSW)</h4>
+                <div class="tags"><span class="pill p-grey">Platform</span></div>
+                <div class="foot"><span>⛓ 2 items depend on this</span></div>
+              </div>
+            </div>
+            <div class="lane">
+              <div class="lane-head"><span class="dot" style="background:var(--blue)"></span><span class="t">Next</span><span class="c">5</span></div>
+              <div class="rcard"><h4>Document compare</h4><div class="tags"><span class="pill p-green">Validated</span></div><div class="foot"><span>▤ 2 meetings</span><span style="margin-left:auto">⛓ needs search rebuild</span></div></div>
+              <div class="rcard"><h4>Redaction cluster (bulk client names)</h4><div class="tags"><span class="pill p-pink">Emerging</span><span class="pill p-amber">4 asks</span></div><div class="foot"><span>auto-suggested by Copilot</span></div></div>
+              <div class="rcard"><h4>SSO · Microsoft Entra</h4><div class="tags"><span class="pill p-grey">Enterprise</span></div><div class="foot"><span>▤ 1 meeting</span></div></div>
+            </div>
+            <div class="lane">
+              <div class="lane-head"><span class="dot" style="background:var(--txt-3)"></span><span class="t">Later</span><span class="c">6</span></div>
+              <div class="rcard"><h4>Per-firm citation styles (OSCOLA)</h4><div class="tags"><span class="pill p-pink">Small / unique</span></div><div class="foot"><span>parked · nice-to-have</span></div></div>
+              <div class="rcard"><h4>Matter → PDF export bundle</h4><div class="tags"><span class="pill p-grey">Workflow</span></div><div class="foot"><span>▤ 1 meeting</span></div></div>
+              <div class="rcard"><h4>Mobile review app</h4><div class="tags"><span class="pill p-grey">Exploration</span></div><div class="foot"><span>no signal yet</span></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- timeline -->
+        <div class="subview" id="rm-timeline">
+          <div class="card">
+            <div class="tl-head"><span>Item</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span></div>
+            <div class="tl-row"><div style="font-size:12.5px;font-weight:550">Inline citations</div><div class="tl-track"><div class="tl-bar" style="left:1%;width:30%;background:var(--green)">Now · ships mid-Jul</div></div></div>
+            <div class="tl-row"><div style="font-size:12.5px;font-weight:550">EU data residency</div><div class="tl-track"><div class="tl-bar" style="left:1%;width:22%;background:var(--red)">Blocker</div></div></div>
+            <div class="tl-row"><div style="font-size:12.5px;font-weight:550">Search rebuild</div><div class="tl-track"><div class="tl-bar" style="left:5%;width:34%;background:var(--accent)">Platform</div></div></div>
+            <div class="tl-row"><div style="font-size:12.5px;font-weight:550">Document compare</div><div class="tl-track"><div class="tl-bar" style="left:34%;width:30%;background:var(--blue)">Next</div></div></div>
+            <div class="tl-row"><div style="font-size:12.5px;font-weight:550">Redaction cluster</div><div class="tl-track"><div class="tl-bar" style="left:40%;width:28%;background:var(--pink)">Emerging</div></div></div>
+            <div class="tl-row"><div style="font-size:12.5px;font-weight:550">SSO · Entra</div><div class="tl-track"><div class="tl-bar" style="left:55%;width:26%;background:var(--txt-3)">Next</div></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== TASKS ===================== -->
+      <section class="screen" id="s-tasks">
+        <div class="row" style="margin-bottom:16px">
+          <div><h2 style="margin:0;font-size:18px">Tasks</h2><div class="muted" style="font-size:12.5px">Sprint 14 · assignees, estimates &amp; deadlines · many tasks born from meeting briefs</div></div>
+          <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+            <div class="seg" id="tkSeg">
+              <button class="on" data-sub="tk-board">Board</button>
+              <button data-sub="tk-list">List</button>
+              <button data-sub="tk-timeline">Timeline</button>
+            </div>
+            <button class="btn primary">＋ Task</button>
+          </div>
+        </div>
+
+        <!-- board -->
+        <div class="subview on" id="tk-board">
+          <div class="board">
+            <div class="col">
+              <div class="col-head"><span class="dot" style="background:var(--txt-3)"></span> Backlog <span class="c">5</span></div>
+              <div class="tcard"><div class="ttl">Spec bulk-redaction UX</div><div class="meta"><div class="avstack"><div class="avatar" style="width:22px;height:22px;background:#f078c4">SF</div></div><span class="pill p-pink">from brief</span><span class="est">5pt</span></div></div>
+              <div class="tcard"><div class="ttl">Research EU hosting on Neon</div><div class="meta"><div class="avstack"><div class="avatar" style="width:22px;height:22px;background:#52a8ff">JK</div></div><span class="est">3pt</span></div></div>
+              <div class="tcard"><div class="ttl">Per-firm citation style schema</div><div class="meta"><div class="avstack"><div class="avatar" style="width:22px;height:22px;background:#6d5efc">NH</div></div><span class="est">2pt</span></div></div>
+            </div>
+            <div class="col">
+              <div class="col-head"><span class="dot" style="background:var(--blue)"></span> In progress <span class="c">4</span></div>
+              <div class="tcard" style="border-color:var(--accent)">
+                <div class="ttl">Citation hover-cards (front-end)</div>
+                <div class="meta" style="margin-bottom:8px"><div class="avstack"><div class="avatar" style="width:22px;height:22px;background:#6d5efc">NH</div><div class="avatar" style="width:22px;height:22px;background:#39c08a">AL</div></div><span class="est">8pt</span></div>
+                <div class="meta"><span class="pill p-red">⚑ Due 4 Jul</span><span style="margin-left:auto" class="pill p-blue">⌖ Inline citations</span></div>
+              </div>
+              <div class="tcard"><div class="ttl">Embed wiki notes on save</div><div class="meta"><div class="avstack"><div class="avatar" style="width:22px;height:22px;background:#39c08a">AL</div></div><span class="pill p-amber">Due 3 Jul</span><span class="est">5pt</span></div></div>
+            </div>
+            <div class="col">
+              <div class="col-head"><span class="dot" style="background:var(--amber)"></span> Testing <span class="c">3</span></div>
+              <div class="tcard"><div class="ttl">Roadmap drag-drop autosave</div><div class="meta"><div class="avstack"><div class="avatar" style="width:22px;height:22px;background:#52a8ff">JK</div></div><span class="pill p-grey">Thu test day</span><span class="est">5pt</span></div></div>
+              <div class="tcard"><div class="ttl">Brief export to PDF</div><div class="meta"><div class="avstack"><div class="avatar" style="width:22px;height:22px;background:#6d5efc">NH</div></div><span class="est">3pt</span></div></div>
+            </div>
+            <div class="col">
+              <div class="col-head"><span class="dot" style="background:var(--green)"></span> Done <span class="c">6</span></div>
+              <div class="tcard" style="opacity:.7"><div class="ttl" style="text-decoration:line-through">Copilot citation chips</div><div class="meta"><div class="avstack"><div class="avatar" style="width:22px;height:22px;background:#39c08a">AL</div></div><span class="est">5pt</span></div></div>
+              <div class="tcard" style="opacity:.7"><div class="ttl" style="text-decoration:line-through">Meeting intake parser</div><div class="meta"><div class="avstack"><div class="avatar" style="width:22px;height:22px;background:#6d5efc">NH</div></div><span class="est">8pt</span></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- list -->
+        <div class="subview" id="tk-list">
+          <div class="card" style="padding:0;overflow:hidden">
+            <table class="tbl">
+              <thead><tr><th>Task</th><th>Assignee</th><th>Status</th><th>Estimate</th><th>Deadline</th><th>Source</th></tr></thead>
+              <tbody>
+                <tr><td>Citation hover-cards (front-end)</td><td><div class="row"><div class="avatar" style="width:22px;height:22px;background:#6d5efc">NH</div> Niels</div></td><td><span class="pill p-blue">In progress</span></td><td>8pt</td><td style="color:var(--red)">4 Jul</td><td><span class="chip">⌖ Roadmap</span></td></tr>
+                <tr><td>Spec bulk-redaction UX</td><td><div class="row"><div class="avatar" style="width:22px;height:22px;background:#f078c4">SF</div> Sofie</div></td><td><span class="pill p-grey">Backlog</span></td><td>5pt</td><td>9 Jul</td><td><span class="chip">▤ Mikenta brief</span></td></tr>
+                <tr><td>Research EU hosting on Neon</td><td><div class="row"><div class="avatar" style="width:22px;height:22px;background:#52a8ff">JK</div> Jonas</div></td><td><span class="pill p-grey">Backlog</span></td><td>3pt</td><td>10 Jul</td><td><span class="chip">▤ Mikenta brief</span></td></tr>
+                <tr><td>Embed wiki notes on save</td><td><div class="row"><div class="avatar" style="width:22px;height:22px;background:#39c08a">AL</div> Anna</div></td><td><span class="pill p-blue">In progress</span></td><td>5pt</td><td style="color:var(--amber)">3 Jul</td><td>—</td></tr>
+                <tr><td>Roadmap drag-drop autosave</td><td><div class="row"><div class="avatar" style="width:22px;height:22px;background:#52a8ff">JK</div> Jonas</div></td><td><span class="pill p-amber">Testing</span></td><td>5pt</td><td>3 Jul</td><td>—</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- timeline -->
+        <div class="subview" id="tk-timeline">
+          <div class="card">
+            <div class="tl-head" style="grid-template-columns:170px repeat(4,1fr)"><span>Task</span><span>30 Jun</span><span>3 Jul</span><span>6 Jul</span><span>9 Jul</span></div>
+            <div class="tl-row" style="grid-template-columns:170px 1fr"><div style="font-size:12.5px">Hover-cards</div><div class="tl-track"><div class="tl-bar" style="left:1%;width:28%;background:#6d5efc">Niels · 8pt</div></div></div>
+            <div class="tl-row" style="grid-template-columns:170px 1fr"><div style="font-size:12.5px">Wiki embed</div><div class="tl-track"><div class="tl-bar" style="left:1%;width:18%;background:#39c08a">Anna</div></div></div>
+            <div class="tl-row" style="grid-template-columns:170px 1fr"><div style="font-size:12.5px">Redaction spec</div><div class="tl-track"><div class="tl-bar" style="left:30%;width:34%;background:#f078c4">Sofie</div></div></div>
+            <div class="tl-row" style="grid-template-columns:170px 1fr"><div style="font-size:12.5px">EU hosting</div><div class="tl-track"><div class="tl-bar" style="left:45%;width:24%;background:#52a8ff">Jonas</div></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== FEATURES ===================== -->
+      <section class="screen" id="s-features">
+        <div class="row" style="margin-bottom:16px">
+          <div><h2 style="margin:0;font-size:18px">Feature Library</h2><div class="muted" style="font-size:12.5px">Grows from meetings &amp; chats · clustered so small, unique features aren’t lost</div></div>
+          <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+            <div class="seg" id="ftSeg">
+              <button class="on" data-sub="ft-clusters">Clusters</button>
+              <button data-sub="ft-catalog">Catalog</button>
+            </div>
+            <button class="btn">＋ Feature</button>
+          </div>
+        </div>
+
+        <div class="legend">
+          <span><span class="dot" style="background:var(--green)"></span> Validated (multiple asks)</span>
+          <span><span class="dot" style="background:var(--blue)"></span> On roadmap</span>
+          <span><span class="dot" style="background:var(--amber)"></span> Idea / needs triage</span>
+          <span><span class="dot" style="background:var(--pink)"></span> Small &amp; unique</span>
+        </div>
+
+        <!-- clusters -->
+        <div class="subview on" id="ft-clusters">
+          <div class="cluster">
+            <div class="cluster-head">
+              <div class="ic p-blue">⚖</div>
+              <div style="flex:1"><h3>Trust &amp; Citations</h3><div class="sub">7 features · asked by 6 firms · the cluster driving the EU pilot</div></div>
+              <span class="pill p-green">Validated</span>
+              <span class="chip">⌖ On roadmap</span>
+            </div>
+            <div class="subfeat"><span class="dot" style="background:var(--blue)"></span><div style="flex:1"><div class="nm">Inline citations with source links</div><div class="req">6 requests · 4 meetings · in “Now”</div></div><span class="pill p-blue">Roadmap</span></div>
+            <div class="subfeat"><span class="dot" style="background:var(--green)"></span><div style="flex:1"><div class="nm">Click-to-source paragraph jump</div><div class="req">3 requests</div></div><span class="pill p-green">Validated</span></div>
+            <div class="subfeat uniq"><span class="dot" style="background:var(--pink)"></span><div style="flex:1"><div class="nm">Per-firm citation style (OSCOLA / in-house)</div><div class="req">1 request · Mikenta only — kept so it isn’t lost</div></div><span class="pill p-pink">Small / unique</span></div>
+          </div>
+
+          <div class="cluster">
+            <div class="cluster-head">
+              <div class="ic p-pink">▦</div>
+              <div style="flex:1"><h3>Redaction &amp; Privacy</h3><div class="sub">4 features · emerged from 4 separate meetings — Copilot suggested this cluster</div></div>
+              <span class="pill p-amber">Auto-suggested</span>
+              <span class="chip">⌖ Promote to roadmap</span>
+            </div>
+            <div class="subfeat"><span class="dot" style="background:var(--amber)"></span><div style="flex:1"><div class="nm">Bulk-redact client names across a matter</div><div class="req">4 requests · Mikenta, Contrast, 2BIZ, Werk</div></div><span class="pill p-amber">Idea</span></div>
+            <div class="subfeat uniq"><span class="dot" style="background:var(--pink)"></span><div style="flex:1"><div class="nm">Redact figures/amounts only</div><div class="req">1 request · 2BIZ</div></div><span class="pill p-pink">Small / unique</span></div>
+            <div class="subfeat uniq"><span class="dot" style="background:var(--pink)"></span><div style="flex:1"><div class="nm">Reversible redaction with audit log</div><div class="req">1 request · Werk compliance</div></div><span class="pill p-pink">Small / unique</span></div>
+          </div>
+
+          <div class="cluster">
+            <div class="cluster-head">
+              <div class="ic p-green">⇄</div>
+              <div style="flex:1"><h3>Document Compare</h3><div class="sub">3 features · 2 firms · in “Next”</div></div>
+              <span class="pill p-blue">Roadmap</span>
+            </div>
+            <div class="subfeat"><span class="dot" style="background:var(--blue)"></span><div style="flex:1"><div class="nm">Version diff of two documents</div><div class="req">2 requests · in “Next”</div></div><span class="pill p-blue">Roadmap</span></div>
+            <div class="subfeat uniq"><span class="dot" style="background:var(--pink)"></span><div style="flex:1"><div class="nm">Plain-English lease diff</div><div class="req">1 request · captured live today</div></div><span class="pill p-pink">New / unique</span></div>
+          </div>
+        </div>
+
+        <!-- catalog -->
+        <div class="subview" id="ft-catalog">
+          <div class="feat-grid">
+            <div class="feat"><div class="row"><h4>Inline citations</h4><span class="pill p-blue" style="margin-left:auto">Roadmap · Now</span></div><div class="desc">Every AI claim links to the exact source paragraph.</div><div class="stat-row"><span>❖ Trust cluster</span><span>▤ 6 requests</span><span style="margin-left:auto">conf <span class="conf"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></span></div></div>
+            <div class="feat"><div class="row"><h4>Bulk redaction</h4><span class="pill p-amber" style="margin-left:auto">Idea</span></div><div class="desc">Mask all client names across a matter in one action.</div><div class="stat-row"><span>❖ Redaction cluster</span><span>▤ 4 requests</span></div></div>
+            <div class="feat"><div class="row"><h4>Document compare</h4><span class="pill p-blue" style="margin-left:auto">Roadmap · Next</span></div><div class="desc">Diff two versions of a contract or lease.</div><div class="stat-row"><span>❖ Compare cluster</span><span>▤ 2 requests</span></div></div>
+            <div class="feat"><div class="row"><h4>SSO · Microsoft Entra</h4><span class="pill p-grey" style="margin-left:auto">Enterprise</span></div><div class="desc">Single sign-on for larger firms.</div><div class="stat-row"><span>❖ Platform</span><span>▤ 1 request</span></div></div>
+            <div class="feat" style="border-color:rgba(240,120,196,.35)"><div class="row"><h4>Plain-English lease diff</h4><span class="pill p-pink" style="margin-left:auto">New / unique</span></div><div class="desc">Captured live today · niche but distinct, won’t be lost.</div><div class="stat-row"><span>❖ Compare cluster</span><span>▤ 1 request</span></div></div>
+            <div class="feat" style="border-color:rgba(240,120,196,.35)"><div class="row"><h4>OSCOLA citation style</h4><span class="pill p-pink" style="margin-left:auto">Small / unique</span></div><div class="desc">Per-firm citation formatting preference.</div><div class="stat-row"><span>❖ Trust cluster</span><span>▤ 1 request</span></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== KNOWLEDGE (living wiki) ===================== -->
+      <section class="screen" id="s-knowledge">
+        <div class="row" style="margin-bottom:8px">
+          <div><h2 style="margin:0;font-size:18px">Knowledge</h2><div class="muted" style="font-size:12.5px">Your living wiki — every meeting signal, feature, decision &amp; request as one connected entry you can see and control</div></div>
+          <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+            <div class="seg" id="knSeg">
+              <button class="on" data-sub="kn-map">Cluster map</button>
+              <button data-sub="kn-list">All entries</button>
+            </div>
+            <button class="btn">＋ Entry</button>
+          </div>
+        </div>
+        <div class="kn-legend" style="margin-bottom:10px">
+          <span><span class="dot" style="background:var(--accent)"></span> Cluster hub</span>
+          <span><span class="dot" style="background:var(--blue)"></span> On roadmap</span>
+          <span><span class="dot" style="background:var(--green)"></span> Validated</span>
+          <span><span class="dot" style="background:var(--amber)"></span> Idea</span>
+          <span><span class="dot" style="background:var(--pink)"></span> Small / unique</span>
+          <span style="margin-left:auto">— solid: belongs-to · <span style="color:var(--accent)">⸺ accent: cross-cluster link</span></span>
+        </div>
+
+        <!-- CLUSTER MAP -->
+        <div class="subview on" id="kn-map">
+          <div class="kn-shell">
+            <div class="kn-canvas">
+              <div class="kn-inner">
+                <svg viewBox="0 0 760 500">
+                  <!-- belongs-to links -->
+                  <g stroke="var(--line)" stroke-width="1.5" fill="none">
+                    <!-- trust hub (185,127) -->
+                    <line x1="185" y1="127" x2="95" y2="44"/>
+                    <line x1="185" y1="127" x2="85" y2="214"/>
+                    <line x1="185" y1="127" x2="320" y2="44"/>
+                    <!-- redaction hub (170,387) -->
+                    <line x1="170" y1="387" x2="80" y2="314"/>
+                    <line x1="170" y1="387" x2="95" y2="462"/>
+                    <line x1="170" y1="387" x2="305" y2="444"/>
+                    <!-- compare hub (495,267) -->
+                    <line x1="495" y1="267" x2="525" y2="154"/>
+                    <line x1="495" y1="267" x2="650" y2="362"/>
+                    <!-- platform hub (645,127) -->
+                    <line x1="645" y1="127" x2="700" y2="244"/>
+                    <line x1="645" y1="127" x2="600" y2="44"/>
+                  </g>
+                  <!-- cross-cluster (dependency) links -->
+                  <g stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="5 5" fill="none" opacity="0.8">
+                    <line x1="645" y1="127" x2="495" y2="267"/>
+                    <line x1="185" y1="127" x2="645" y2="127"/>
+                  </g>
+                </svg>
+
+                <!-- hubs -->
+                <div class="khub" data-key="trust" style="left:185px;top:127px"><span class="ic p-blue">⚖</span> Trust &amp; Citations</div>
+                <div class="khub" data-key="redaction" style="left:170px;top:387px"><span class="ic p-pink">▦</span> Redaction</div>
+                <div class="khub" data-key="compare" style="left:495px;top:267px"><span class="ic p-green">⇄</span> Document Compare</div>
+                <div class="khub" data-key="platform" style="left:645px;top:127px"><span class="ic p-grey">⚙</span> Platform</div>
+
+                <!-- trust entries -->
+                <div class="knode sel" data-key="inline" style="left:95px;top:44px"><span class="nd" style="background:var(--blue)"></span> Inline citations</div>
+                <div class="knode" data-key="click" style="left:85px;top:214px"><span class="nd" style="background:var(--green)"></span> Click-to-source</div>
+                <div class="knode uniq" data-key="oscola" style="left:320px;top:44px"><span class="nd" style="background:var(--pink)"></span> OSCOLA style</div>
+                <!-- redaction entries -->
+                <div class="knode" data-key="bulk" style="left:80px;top:314px"><span class="nd" style="background:var(--amber)"></span> Bulk redact names</div>
+                <div class="knode uniq" data-key="figures" style="left:95px;top:462px"><span class="nd" style="background:var(--pink)"></span> Redact figures</div>
+                <div class="knode uniq" data-key="reversible" style="left:305px;top:444px"><span class="nd" style="background:var(--pink)"></span> Reversible + audit</div>
+                <!-- compare entries -->
+                <div class="knode" data-key="diff" style="left:525px;top:154px"><span class="nd" style="background:var(--blue)"></span> Version diff</div>
+                <div class="knode uniq" data-key="plain" style="left:650px;top:362px"><span class="nd" style="background:var(--pink)"></span> Plain-English diff</div>
+                <!-- platform entries -->
+                <div class="knode" data-key="sso" style="left:700px;top:244px"><span class="nd" style="background:var(--txt-3)"></span> SSO · Entra</div>
+                <div class="knode" data-key="search" style="left:600px;top:44px"><span class="nd" style="background:var(--accent)"></span> Search rebuild</div>
+              </div>
+            </div>
+
+            <!-- inspector: a single entry, with controls -->
+            <div class="card kn-inspector" id="knInspector"><!-- filled by JS --></div>
+          </div>
+        </div>
+
+        <!-- ALL ENTRIES -->
+        <div class="subview" id="kn-list">
+          <div class="card" style="padding:0;overflow:hidden">
+            <div class="row" style="padding:12px 14px;border-bottom:1px solid var(--line-soft);gap:8px">
+              <span class="chip">All types ▾</span><span class="chip">All clusters ▾</span><span class="chip">Any status ▾</span>
+              <span class="muted" style="margin-left:auto;font-size:12px">86 entries · 12 clusters</span>
+            </div>
+            <table class="tbl">
+              <thead><tr><th>Entry</th><th>Type</th><th>Cluster</th><th>Status</th><th>Requests</th><th>Source</th><th></th></tr></thead>
+              <tbody>
+                <tr><td>Inline citations with source links</td><td><span class="pill p-grey">Feature</span></td><td>Trust &amp; Citations</td><td><span class="pill p-blue">Roadmap · Now</span></td><td>6</td><td><span class="chip">▤ 4 meetings</span></td><td style="text-align:right"><span class="chip">⋯</span></td></tr>
+                <tr><td>Bulk-redact client names</td><td><span class="pill p-grey">Feature</span></td><td>Redaction</td><td><span class="pill p-amber">Idea</span></td><td>4</td><td><span class="chip">▤ Mikenta +3</span></td><td style="text-align:right"><span class="chip">⋯</span></td></tr>
+                <tr><td>Ship citations before EU pilot</td><td><span class="pill p-grey">Decision</span></td><td>Trust &amp; Citations</td><td><span class="pill p-green">Decided</span></td><td>—</td><td><span class="chip">▤ Mikenta · 28 Jun</span></td><td style="text-align:right"><span class="chip">⋯</span></td></tr>
+                <tr><td>Plain-English lease diff</td><td><span class="pill p-grey">Request</span></td><td>Document Compare</td><td><span class="pill p-pink">New / unique</span></td><td>1</td><td><span class="chip">✦ Live · 30 Jun</span></td><td style="text-align:right"><span class="chip">⋯</span></td></tr>
+                <tr><td>EU data residency</td><td><span class="pill p-grey">Feature</span></td><td>Platform</td><td><span class="pill p-red">Blocker</span></td><td>2</td><td><span class="chip">▤ 2 meetings</span></td><td style="text-align:right"><span class="chip">⋯</span></td></tr>
+                <tr><td>Per-firm citation style (OSCOLA)</td><td><span class="pill p-grey">Feature</span></td><td>Trust &amp; Citations</td><td><span class="pill p-pink">Small / unique</span></td><td>1</td><td><span class="chip">▤ Mikenta</span></td><td style="text-align:right"><span class="chip">⋯</span></td></tr>
+                <tr><td>Reversible redaction with audit log</td><td><span class="pill p-grey">Feature</span></td><td>Redaction</td><td><span class="pill p-pink">Small / unique</span></td><td>1</td><td><span class="chip">▤ Werk</span></td><td style="text-align:right"><span class="chip">⋯</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<script>
+  // top-level screen switching
+  const titles = {
+    dashboard:["Dashboard","Tuesday, 30 June 2026 · Sprint 14 — “Drafting & Citations”"],
+    meetings:["Meetings & Briefs","Paste transcripts · Copilot turns them into structured, linked briefs"],
+    chat:["Copilot","Searches everything · cites sources · captures feature signals live"],
+    roadmap:["Roadmap","Now / Next / Later · auto-saves · feeds Copilot"],
+    tasks:["Tasks","Sprint board · assignees, estimates, deadlines · multiple views"],
+    features:["Feature Library","Self-growing, clustered catalog of every feature signal"],
+    knowledge:["Knowledge","Living wiki · every entry, clustered — see, link and control single records"]
+  };
+  function go(nav){
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.nav===nav));
+    document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id==='s-'+nav));
+    if(titles[nav]){document.getElementById('pgTitle').textContent=titles[nav][0];document.getElementById('pgSub').textContent=titles[nav][1];}
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  document.querySelectorAll('[data-nav]').forEach(el=>el.addEventListener('click',()=>go(el.dataset.nav)));
+
+  // theme: Auto (follows OS) → Light → Dark, cycling
+  const themeModes=['auto','light','dark'];
+  const themeLabels={auto:'◐ Auto',light:'☀ Light',dark:'☾ Dark'};
+  let tIdx=0;
+  const tBtn=document.getElementById('themeBtn');
+  function applyTheme(){
+    const m=themeModes[tIdx];
+    if(m==='auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme',m);
+    tBtn.textContent=themeLabels[m];
+  }
+  tBtn.addEventListener('click',()=>{tIdx=(tIdx+1)%themeModes.length;applyTheme();});
+  applyTheme();
+
+  // sub-view segmented toggles
+  document.querySelectorAll('.seg').forEach(seg=>{
+    seg.addEventListener('click',e=>{
+      const btn=e.target.closest('button'); if(!btn)return;
+      seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===btn));
+      const scope=seg.closest('section');
+      scope.querySelectorAll('.subview').forEach(v=>v.classList.toggle('on',v.id===btn.dataset.sub));
+    });
+  });
+
+  // capture-card classification toggle
+  document.querySelectorAll('.cls').forEach(cls=>{
+    cls.addEventListener('click',e=>{
+      const opt=e.target.closest('.cls-opt'); if(!opt)return;
+      cls.querySelectorAll('.cls-opt').forEach(o=>o.classList.toggle('on',o===opt));
+    });
+  });
+
+  // meeting list selection (visual only)
+  document.querySelectorAll('.mcard').forEach(c=>c.addEventListener('click',()=>{
+    document.querySelectorAll('.mcard').forEach(x=>x.classList.remove('sel'));c.classList.add('sel');
+  }));
+
+  // ---- knowledge graph: single-entry inspector ----
+  const knData={
+    trust:{t:'Trust & Citations',type:'Cluster',tp:'p-accent',status:'Validated',sp:'p-green',cluster:'—',req:'9 across members',meet:'6 meetings',src:'Mikenta · Contrast · Werk · 2BIZ · FLC · Viio',desc:'The cluster driving the EU pilot. Groups every signal about making AI output trustworthy in court filings.',hub:true},
+    redaction:{t:'Redaction',type:'Cluster',tp:'p-accent',status:'Auto-suggested',sp:'p-amber',cluster:'—',req:'6 across members',meet:'4 meetings',src:'Mikenta · Contrast · 2BIZ · Werk',desc:'Emerged automatically — Copilot noticed redaction asked across 4 separate meetings with no roadmap item.',hub:true},
+    compare:{t:'Document Compare',type:'Cluster',tp:'p-accent',status:'On roadmap',sp:'p-blue',cluster:'—',req:'3 across members',meet:'2 meetings',src:'Contrast · live call',desc:'Diffing two versions of a contract or lease. Sits in "Next" on the roadmap.',hub:true},
+    platform:{t:'Platform',type:'Cluster',tp:'p-accent',status:'Foundational',sp:'p-grey',cluster:'—',req:'—',meet:'3 meetings',src:'Eng reviews · Mikenta',desc:'Cross-cutting infrastructure others depend on — search rebuild, residency, SSO.',hub:true},
+    inline:{t:'Inline citations with source links',type:'Feature',tp:'p-grey',status:'Roadmap · Now',sp:'p-blue',cluster:'Trust & Citations',req:'6 requests',meet:'4 meetings',src:'Mikenta · Contrast · Werk · 2BIZ',desc:'Click any AI claim → jump to the exact source paragraph. 6th firm just asked — strongest validated signal.'},
+    click:{t:'Click-to-source paragraph jump',type:'Feature',tp:'p-grey',status:'Validated',sp:'p-green',cluster:'Trust & Citations',req:'3 requests',meet:'2 meetings',src:'Contrast · Werk',desc:'The interaction behind inline citations — deep-link straight into the document.'},
+    oscola:{t:'Per-firm citation style (OSCOLA / in-house)',type:'Feature',tp:'p-grey',status:'Small / unique',sp:'p-pink',cluster:'Trust & Citations',req:'1 request',meet:'1 meeting',src:'Mikenta only',desc:'Niche but distinct — captured so it is not lost. Tagged nice-to-have, EU.'},
+    bulk:{t:'Bulk-redact client names across a matter',type:'Feature',tp:'p-grey',status:'Idea',sp:'p-amber',cluster:'Redaction',req:'4 requests',meet:'4 meetings',src:'Mikenta · Contrast · 2BIZ · Werk',desc:'Mask all client names across a whole matter in one action. Strongest unmet ask — candidate to promote.'},
+    figures:{t:'Redact figures / amounts only',type:'Feature',tp:'p-grey',status:'Small / unique',sp:'p-pink',cluster:'Redaction',req:'1 request',meet:'1 meeting',src:'2BIZ',desc:'Targeted redaction of monetary values rather than names.'},
+    reversible:{t:'Reversible redaction with audit log',type:'Feature',tp:'p-grey',status:'Small / unique',sp:'p-pink',cluster:'Redaction',req:'1 request',meet:'1 meeting',src:'Werk compliance',desc:'Un-redact with a full audit trail — compliance-driven.'},
+    diff:{t:'Version diff of two documents',type:'Feature',tp:'p-grey',status:'Roadmap · Next',sp:'p-blue',cluster:'Document Compare',req:'2 requests',meet:'2 meetings',src:'Contrast · live call',desc:'Side-by-side structural diff of two document versions.'},
+    plain:{t:'Plain-English lease diff',type:'Request',tp:'p-grey',status:'New / unique',sp:'p-pink',cluster:'Document Compare',req:'1 request',meet:'captured live',src:'Live session · 30 Jun',desc:'A plain-language explanation of what changed between two lease versions. Captured live in Copilot today.'},
+    sso:{t:'SSO · Microsoft Entra',type:'Feature',tp:'p-grey',status:'Enterprise',sp:'p-grey',cluster:'Platform',req:'1 request',meet:'1 meeting',src:'2BIZ',desc:'Single sign-on for larger firms.'},
+    search:{t:'Search rebuild (pgvector HNSW)',type:'Feature',tp:'p-grey',status:'Roadmap · Now',sp:'p-blue',cluster:'Platform',req:'—',meet:'eng review',src:'Architecture review · 22 Jun',desc:'Platform work that 2 roadmap items depend on — inline citations and document compare both need it.'}
+  };
+  function renderInspector(key){
+    const e=knData[key]||knData.inline;
+    const promote = e.status.includes('Roadmap')? '<button class="btn">⌖ On roadmap</button>' : '<button class="btn">⌖ Promote to roadmap</button>';
+    document.getElementById('knInspector').innerHTML=`
+      <div class="ent-type"><span class="pill ${e.tp}">${e.type}</span><span class="pill ${e.sp}" style="margin-left:auto">${e.status}</span></div>
+      <h3>${e.t}</h3>
+      <p class="muted" style="font-size:12.5px;margin:8px 0 14px">${e.desc}</p>
+      <div class="kn-meta-row"><span>Cluster</span><b>${e.cluster}</b></div>
+      <div class="kn-meta-row"><span>Requests</span><b>${e.req}</b></div>
+      <div class="kn-meta-row"><span>Appears in</span><b>${e.meet}</b></div>
+      <div class="kn-meta-row" style="border:none"><span>Sources</span><b style="text-align:right;max-width:170px">${e.src}</b></div>
+      <div class="kn-ctrl">
+        <button class="btn">✎ Edit</button>
+        <button class="btn">⇄ Status ▾</button>
+        <button class="btn">❖ Merge into…</button>
+        ${promote}
+        <button class="btn full">⛓ Link to another entry</button>
+        <button class="btn full" style="color:var(--red)">⌫ Archive entry</button>
+      </div>`;
+  }
+  function selectNode(el){
+    document.querySelectorAll('.knode,.khub').forEach(n=>n.classList.remove('sel'));
+    el.classList.add('sel');
+    renderInspector(el.dataset.key);
+  }
+  document.querySelectorAll('.knode,.khub').forEach(n=>n.addEventListener('click',()=>selectNode(n)));
+  renderInspector('inline');
+</script>
+</body>
+</html>
