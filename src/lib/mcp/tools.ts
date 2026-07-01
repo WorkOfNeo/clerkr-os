@@ -2,16 +2,15 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 
-export interface ToolContext {
-  userId: string;
-}
+import { ANALYTICS_TOOLS } from "./tools/analytics";
+import { CHAT_TOOLS } from "./tools/chat";
+import { SPRINT_TOOLS } from "./tools/sprint";
+import { TASK_TOOLS } from "./tools/task";
+import { TAXONOMY_TOOLS } from "./tools/taxonomy";
+import { WIKI_TOOLS } from "./tools/wiki";
+import type { ToolContext, ToolDef } from "./tools/types";
 
-export interface ToolDef {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-  handler: (args: Record<string, unknown>, ctx: ToolContext) => Promise<unknown>;
-}
+export type { ToolContext, ToolDef };
 
 const priority = z.number().int().min(1).max(5);
 const isoDate = z
@@ -314,4 +313,12 @@ export const TOOLS: ToolDef[] = [
       return { posts, count: posts.length };
     },
   },
+
+  // ─── Sprint board ─────────────────────────────────────────────────────────
+  ...TASK_TOOLS,
+  ...SPRINT_TOOLS,
+  ...TAXONOMY_TOOLS,
+  ...WIKI_TOOLS,
+  ...CHAT_TOOLS,
+  ...ANALYTICS_TOOLS,
 ];
