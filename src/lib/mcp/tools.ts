@@ -4,6 +4,10 @@ import { db } from "@/lib/db";
 
 import { ANALYTICS_TOOLS } from "./tools/analytics";
 import { CHAT_TOOLS } from "./tools/chat";
+import { FEATURE_TOOLS } from "./tools/feature";
+import { MEETING_TOOLS } from "./tools/meeting";
+import { ROADMAP_TOOLS } from "./tools/roadmap";
+import { SETTINGS_TOOLS } from "./tools/settings";
 import { SPRINT_TOOLS } from "./tools/sprint";
 import { TASK_TOOLS } from "./tools/task";
 import { TAXONOMY_TOOLS } from "./tools/taxonomy";
@@ -321,4 +325,9 @@ export const TOOLS: ToolDef[] = [
   ...WIKI_TOOLS,
   ...CHAT_TOOLS,
   ...ANALYTICS_TOOLS,
+  // ─── Product OS (meetings → briefs, feature library, roadmap) ────────────
+  ...MEETING_TOOLS,
+  ...FEATURE_TOOLS,
+  ...ROADMAP_TOOLS,
+  ...SETTINGS_TOOLS,
 ];
