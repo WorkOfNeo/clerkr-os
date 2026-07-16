@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { runChatTurn, type FocusTaskLite, type SprintContextLite } from "@/lib/ai/chat";
+import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { db } from "@/lib/db";
 
 import type { ToolDef } from "./types";
@@ -73,6 +75,90 @@ export const CHAT_TOOLS: ToolDef[] = [
         data: { sessionId, role: "USER", content },
       });
       return msg;
+    },
+  },
+
+  {
+    name: "send_chat_message",
+    description:
+      "Send a user message to the in-app Copilot and get the AI's reply — the full turn " +
+      "(persist user message, semantic search for context, model call, persist assistant " +
+      "reply), identical to typing in the web UI. Omit sessionId to auto-create a session " +
+      "titled from the message. Use append_chat_message instead if you only want to store " +
+      "a message without an AI response.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: { type: "string", description: "Existing session; omit to auto-create." },
+        content: { type: "string", description: "The user message." },
+        sprintId: { type: "string", description: "Optional sprint context (only used when auto-creating)." },
+        focusTaskId: { type: "string", description: "Optional focus task context (only used when auto-creating)." },
+      },
+      required: ["content"],
+    },
+    handler: async (args, ctx) => {
+      const input = z
+        .object({
+          sessionId: z.string().optional(),
+          content: z.string().min(1),
+          sprintId: z.string().optional(),
+          focusTaskId: z.string().optional(),
+        })
+        .parse(args);
+      if (!isOpenAIAvailable()) {
+        throw new Error("OPENAI_API_KEY is not set. The in-app LLM is disabled.");
+      }
+
+      let sessionId = input.sessionId ?? null;
+      let sprintId = input.sprintId ?? null;
+      let focusTaskId = input.focusTaskId ?? null;
+      if (sessionId) {
+        const existing = await db.chatSession.findUnique({
+          where: { id: sessionId },
+          select: { sprintId: true, focusTaskId: true },
+        });
+        if (!existing) throw new Error(`Chat session not found: ${sessionId}`);
+        sprintId = existing.sprintId;
+        focusTaskId = existing.focusTaskId;
+      } else {
+        const title =
+          input.content.length > 60 ? `${input.content.slice(0, 60)}…` : input.content;
+        const created = await db.chatSession.create({
+          data: { title, userId: ctx.userId, sprintId, focusTaskId },
+          select: { id: true },
+        });
+        sessionId = created.id;
+      }
+
+      let sprint: SprintContextLite | null = null;
+      if (sprintId) {
+        sprint = await db.sprint.findUnique({
+          where: { id: sprintId },
+          select: { id: true, name: true, state: true, goal: true, startDate: true, endDate: true },
+        });
+      }
+      let focusTask: FocusTaskLite | null = null;
+      if (focusTaskId) {
+        const t = await db.task.findUnique({
+          where: { id: focusTaskId },
+          select: { id: true, name: true, status: { select: { label: true } } },
+        });
+        if (t) focusTask = { id: t.id, name: t.name, status: t.status.label };
+      }
+
+      const turn = await runChatTurn({
+        sessionId,
+        userMessage: input.content.trim(),
+        sprint,
+        focusTask,
+      });
+      const citedNotes = turn.citedNoteIds.length
+        ? await db.wikiNote.findMany({
+            where: { id: { in: turn.citedNoteIds } },
+            select: { id: true, slug: true, title: true },
+          })
+        : [];
+      return { sessionId, assistantText: turn.assistantText, citedNotes };
     },
   },
 

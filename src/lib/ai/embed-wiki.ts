@@ -7,10 +7,11 @@ export async function embedNote(noteId: string, title: string, body: string): Pr
   const literal = toVectorLiteral(vec);
   // Unsupported columns must be written via raw SQL — Prisma can't bind to
   // them via the generated client.
+  // Column is camelCase (the Prisma field has no @map) — must be quoted in raw SQL.
   await db.$executeRaw`
     UPDATE wiki_note
-       SET embedding   = ${literal}::vector,
-           embedded_at = NOW()
+       SET embedding    = ${literal}::vector,
+           "embeddedAt" = NOW()
      WHERE id = ${noteId}
   `;
 }

@@ -15,9 +15,10 @@ export async function embedMeeting(
 ): Promise<void> {
   const text = `${title}\n\n${tldr}\n\n${transcript}`;
   const literal = toVectorLiteral(await embedText(text));
+  // "embeddedAt" is camelCase in the DB (no @map on the Prisma field).
   await db.$executeRaw`
     UPDATE meeting
-       SET embedding = ${literal}::vector, embedded_at = NOW()
+       SET embedding = ${literal}::vector, "embeddedAt" = NOW()
      WHERE id = ${id}
   `;
 }
@@ -30,7 +31,7 @@ export async function embedFeature(
   const literal = toVectorLiteral(await embedText(`${title}\n\n${description}`));
   await db.$executeRaw`
     UPDATE feature
-       SET embedding = ${literal}::vector, embedded_at = NOW()
+       SET embedding = ${literal}::vector, "embeddedAt" = NOW()
      WHERE id = ${id}
   `;
 }

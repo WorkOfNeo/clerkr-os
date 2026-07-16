@@ -75,6 +75,9 @@ All under [src/lib/ai/](src/lib/ai/):
 - `wiki-search.ts` — semantic search via `embedding <=> ${vec}::vector` cosine distance, with `Prisma.sql` for optional tag-array filter.
 - `chat.ts` — `runChatTurn`: persists user msg, runs semantic search for context, calls `gpt-4o-mini`, persists assistant msg.
 - `review-plan.ts` — `reviewSprintPlan`: builds a critique prompt with task list + wiki context, creates a `ChatSession` titled "Plan review: <name>".
+- `embed-sweep.ts` — `sweepMissingEmbeddings`: embeds any wiki note / feature / meeting whose `embedding` is NULL. Runs every 10 min (+ ~30s after boot) via `src/instrumentation.ts`, and on demand via the `backfill_embeddings` MCP tool. Nothing stays unsearchable even when an inline embed fails.
+
+**Raw-SQL column gotcha:** the pgvector tables use camelCase column names (`"embeddedAt"`) because the Prisma fields have no `@map`. Raw `$executeRaw`/`$queryRaw` must quote them — unquoted `embedded_at` fails with Postgres `42703`, and inside `tryEmbed`-style wrappers it fails *silently*. This once left every wiki note / feature / meeting in prod unembedded.
 
 Chat is **synchronous** (no streaming yet) — fine for the team's volume. Streaming is a follow-up.
 

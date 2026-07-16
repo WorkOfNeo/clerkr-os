@@ -4,10 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { enrichMeeting, type EnrichSignal } from "@/lib/ai/enrich-meeting";
-import { extractBrief } from "@/lib/ai/extract-brief";
 import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { db } from "@/lib/db";
+import { runStructurePipeline } from "@/lib/meetings/structure";
 import { requireSession } from "@/lib/session";
 import { slugify, uniqueSlug } from "@/lib/slug";
 
@@ -63,81 +62,10 @@ export async function structureMeeting(id: string): Promise<{ error?: string }> 
     return { error: "OPENAI_API_KEY is not set. Brief extraction is disabled." };
   }
 
-  const meeting = await db.meeting.findUnique({
-    where: { id },
-    select: { id: true, transcript: true },
-  });
-  if (!meeting) return { error: "Meeting not found." };
-
-  let brief;
   try {
-    brief = await extractBrief(meeting.transcript);
+    await runStructurePipeline(id);
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
-  }
-
-  // Re-runnable: clear the prior extraction (our own child rows — safe to
-  // delete) and re-create everything except signals in one transaction.
-  await db.$transaction([
-    db.decision.deleteMany({ where: { meetingId: id } }),
-    db.featureSignal.deleteMany({ where: { meetingId: id } }),
-    db.actionItem.deleteMany({ where: { meetingId: id } }),
-    db.openQuestion.deleteMany({ where: { meetingId: id } }),
-    db.meeting.update({
-      where: { id },
-      data: {
-        tldr: brief.tldr,
-        structuredAt: new Date(),
-        decisions: {
-          create: brief.decisions.map((d) => ({
-            content: d.content,
-            owner: d.owner ?? null,
-          })),
-        },
-        actionItems: {
-          create: brief.actionItems.map((a) => ({
-            content: a.content,
-            assignee: a.assignee ?? null,
-            dueDate: parseDate(a.dueDate),
-          })),
-        },
-        openQuestions: {
-          create: brief.openQuestions.map((q) => ({ content: q.content })),
-        },
-      },
-    }),
-  ]);
-
-  // Feature signals are created individually so we can capture their ids and
-  // cluster hints for the enrichment pass (embed + cluster + dedupe + promote).
-  const enrichSignals: EnrichSignal[] = [];
-  for (const f of brief.featureSignals) {
-    const sig = await db.featureSignal.create({
-      data: {
-        meetingId: id,
-        title: f.title,
-        detail: f.detail ?? null,
-        status: f.status,
-        tags: f.tags,
-      },
-      select: { id: true },
-    });
-    enrichSignals.push({
-      id: sig.id,
-      title: f.title,
-      detail: f.detail ?? null,
-      status: f.status,
-      tags: f.tags,
-      cluster: f.cluster ?? null,
-    });
-  }
-
-  // Embed the meeting and auto-cluster / categorize / dedupe / promote signals.
-  // Best-effort — never fail the structuring if enrichment hiccups.
-  try {
-    await enrichMeeting(id, enrichSignals);
-  } catch (err) {
-    console.warn("[structureMeeting] enrichment failed:", err);
   }
 
   revalidatePath("/meetings");
