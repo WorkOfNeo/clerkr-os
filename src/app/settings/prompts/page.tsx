@@ -3,7 +3,9 @@ import Link from "next/link";
 import { AppNav } from "@/components/AppNav";
 import {
   DEFAULT_CHAT_PROMPT,
+  DEFAULT_INGEST_PROMPT,
   DEFAULT_MEETING_PROMPT,
+  DEFAULT_ROLLUP_PROMPT,
   PROMPT_KEYS,
 } from "@/lib/ai/prompts";
 import { db } from "@/lib/db";
@@ -15,12 +17,14 @@ export default async function PromptsSettingsPage() {
   const session = await requireSession();
 
   const rows = await db.appSetting.findMany({
-    where: { key: { in: [PROMPT_KEYS.meeting, PROMPT_KEYS.chat] } },
+    where: { key: { in: Object.values(PROMPT_KEYS) } },
   });
   const byKey = new Map(rows.map((r) => [r.key, r.value]));
 
   const meetingValue = byKey.get(PROMPT_KEYS.meeting) ?? DEFAULT_MEETING_PROMPT;
   const chatValue = byKey.get(PROMPT_KEYS.chat) ?? DEFAULT_CHAT_PROMPT;
+  const ingestValue = byKey.get(PROMPT_KEYS.ingest) ?? DEFAULT_INGEST_PROMPT;
+  const rollupValue = byKey.get(PROMPT_KEYS.rollup) ?? DEFAULT_ROLLUP_PROMPT;
 
   return (
     <div className="min-h-screen">
@@ -56,6 +60,22 @@ export default async function PromptsSettingsPage() {
           description="The base persona and rules for the /chat assistant. Product + semantic context is appended automatically."
           value={chatValue}
           isCustom={byKey.has(PROMPT_KEYS.chat)}
+        />
+
+        <PromptEditor
+          settingKey={PROMPT_KEYS.ingest}
+          title="Claude session → work log"
+          description="Decides what the session-end hook keeps out of a Claude Code session, and how each entry is worded. Tighten this if the log gets noisy; loosen it if real decisions are slipping through. {{KINDS}} is replaced with the live entry-kind list."
+          value={ingestValue}
+          isCustom={byKey.has(PROMPT_KEYS.ingest)}
+        />
+
+        <PromptEditor
+          settingKey={PROMPT_KEYS.rollup}
+          title="Thread roll-up (on close)"
+          description="Turns a closed thread's whole entry stream into its outcome, and picks which ideas carry forward into the Feature Library."
+          value={rollupValue}
+          isCustom={byKey.has(PROMPT_KEYS.rollup)}
         />
       </main>
     </div>

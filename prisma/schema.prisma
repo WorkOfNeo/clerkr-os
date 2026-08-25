@@ -27,15 +27,15 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
 
-  sessions        Session[]
-  accounts        Account[]
-  apiTokens       ApiToken[]
-  posts           Post[]
-  tasksAuthored   Task[]         @relation("TaskAuthor")
-  taskAssignments TaskAssignee[]
-  wikiNotes       WikiNote[]
-  chatSessions    ChatSession[]
-  meetings        Meeting[]
+  sessions     Session[]
+  accounts     Account[]
+  apiTokens    ApiToken[]
+  posts        Post[]
+  wikiNotes    WikiNote[]
+  chatSessions ChatSession[]
+  meetings     Meeting[]
+  threads      Thread[]
+  logEntries   LogEntry[]
 
   @@map("user")
 }
@@ -131,158 +131,7 @@ model Post {
   @@map("post")
 }
 
-// ─── Sprint board ──────────────────────────────────────────────────────────
-// Sprint metadata (testing days, planning date) is editable per-sprint; the
-// "first Thursday + next-week Wed & Fri" convention lives in `src/lib/sprint-dates.ts`.
-
-enum SprintState {
-  PLANNED
-  ACTIVE
-  CLOSED
-}
-
-enum TaskPriority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
-}
-
-model Sprint {
-  id           String      @id @default(uuid())
-  name         String
-  slug         String      @unique
-  state        SprintState @default(PLANNED)
-  startDate    DateTime
-  endDate      DateTime
-  planningDate DateTime?
-  testingDay1  DateTime?
-  testingDay2  DateTime?
-  testingDay3  DateTime?
-  goal         String?
-  retroNotes   String?
-  closedAt     DateTime?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @default(now()) @updatedAt
-
-  tasks        Task[]
-  chatSessions ChatSession[]
-
-  @@index([state])
-  @@index([startDate])
-  @@map("sprint")
-}
-
 // Taxonomy — editable lists. New rows added via the settings UI or MCP.
-
-model TaskStatus {
-  id        String   @id @default(uuid())
-  label     String   @unique
-  color     String
-  sortOrder Int      @default(0)
-  isDone    Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  tasks Task[]
-
-  @@map("task_status")
-}
-
-model TaskGroup {
-  id        String   @id @default(uuid())
-  label     String   @unique
-  color     String
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-
-  tasks Task[]
-
-  @@map("task_group")
-}
-
-model TaskStack {
-  id        String   @id @default(uuid())
-  label     String   @unique
-  color     String
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-
-  tasks Task[]
-
-  @@map("task_stack")
-}
-
-model Task {
-  id             String       @id @default(uuid())
-  name           String
-  slug           String       @unique
-  description    String? // TipTap JSON serialized as string
-  dueDate        DateTime?
-  plannedDate    DateTime?
-  estimatedHours Decimal?     @db.Decimal(6, 2)
-  loggedHours    Decimal?     @db.Decimal(6, 2)
-  priority       TaskPriority @default(MEDIUM)
-  order          Int          @default(0) // sparse ordering within (sprintId, statusId)
-  archivedAt     DateTime?
-
-  statusId String
-  status   TaskStatus @relation(fields: [statusId], references: [id])
-
-  groupId String?
-  group   TaskGroup? @relation(fields: [groupId], references: [id])
-
-  stackId String?
-  stack   TaskStack? @relation(fields: [stackId], references: [id])
-
-  sprintId String?
-  sprint   Sprint? @relation(fields: [sprintId], references: [id])
-
-  authorId String
-  author   User   @relation("TaskAuthor", fields: [authorId], references: [id])
-
-  // Provenance: the meeting/brief this task came from (optional).
-  sourceMeetingId  String?
-  sourceMeeting    Meeting?    @relation("MeetingTasks", fields: [sourceMeetingId], references: [id])
-  sourceActionItem ActionItem?
-
-  assignees TaskAssignee[]
-  blockedBy TaskBlock[]    @relation("TaskBlocked")
-  blocking  TaskBlock[]    @relation("TaskBlocker")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  @@index([sprintId, statusId, order])
-  @@index([statusId])
-  @@index([authorId])
-  @@map("task")
-}
-
-model TaskAssignee {
-  taskId     String
-  userId     String
-  assignedAt DateTime @default(now())
-
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([taskId, userId])
-  @@index([userId])
-  @@map("task_assignee")
-}
-
-model TaskBlock {
-  // "blocker" must complete before "blocked" can start.
-  blockerId String
-  blockedId String
-
-  blocker Task @relation("TaskBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
-  blocked Task @relation("TaskBlocked", fields: [blockedId], references: [id], onDelete: Cascade)
-
-  @@id([blockerId, blockedId])
-  @@index([blockedId])
-  @@map("task_block")
-}
 
 // ─── Wiki ──────────────────────────────────────────────────────────────────
 // Embeddings stored as pgvector(1536) — text-embedding-3-small dimensions.
@@ -315,15 +164,14 @@ enum ChatRole {
 }
 
 model ChatSession {
-  id          String   @id @default(uuid())
-  title       String
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  sprintId    String?
-  sprint      Sprint?  @relation(fields: [sprintId], references: [id])
-  focusTaskId String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
+  id        String   @id @default(uuid())
+  title     String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  threadId  String?
+  thread    Thread?  @relation(fields: [threadId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
   messages ChatMessage[]
 
@@ -384,7 +232,6 @@ model Meeting {
   featureSignals FeatureSignal[]
   actionItems    ActionItem[]
   openQuestions  OpenQuestion[]
-  tasks          Task[]          @relation("MeetingTasks")
 
   @@index([meetingDate])
   @@index([authorId])
@@ -423,17 +270,17 @@ model FeatureSignal {
 }
 
 model ActionItem {
-  id        String    @id @default(uuid())
-  meetingId String
-  meeting   Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  content   String
-  assignee  String?
-  dueDate   DateTime?
-  done      Boolean   @default(false)
-  // Set when this action item has been pushed to the task board (1:1).
-  taskId    String?   @unique
-  task      Task?     @relation(fields: [taskId], references: [id])
-  createdAt DateTime  @default(now())
+  id         String    @id @default(uuid())
+  meetingId  String
+  meeting    Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  content    String
+  assignee   String?
+  dueDate    DateTime?
+  done       Boolean   @default(false)
+  // Set when this action item has been pushed to the work log (1:1).
+  logEntryId String?   @unique
+  logEntry   LogEntry? @relation(fields: [logEntryId], references: [id])
+  createdAt  DateTime  @default(now())
 
   @@index([meetingId])
   @@map("action_item")
@@ -481,6 +328,7 @@ model Cluster {
   updatedAt     DateTime @default(now()) @updatedAt
 
   features Feature[]
+  threads  Thread[]
 
   @@map("cluster")
 }
@@ -503,6 +351,8 @@ model Feature {
   roadmapItems RoadmapItem[]
   linksFrom    FeatureLink[]   @relation("FeatureLinkFrom")
   linksTo      FeatureLink[]   @relation("FeatureLinkTo")
+  threads      Thread[]
+  logEntries   LogEntry[]
 
   @@index([clusterId])
   @@index([status])
@@ -564,4 +414,148 @@ model RoadmapItem {
 
   @@index([lane, order])
   @@map("roadmap_item")
+}
+
+// ─── Work log (Threads + LogEntry) ───────────────────────────────────────────
+// This replaces the sprint/task board. The unit of work is not a planned task
+// but a DECISION already taken: a Thread. Everything that happens while acting
+// on it — right paths, dead ends, blockers, ideas thrown off along the way —
+// lands as a LogEntry on that thread. When the thread closes,
+// `src/lib/ai/roll-up-thread.ts` reads the whole stream and writes the outcome,
+// promoting IDEA entries into the Feature Library (deduped by embedding).
+//
+// Entries can also live with no thread at all — a loose note is still worth
+// keeping, and `attachEntry` can file it later.
+
+enum ThreadState {
+  OPEN // decided, in flight
+  DONE // finished; outcome rolled up
+  PARKED // paused, will come back
+  ABANDONED // dropped on purpose (the dead end IS the learning)
+}
+
+enum LogKind {
+  DECISION // "we're doing X, because Y"
+  WORKED // right path — this is what worked
+  DEAD_END // bad path — tried it, didn't work, here's why
+  BLOCKER // stuck on this
+  IDEA // for later — feeds the Feature Library on rollup
+  QUESTION // open, unresolved
+  SHIPPED // landed
+  NOTE // everything else
+}
+
+enum LogSource {
+  MANUAL // typed into /log
+  MCP // written by Claude via an MCP tool
+  SESSION // extracted from a Claude Code session by the session-end hook
+  MEETING // pushed over from a meeting action item
+}
+
+model Thread {
+  id       String      @id @default(uuid())
+  slug     String      @unique
+  title    String
+  decision String? // the call that started it
+  why      String? // the reasoning behind the call
+  state    ThreadState @default(OPEN)
+
+  clusterId String?
+  cluster   Cluster? @relation(fields: [clusterId], references: [id])
+
+  featureId String?
+  feature   Feature? @relation(fields: [featureId], references: [id])
+
+  // Written by the AI rollup when the thread closes.
+  outcome   String?
+  outcomeAt DateTime?
+
+  embedding  Unsupported("vector(1536)")? // semantic recall + hook auto-attach
+  embeddedAt DateTime?
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  startedAt DateTime  @default(now())
+  closedAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+
+  entries      LogEntry[]
+  chatSessions ChatSession[]
+
+  @@index([state, startedAt])
+  @@index([authorId])
+  @@map("thread")
+}
+
+model LogEntry {
+  id   String  @id @default(uuid())
+  kind LogKind @default(NOTE)
+  body String
+
+  threadId String?
+  thread   Thread? @relation(fields: [threadId], references: [id])
+
+  source LogSource @default(MANUAL)
+
+  // Provenance for SESSION-sourced entries (set by the session-end hook).
+  sessionId String?
+  repo      String?
+  branch    String?
+
+  // AI-written entries land unreviewed and surface in the /log review tray;
+  // anything typed by hand is reviewed on arrival.
+  reviewed Boolean @default(true)
+
+  // Set when an IDEA entry has been promoted into the Feature Library.
+  featureId  String?
+  feature    Feature?  @relation(fields: [featureId], references: [id])
+  promotedAt DateTime?
+
+  embedding  Unsupported("vector(1536)")?
+  embeddedAt DateTime?
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  sourceActionItem ActionItem?
+
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([occurredAt])
+  @@index([threadId, occurredAt])
+  @@index([kind, occurredAt])
+  @@index([reviewed])
+  @@index([sessionId])
+  @@map("log_entry")
+}
+
+// One row per Claude Code session the session-end hook offered us. Keyed on the
+// Claude session id so a re-fired hook can never double-log, and kept even when
+// the session was judged irrelevant — that's the audit trail for "why didn't my
+// session show up?".
+model SessionIngest {
+  id          String  @id @default(uuid())
+  sessionId   String  @unique
+  cwd         String?
+  repo        String?
+  branch      String?
+  contentHash String
+
+  relevant Boolean @default(false)
+  reason   String? // why it was skipped, or a one-line summary when kept
+
+  entriesCreated  Int @default(0)
+  threadsCreated  Int @default(0)
+  featuresCreated Int @default(0)
+  transcriptChars Int @default(0)
+
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("session_ingest")
 }

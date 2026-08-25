@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { AppNav } from "@/components/AppNav";
-import { ActionItemTaskButton } from "@/components/meeting/ActionItemTaskButton";
+import { ActionItemLogButton } from "@/components/meeting/ActionItemLogButton";
 import { ActionItemToggle } from "@/components/meeting/ActionItemToggle";
 import { PromoteSignalButton } from "@/components/meeting/PromoteSignalButton";
 import { StructureButton } from "@/components/meeting/StructureButton";
@@ -162,7 +162,7 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
                       </p>
                     </div>
                   </div>
-                  <ActionItemTaskButton actionItemId={a.id} onBoard={Boolean(a.taskId)} />
+                  <ActionItemLogButton actionItemId={a.id} inLog={Boolean(a.logEntryId)} />
                 </li>
               ))}
             </BriefSection>

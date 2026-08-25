@@ -25,16 +25,14 @@ export interface ChatTurnResponse {
 
 export async function createChatSession(input: {
   title?: string;
-  sprintId?: string | null;
-  focusTaskId?: string | null;
+  threadId?: string | null;
 }): Promise<{ id: string }> {
   const session = await requireSession();
   const created = await db.chatSession.create({
     data: {
       title: input.title?.trim() || "New chat",
       userId: session.user.id,
-      sprintId: input.sprintId ?? null,
-      focusTaskId: input.focusTaskId ?? null,
+      threadId: input.threadId ?? null,
     },
     select: { id: true },
   });
@@ -60,8 +58,7 @@ export async function getSessionMessages(sessionId: string): Promise<ChatMessage
 export async function sendChatMessage(input: {
   sessionId: string | null;
   userMessage: string;
-  sprintId?: string | null;
-  focusTaskId?: string | null;
+  threadId?: string | null;
 }): Promise<ChatTurnResponse> {
   const session = await requireSession();
   const userMessage = input.userMessage.trim();
@@ -81,43 +78,24 @@ export async function sendChatMessage(input: {
     // Auto-create.
     const title = userMessage.length > 60 ? `${userMessage.slice(0, 60)}…` : userMessage;
     const created = await db.chatSession.create({
-      data: {
-        title,
-        userId: session.user.id,
-        sprintId: input.sprintId ?? null,
-        focusTaskId: input.focusTaskId ?? null,
-      },
+      data: { title, userId: session.user.id, threadId: input.threadId ?? null },
       select: { id: true },
     });
     sessionId = created.id;
   }
 
-  // Build sprint context if applicable.
-  let sprint = null;
-  if (input.sprintId) {
-    const s = await db.sprint.findUnique({
-      where: { id: input.sprintId },
-      select: { id: true, name: true, state: true, goal: true, startDate: true, endDate: true },
+  // Thread context, when the chat was opened from a thread.
+  let thread = null;
+  if (input.threadId) {
+    const t = await db.thread.findUnique({
+      where: { id: input.threadId },
+      select: { id: true, title: true, state: true, decision: true },
     });
-    if (s) sprint = s;
-  }
-
-  let focusTask = null;
-  if (input.focusTaskId) {
-    const t = await db.task.findUnique({
-      where: { id: input.focusTaskId },
-      select: { id: true, name: true, status: { select: { label: true } } },
-    });
-    if (t) focusTask = { id: t.id, name: t.name, status: t.status.label };
+    if (t) thread = t;
   }
 
   try {
-    const turn = await runChatTurn({
-      sessionId,
-      userMessage,
-      sprint,
-      focusTask,
-    });
+    const turn = await runChatTurn({ sessionId, userMessage, thread });
 
     const messages = await getSessionMessages(sessionId);
     const citedNotes = turn.citedNoteIds.length
@@ -157,13 +135,15 @@ export async function saveAssistantTurnToWiki(input: {
   const session = await requireSession();
   const msg = await db.chatMessage.findUnique({
     where: { id: input.messageId },
-    select: { sessionId: true, session: { select: { sprint: { select: { slug: true } } } } },
+    select: { sessionId: true, session: { select: { thread: { select: { slug: true } } } } },
   });
 
   const tags = input.tags ?? [];
-  if (msg?.session?.sprint?.slug) {
-    const sprintTag = `sprint-${msg.session.sprint.slug}`;
-    if (!tags.includes(sprintTag)) tags.push(sprintTag);
+  // Tag the note with the thread the conversation belonged to, so the wiki and
+  // the work log stay cross-referenced.
+  if (msg?.session?.thread?.slug) {
+    const threadTag = `thread-${msg.session.thread.slug}`;
+    if (!tags.includes(threadTag)) tags.push(threadTag);
   }
 
   const { createWikiNote } = await import("@/app/wiki/actions");
@@ -171,14 +151,13 @@ export async function saveAssistantTurnToWiki(input: {
   return { slug };
 }
 
-export async function ensureSessionForSprint(input: {
-  sprintId: string | null;
+export async function ensureSessionForThread(input: {
+  threadId: string | null;
 }): Promise<{ id: string; messages: ChatMessageDTO[] } | null> {
   const session = await requireSession();
-  // Try to find the most recent session this user has for this sprint context;
-  // create a new one if none exists.
+  // Reuse the most recent session for this thread context; create one if none.
   const existing = await db.chatSession.findFirst({
-    where: { userId: session.user.id, sprintId: input.sprintId ?? null },
+    where: { userId: session.user.id, threadId: input.threadId ?? null },
     orderBy: { updatedAt: "desc" },
     select: { id: true },
   });
@@ -186,9 +165,9 @@ export async function ensureSessionForSprint(input: {
   if (!sessionId) {
     const created = await db.chatSession.create({
       data: {
-        title: input.sprintId ? "Sprint chat" : "Chat",
+        title: input.threadId ? "Thread chat" : "Chat",
         userId: session.user.id,
-        sprintId: input.sprintId ?? null,
+        threadId: input.threadId ?? null,
       },
       select: { id: true },
     });

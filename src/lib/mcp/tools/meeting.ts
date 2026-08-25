@@ -3,6 +3,8 @@ import { z } from "zod";
 import { semanticSearchMeetings } from "@/lib/ai/embed-entities";
 import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { db } from "@/lib/db";
+import { entrySelect, resolveThread, writeLogEntry } from "@/lib/log";
+import { LOG_KIND_ORDER } from "@/lib/log-kinds";
 import { runStructurePipeline } from "@/lib/meetings/structure";
 import { slugify, uniqueSlug } from "@/lib/slug";
 
@@ -383,55 +385,56 @@ export const MEETING_TOOLS: ToolDef[] = [
   },
 
   {
-    name: "send_action_item_to_task",
+    name: "send_action_item_to_log",
     description:
-      "Push a meeting action item onto the task board (1:1 — idempotent, returns the existing " +
-      "task if already pushed). The task lands in the first status column of the backlog.",
+      "Push a meeting action item into the work log as an entry (1:1 — idempotent, returns the " +
+      "existing entry if already pushed). Optionally file it onto a thread. Action items are " +
+      "things that came out of a conversation; the log is where they live now that there is no " +
+      "task board.",
     inputSchema: {
       type: "object",
-      properties: { id: { type: "string" } },
+      properties: {
+        id: { type: "string" },
+        thread: { type: "string", description: "Thread id or slug to file it under." },
+        kind: {
+          type: "string",
+          enum: LOG_KIND_ORDER,
+          description: "Defaults to NOTE. Use DECISION when the meeting actually settled something.",
+        },
+      },
       required: ["id"],
     },
     handler: async (args, ctx) => {
-      const { id } = idSchema.parse(args);
-      const item = await db.actionItem.findUnique({ where: { id } });
-      if (!item) throw new Error(`Action item not found: ${id}`);
+      const input = z
+        .object({
+          id: z.string().min(1),
+          thread: z.string().optional(),
+          kind: z.enum(LOG_KIND_ORDER as [string, ...string[]]).optional(),
+        })
+        .parse(args);
 
-      if (item.taskId) {
-        const existing = await db.task.findUnique({
-          where: { id: item.taskId },
-          select: { id: true, slug: true, name: true },
+      const item = await db.actionItem.findUnique({ where: { id: input.id } });
+      if (!item) throw new Error(`Action item not found: ${input.id}`);
+
+      if (item.logEntryId) {
+        const existing = await db.logEntry.findUnique({
+          where: { id: item.logEntryId },
+          select: entrySelect,
         });
         if (existing) return { ...existing, alreadyExisted: true };
       }
 
-      const status = await db.taskStatus.findFirst({ orderBy: { sortOrder: "asc" } });
-      if (!status) throw new Error("No task statuses configured yet — run npm run db:seed first.");
-
-      const slug = await uniqueSlug(slugify(item.content), async (s) =>
-        Boolean(await db.task.findUnique({ where: { slug: s }, select: { id: true } })),
-      );
-      const last = await db.task.findFirst({
-        where: { statusId: status.id, sprintId: null },
-        orderBy: { order: "desc" },
-        select: { order: true },
+      const thread = input.thread ? await resolveThread(input.thread) : null;
+      const entry = await writeLogEntry({
+        body: item.content,
+        kind: (input.kind ?? "NOTE") as never,
+        threadId: thread?.id ?? null,
+        source: "MEETING",
+        reviewed: true,
+        authorId: ctx.userId,
       });
-      const order = (last?.order ?? 0) + 1000;
-
-      const task = await db.task.create({
-        data: {
-          name: item.content,
-          slug,
-          statusId: status.id,
-          dueDate: item.dueDate,
-          order,
-          authorId: ctx.userId,
-          sourceMeetingId: item.meetingId,
-        },
-        select: { id: true, slug: true, name: true },
-      });
-      await db.actionItem.update({ where: { id: item.id }, data: { taskId: task.id } });
-      return { ...task, alreadyExisted: false };
+      await db.actionItem.update({ where: { id: item.id }, data: { logEntryId: entry.id } });
+      return { ...entry, alreadyExisted: false };
     },
   },
 ];

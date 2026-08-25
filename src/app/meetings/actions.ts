@@ -7,6 +7,7 @@ import { z } from "zod";
 import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { db } from "@/lib/db";
 import { runStructurePipeline } from "@/lib/meetings/structure";
+import { writeLogEntry } from "@/lib/log";
 import { requireSession } from "@/lib/session";
 import { slugify, uniqueSlug } from "@/lib/slug";
 
@@ -86,53 +87,36 @@ export async function toggleActionItem(input: { id: string; done: boolean }): Pr
   revalidatePath(`/meetings/${item.meetingId}`);
 }
 
-export async function sendActionItemToTask(actionItemId: string): Promise<{ slug: string }> {
+export async function sendActionItemToLog(
+  actionItemId: string,
+): Promise<{ entryId: string }> {
   const session = await requireSession();
   if (!actionItemId) throw new Error("id required");
 
   const item = await db.actionItem.findUnique({ where: { id: actionItemId } });
   if (!item) throw new Error("Action item not found");
 
-  // Already pushed — return the existing task.
-  if (item.taskId) {
-    const existing = await db.task.findUnique({
-      where: { id: item.taskId },
-      select: { slug: true },
+  // Already pushed — idempotent, return the existing entry.
+  if (item.logEntryId) {
+    const existing = await db.logEntry.findUnique({
+      where: { id: item.logEntryId },
+      select: { id: true },
     });
-    if (existing) return existing;
+    if (existing) return { entryId: existing.id };
   }
 
-  const status = await db.taskStatus.findFirst({ orderBy: { sortOrder: "asc" } });
-  if (!status) throw new Error("No task statuses configured yet — run npm run db:seed first.");
-
-  const slug = await uniqueSlug(slugify(item.content), async (s) =>
-    Boolean(await db.task.findUnique({ where: { slug: s }, select: { id: true } })),
-  );
-  const last = await db.task.findFirst({
-    where: { statusId: status.id, sprintId: null },
-    orderBy: { order: "desc" },
-    select: { order: true },
+  const entry = await writeLogEntry({
+    body: item.content,
+    kind: "NOTE",
+    source: "MEETING",
+    reviewed: true,
+    authorId: session.user.id,
   });
-  const order = (last?.order ?? 0) + 1000;
+  await db.actionItem.update({ where: { id: item.id }, data: { logEntryId: entry.id } });
 
-  const task = await db.task.create({
-    data: {
-      name: item.content,
-      slug,
-      statusId: status.id,
-      dueDate: item.dueDate,
-      order,
-      authorId: session.user.id,
-      sourceMeetingId: item.meetingId,
-    },
-    select: { id: true, slug: true },
-  });
-
-  await db.actionItem.update({ where: { id: item.id }, data: { taskId: task.id } });
-
-  revalidatePath("/tasks");
+  revalidatePath("/log");
   revalidatePath(`/meetings/${item.meetingId}`);
-  return { slug: task.slug };
+  return { entryId: entry.id };
 }
 
 export async function updateSignalStatus(input: {

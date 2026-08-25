@@ -13,7 +13,8 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
-    "probe": "tsx scripts/probe-mcp.ts"
+    "probe": "tsx scripts/probe-mcp.ts",
+    "hook:install": "node scripts/install-hook.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

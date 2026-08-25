@@ -1,242 +1,173 @@
 import { z } from "zod";
 
 import { db } from "@/lib/db";
+import { entrySelect, threadListSelect } from "@/lib/log";
 
 import type { ToolDef } from "./types";
 
-const sprintRefSchema = z
-  .object({
-    sprintId: z.string().optional(),
-    sprintSlug: z.string().optional(),
-  })
-  .refine((v) => v.sprintId || v.sprintSlug, { message: "Provide sprintId or sprintSlug." });
+// Analytics for a work log, not a sprint board. Nothing here measures
+// throughput or velocity — with a team of one those numbers are noise. What is
+// worth asking: what's stuck, what have I been doing, what did the work throw
+// off that I haven't done anything with, and which threads have gone quiet.
 
-async function findSprint(input: { sprintId?: string; sprintSlug?: string }) {
-  const sprint = await db.sprint.findFirst({
-    where: input.sprintId ? { id: input.sprintId } : { slug: input.sprintSlug! },
-  });
-  if (!sprint) throw new Error(`Sprint not found: ${input.sprintId ?? input.sprintSlug}`);
-  return sprint;
+const windowSchema = z.object({
+  days: z.number().int().min(1).max(365).optional(),
+});
+
+function since(days: number): Date {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 }
 
 export const ANALYTICS_TOOLS: ToolDef[] = [
   {
-    name: "sprint_summary",
+    name: "log_pulse",
     description:
-      "Counts and hours roll-up for a sprint: tasks per status, total estimated vs logged hours, " +
-      "blocker count, and overdue tasks.",
+      "What's been happening in the work log over the last N days (default 14): entry counts by kind, the most active threads, and how many auto-captured entries are still unreviewed. Use this to answer 'what have I been doing?'.",
     inputSchema: {
       type: "object",
       properties: {
-        sprintId: { type: "string" },
-        sprintSlug: { type: "string" },
+        days: { type: "integer", minimum: 1, maximum: 365, description: "Window. Default 14." },
       },
     },
     handler: async (args) => {
-      const input = sprintRefSchema.parse(args);
-      const sprint = await findSprint(input);
+      const { days = 14 } = windowSchema.parse(args);
+      const from = since(days);
 
-      const tasks = await db.task.findMany({
-        where: { sprintId: sprint.id, archivedAt: null },
-        include: { status: true, blockedBy: { select: { blockerId: true } } },
-      });
-
-      const byStatus: Record<string, { label: string; color: string; isDone: boolean; count: number }> = {};
-      let estimated = 0;
-      let logged = 0;
-      let blocked = 0;
-      let overdue = 0;
-      const now = new Date();
-
-      for (const t of tasks) {
-        const k = t.status.label;
-        if (!byStatus[k])
-          byStatus[k] = { label: t.status.label, color: t.status.color, isDone: t.status.isDone, count: 0 };
-        byStatus[k].count++;
-        if (t.estimatedHours) estimated += Number(t.estimatedHours);
-        if (t.loggedHours) logged += Number(t.loggedHours);
-        if (t.blockedBy.length > 0 && !t.status.isDone) blocked++;
-        if (t.dueDate && t.dueDate < now && !t.status.isDone) overdue++;
-      }
+      const [byKind, total, unreviewed, threads] = await Promise.all([
+        db.logEntry.groupBy({
+          by: ["kind"],
+          where: { occurredAt: { gte: from } },
+          _count: { _all: true },
+        }),
+        db.logEntry.count({ where: { occurredAt: { gte: from } } }),
+        db.logEntry.count({ where: { reviewed: false } }),
+        db.thread.findMany({
+          where: { entries: { some: { occurredAt: { gte: from } } } },
+          orderBy: { updatedAt: "desc" },
+          take: 10,
+          select: {
+            slug: true,
+            title: true,
+            state: true,
+            _count: { select: { entries: true } },
+          },
+        }),
+      ]);
 
       return {
-        sprint: { id: sprint.id, slug: sprint.slug, name: sprint.name, state: sprint.state },
-        taskCount: tasks.length,
-        byStatus: Object.values(byStatus),
-        estimatedHours: estimated,
-        loggedHours: logged,
-        blockedCount: blocked,
-        overdueCount: overdue,
+        window: { days, since: from },
+        total,
+        byKind: Object.fromEntries(byKind.map((r) => [r.kind, r._count._all])),
+        unreviewed,
+        activeThreads: threads.map((t) => ({
+          slug: t.slug,
+          title: t.title,
+          state: t.state,
+          entries: t._count.entries,
+        })),
       };
     },
   },
-
   {
-    name: "sprint_burndown",
+    name: "open_blockers",
     description:
-      "Per-day count of tasks not yet in a Done status from sprint.startDate to today (or sprint.endDate, whichever is earlier).",
+      "Everything currently in the way: BLOCKER and QUESTION entries on threads that are still open or parked, newest first. This is the closest thing to a to-do list here — it's derived from what actually happened, not planned up front.",
     inputSchema: {
       type: "object",
-      properties: { sprintId: { type: "string" }, sprintSlug: { type: "string" } },
+      properties: { limit: { type: "integer", minimum: 1, maximum: 100 } },
     },
     handler: async (args) => {
-      const input = sprintRefSchema.parse(args);
-      const sprint = await findSprint(input);
-      const tasks = await db.task.findMany({
-        where: { sprintId: sprint.id, archivedAt: null },
-        include: { status: true },
-      });
-
-      const start = new Date(sprint.startDate);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(Math.min(sprint.endDate.getTime(), Date.now()));
-      end.setHours(0, 0, 0, 0);
-
-      const days: { date: string; remaining: number; total: number }[] = [];
-      for (let t = start.getTime(); t <= end.getTime(); t += 24 * 3600 * 1000) {
-        const dayEnd = new Date(t);
-        dayEnd.setHours(23, 59, 59, 999);
-        let remaining = 0;
-        let total = 0;
-        for (const task of tasks) {
-          if (task.createdAt > dayEnd) continue; // didn't exist yet
-          total++;
-          // A task counts as "remaining" if it isn't Done as of this day —
-          // we approximate by checking current status (we don't store history)
-          // but discount tasks created after the day.
-          if (!task.status.isDone) remaining++;
-        }
-        days.push({ date: dayEnd.toISOString().slice(0, 10), remaining, total });
-      }
-
-      return {
-        sprint: { id: sprint.id, slug: sprint.slug, name: sprint.name },
-        days,
-      };
-    },
-  },
-
-  {
-    name: "team_load",
-    description: "Open tasks per assignee, optionally scoped to a sprint.",
-    inputSchema: {
-      type: "object",
-      properties: { sprintId: { type: "string" }, sprintSlug: { type: "string" } },
-    },
-    handler: async (args) => {
-      const { sprintId, sprintSlug } = z
-        .object({ sprintId: z.string().optional(), sprintSlug: z.string().optional() })
+      const { limit } = z
+        .object({ limit: z.number().int().min(1).max(100).optional() })
         .parse(args);
-
-      let sprintFilter: string | undefined;
-      if (sprintId) sprintFilter = sprintId;
-      else if (sprintSlug) {
-        const s = await db.sprint.findUnique({ where: { slug: sprintSlug } });
-        if (!s) throw new Error(`Sprint not found: ${sprintSlug}`);
-        sprintFilter = s.id;
-      }
-
-      const assignees = await db.taskAssignee.findMany({
+      const entries = await db.logEntry.findMany({
         where: {
-          task: {
-            archivedAt: null,
-            status: { isDone: false },
-            ...(sprintFilter ? { sprintId: sprintFilter } : {}),
-          },
+          kind: { in: ["BLOCKER", "QUESTION"] },
+          OR: [{ thread: { state: { in: ["OPEN", "PARKED"] } } }, { threadId: null }],
         },
-        include: {
-          user: { select: { id: true, email: true, name: true } },
-          task: {
-            select: { estimatedHours: true, priority: true },
-          },
-        },
+        orderBy: { occurredAt: "desc" },
+        take: limit ?? 25,
+        select: entrySelect,
       });
-
-      const byUser: Record<string, { user: { id: string; email: string; name: string }; openCount: number; estimatedHours: number; urgentCount: number }> = {};
-      for (const a of assignees) {
-        const key = a.user.id;
-        if (!byUser[key]) {
-          byUser[key] = { user: a.user, openCount: 0, estimatedHours: 0, urgentCount: 0 };
-        }
-        byUser[key].openCount++;
-        if (a.task.estimatedHours) byUser[key].estimatedHours += Number(a.task.estimatedHours);
-        if (a.task.priority === "URGENT") byUser[key].urgentCount++;
-      }
-
-      return { rows: Object.values(byUser).sort((a, b) => b.openCount - a.openCount) };
+      return { entries, count: entries.length };
     },
   },
-
   {
-    name: "overdue_tasks",
-    description: "Tasks past their dueDate and not in a Done status. Optionally scoped to a sprint.",
+    name: "idea_harvest",
+    description:
+      "IDEA entries that have not yet been carried into the Feature Library — the ideas the work threw off that nothing has been done with. Closing their thread promotes them automatically; this finds the ones sitting on threads that are still open.",
+    inputSchema: {
+      type: "object",
+      properties: { limit: { type: "integer", minimum: 1, maximum: 100 } },
+    },
+    handler: async (args) => {
+      const { limit } = z
+        .object({ limit: z.number().int().min(1).max(100).optional() })
+        .parse(args);
+      const entries = await db.logEntry.findMany({
+        where: { kind: "IDEA", featureId: null },
+        orderBy: { occurredAt: "desc" },
+        take: limit ?? 50,
+        select: entrySelect,
+      });
+      return { entries, count: entries.length };
+    },
+  },
+  {
+    name: "stale_threads",
+    description:
+      "Open or parked threads with no log entry in the last N days (default 14). These are the ones to either pick back up, park deliberately, or close and roll up — a thread that quietly went nowhere still has learnings in it.",
     inputSchema: {
       type: "object",
       properties: {
-        sprintId: { type: "string" },
-        sprintSlug: { type: "string" },
-        limit: { type: "integer", minimum: 1, maximum: 200 },
+        days: { type: "integer", minimum: 1, maximum: 365, description: "Default 14." },
       },
     },
     handler: async (args) => {
-      const { sprintId, sprintSlug, limit } = z
+      const { days = 14 } = windowSchema.parse(args);
+      const cutoff = since(days);
+      const threads = await db.thread.findMany({
+        where: {
+          state: { in: ["OPEN", "PARKED"] },
+          entries: { none: { occurredAt: { gte: cutoff } } },
+        },
+        orderBy: { updatedAt: "asc" },
+        select: threadListSelect,
+      });
+      return {
+        cutoff,
+        threads: threads.map((t) => ({
+          ...t,
+          daysQuiet: Math.floor((Date.now() - t.updatedAt.getTime()) / 86_400_000),
+        })),
+        count: threads.length,
+      };
+    },
+  },
+  {
+    name: "ingest_history",
+    description:
+      "What the Claude Code session-end hook has sent to Clerkr OS, newest first — including sessions it judged irrelevant and why. Use this to answer 'why didn't my session show up in the log?'.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "integer", minimum: 1, maximum: 100 },
+        relevantOnly: { type: "boolean" },
+      },
+    },
+    handler: async (args) => {
+      const { limit, relevantOnly } = z
         .object({
-          sprintId: z.string().optional(),
-          sprintSlug: z.string().optional(),
-          limit: z.number().int().min(1).max(200).optional(),
+          limit: z.number().int().min(1).max(100).optional(),
+          relevantOnly: z.boolean().optional(),
         })
         .parse(args);
-
-      let sprintFilter: string | undefined;
-      if (sprintId) sprintFilter = sprintId;
-      else if (sprintSlug) {
-        const s = await db.sprint.findUnique({ where: { slug: sprintSlug } });
-        if (!s) throw new Error(`Sprint not found: ${sprintSlug}`);
-        sprintFilter = s.id;
-      }
-
-      const tasks = await db.task.findMany({
-        where: {
-          archivedAt: null,
-          dueDate: { lt: new Date() },
-          status: { isDone: false },
-          ...(sprintFilter ? { sprintId: sprintFilter } : {}),
-        },
-        orderBy: { dueDate: "asc" },
-        take: limit ?? 50,
-        include: {
-          status: { select: { label: true } },
-          assignees: { include: { user: { select: { email: true, name: true } } } },
-        },
+      const rows = await db.sessionIngest.findMany({
+        where: relevantOnly ? { relevant: true } : {},
+        orderBy: { createdAt: "desc" },
+        take: limit ?? 25,
       });
-      return { tasks, count: tasks.length };
-    },
-  },
-
-  {
-    name: "task_throughput",
-    description:
-      "Number of tasks closed (status.isDone = true) per closed sprint, oldest first. Useful for trend lines.",
-    inputSchema: { type: "object", properties: {} },
-    handler: async () => {
-      const sprints = await db.sprint.findMany({
-        where: { state: "CLOSED" },
-        orderBy: { startDate: "asc" },
-        include: {
-          tasks: { include: { status: true } },
-        },
-      });
-
-      const rows = sprints.map((s) => ({
-        id: s.id,
-        slug: s.slug,
-        name: s.name,
-        startDate: s.startDate,
-        endDate: s.endDate,
-        completed: s.tasks.filter((t) => t.status.isDone).length,
-        total: s.tasks.length,
-      }));
-      return { rows };
+      return { ingests: rows, count: rows.length };
     },
   },
 ];

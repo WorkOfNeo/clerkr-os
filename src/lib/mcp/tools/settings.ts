@@ -2,7 +2,9 @@ import { z } from "zod";
 
 import {
   DEFAULT_CHAT_PROMPT,
+  DEFAULT_INGEST_PROMPT,
   DEFAULT_MEETING_PROMPT,
+  DEFAULT_ROLLUP_PROMPT,
   PROMPT_KEYS,
 } from "@/lib/ai/prompts";
 import { db } from "@/lib/db";
@@ -24,17 +26,29 @@ const KEY_INFO = [
     label: "Copilot chat",
     default: DEFAULT_CHAT_PROMPT,
   },
+  {
+    key: PROMPT_KEYS.ingest,
+    label: "Claude session → work log",
+    default: DEFAULT_INGEST_PROMPT,
+  },
+  {
+    key: PROMPT_KEYS.rollup,
+    label: "Thread roll-up on close",
+    default: DEFAULT_ROLLUP_PROMPT,
+  },
 ] as const;
 
 const VALID_KEYS = KEY_INFO.map((k) => k.key);
 
-const keySchema = z.enum([PROMPT_KEYS.meeting, PROMPT_KEYS.chat]);
+const keySchema = z.enum(
+  Object.values(PROMPT_KEYS) as [string, ...string[]],
+);
 
 export const SETTINGS_TOOLS: ToolDef[] = [
   {
     name: "list_prompts",
     description:
-      "List the editable AI system prompts (meeting extraction + Copilot chat): current " +
+      "List the editable AI system prompts (meeting extraction, Copilot chat, Claude-session harvesting, thread roll-up): current " +
       "effective value, whether it's customized or the code default, and the default text.",
     inputSchema: { type: "object", properties: {} },
     handler: async () => {
@@ -68,7 +82,7 @@ export const SETTINGS_TOOLS: ToolDef[] = [
       properties: {
         key: {
           type: "string",
-          enum: [PROMPT_KEYS.meeting, PROMPT_KEYS.chat],
+          enum: Object.values(PROMPT_KEYS),
         },
         value: { type: "string", description: "The full new system prompt." },
       },
@@ -93,7 +107,7 @@ export const SETTINGS_TOOLS: ToolDef[] = [
       properties: {
         key: {
           type: "string",
-          enum: [PROMPT_KEYS.meeting, PROMPT_KEYS.chat],
+          enum: Object.values(PROMPT_KEYS),
         },
       },
       required: ["key"],

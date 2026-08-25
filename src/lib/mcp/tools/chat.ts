@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { runChatTurn, type FocusTaskLite, type SprintContextLite } from "@/lib/ai/chat";
+import { runChatTurn, type ThreadContextLite } from "@/lib/ai/chat";
 import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { db } from "@/lib/db";
 
@@ -10,11 +10,10 @@ const sessionSelect = {
   id: true,
   title: true,
   userId: true,
-  sprintId: true,
-  focusTaskId: true,
+  threadId: true,
   createdAt: true,
   updatedAt: true,
-  sprint: { select: { id: true, slug: true, name: true } },
+  thread: { select: { id: true, slug: true, title: true } },
   _count: { select: { messages: true } },
 } as const;
 
@@ -22,30 +21,27 @@ export const CHAT_TOOLS: ToolDef[] = [
   {
     name: "create_chat_session",
     description:
-      "Start a new chat session with the in-app assistant. Optional sprintId / focusTaskId " +
+      "Start a new chat session with the in-app assistant. Optional threadId " +
       "are auto-injected into the system prompt as context. The session is owned by the API token holder.",
     inputSchema: {
       type: "object",
       properties: {
         title: { type: "string", description: "Defaults to 'New chat'." },
-        sprintId: { type: "string" },
-        focusTaskId: { type: "string" },
+        threadId: { type: "string" },
       },
     },
     handler: async (args, ctx) => {
-      const { title, sprintId, focusTaskId } = z
+      const { title, threadId } = z
         .object({
           title: z.string().optional(),
-          sprintId: z.string().optional(),
-          focusTaskId: z.string().optional(),
+          threadId: z.string().optional(),
         })
         .parse(args);
       const session = await db.chatSession.create({
         data: {
           title: title ?? "New chat",
           userId: ctx.userId,
-          sprintId: sprintId ?? null,
-          focusTaskId: focusTaskId ?? null,
+          threadId: threadId ?? null,
         },
         select: sessionSelect,
       });
@@ -91,8 +87,7 @@ export const CHAT_TOOLS: ToolDef[] = [
       properties: {
         sessionId: { type: "string", description: "Existing session; omit to auto-create." },
         content: { type: "string", description: "The user message." },
-        sprintId: { type: "string", description: "Optional sprint context (only used when auto-creating)." },
-        focusTaskId: { type: "string", description: "Optional focus task context (only used when auto-creating)." },
+        threadId: { type: "string", description: "Optional thread context (only used when auto-creating)." },
       },
       required: ["content"],
     },
@@ -101,8 +96,7 @@ export const CHAT_TOOLS: ToolDef[] = [
         .object({
           sessionId: z.string().optional(),
           content: z.string().min(1),
-          sprintId: z.string().optional(),
-          focusTaskId: z.string().optional(),
+          threadId: z.string().optional(),
         })
         .parse(args);
       if (!isOpenAIAvailable()) {
@@ -110,47 +104,37 @@ export const CHAT_TOOLS: ToolDef[] = [
       }
 
       let sessionId = input.sessionId ?? null;
-      let sprintId = input.sprintId ?? null;
-      let focusTaskId = input.focusTaskId ?? null;
+      let threadId = input.threadId ?? null;
       if (sessionId) {
         const existing = await db.chatSession.findUnique({
           where: { id: sessionId },
-          select: { sprintId: true, focusTaskId: true },
+          select: { threadId: true },
         });
         if (!existing) throw new Error(`Chat session not found: ${sessionId}`);
-        sprintId = existing.sprintId;
-        focusTaskId = existing.focusTaskId;
+        threadId = existing.threadId;
       } else {
         const title =
           input.content.length > 60 ? `${input.content.slice(0, 60)}…` : input.content;
         const created = await db.chatSession.create({
-          data: { title, userId: ctx.userId, sprintId, focusTaskId },
+          data: { title, userId: ctx.userId, threadId },
           select: { id: true },
         });
         sessionId = created.id;
       }
 
-      let sprint: SprintContextLite | null = null;
-      if (sprintId) {
-        sprint = await db.sprint.findUnique({
-          where: { id: sprintId },
-          select: { id: true, name: true, state: true, goal: true, startDate: true, endDate: true },
+      let thread: ThreadContextLite | null = null;
+      if (threadId) {
+        const t = await db.thread.findUnique({
+          where: { id: threadId },
+          select: { id: true, title: true, state: true, decision: true },
         });
-      }
-      let focusTask: FocusTaskLite | null = null;
-      if (focusTaskId) {
-        const t = await db.task.findUnique({
-          where: { id: focusTaskId },
-          select: { id: true, name: true, status: { select: { label: true } } },
-        });
-        if (t) focusTask = { id: t.id, name: t.name, status: t.status.label };
+        if (t) thread = t;
       }
 
       const turn = await runChatTurn({
         sessionId,
-        userMessage: input.content.trim(),
-        sprint,
-        focusTask,
+        userMessage: input.content,
+        thread,
       });
       const citedNotes = turn.citedNoteIds.length
         ? await db.wikiNote.findMany({
@@ -164,27 +148,27 @@ export const CHAT_TOOLS: ToolDef[] = [
 
   {
     name: "list_chat_sessions",
-    description: "List chat sessions, default sort updatedAt desc. Optionally filter by sprint.",
+    description: "List chat sessions, default sort updatedAt desc. Optionally filter by thread.",
     inputSchema: {
       type: "object",
       properties: {
-        sprintId: { type: "string" },
-        sprintSlug: { type: "string" },
+        threadId: { type: "string" },
+        threadSlug: { type: "string" },
         limit: { type: "integer", minimum: 1, maximum: 200 },
       },
     },
     handler: async (args, ctx) => {
-      const { sprintId, sprintSlug, limit } = z
+      const { threadId, threadSlug, limit } = z
         .object({
-          sprintId: z.string().optional(),
-          sprintSlug: z.string().optional(),
+          threadId: z.string().optional(),
+          threadSlug: z.string().optional(),
           limit: z.number().int().min(1).max(200).optional(),
         })
         .parse(args);
 
       const where: Record<string, unknown> = { userId: ctx.userId };
-      if (sprintId) where.sprintId = sprintId;
-      else if (sprintSlug) where.sprint = { slug: sprintSlug };
+      if (threadId) where.threadId = threadId;
+      else if (threadSlug) where.thread = { slug: threadSlug };
 
       const sessions = await db.chatSession.findMany({
         where,
@@ -210,7 +194,7 @@ export const CHAT_TOOLS: ToolDef[] = [
         where: { id },
         include: {
           messages: { orderBy: { createdAt: "asc" } },
-          sprint: { select: { id: true, slug: true, name: true } },
+          thread: { select: { id: true, slug: true, title: true } },
         },
       });
       if (!session) throw new Error(`Chat session not found: ${id}`);
