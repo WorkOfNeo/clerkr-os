@@ -20,13 +20,13 @@ function isOAuthDiscoveryPath(pathname: string): boolean {
   );
 }
 
-// `/api/mcp` and `/api/ingest` MUST be in this allowlist. Both are called by
-// machines with no session cookie (an MCP client; the Claude Code session-end
-// hook), so a redirect to /signin here reads to the caller as a dead endpoint —
-// MCP clients surface it as "couldn't reach server"
-// (wiki cmozdixrh000lqa15qapcherk), and the hook, which is silent by contract,
-// would just log a 307 forever and never write a thing. The bearer-token check
-// inside each route is the real security boundary for those paths.
+// `/api/mcp` MUST be in this allowlist or unauthenticated MCP requests get
+// 307'd to /signin and MCP clients surface that as "couldn't reach server"
+// (wiki cmozdixrh000lqa15qapcherk). The bearer-token check inside the MCP
+// route is the real security boundary for that path.
+//
+// `/api/attachments/[id]` is deliberately NOT here: it serves screenshot bytes
+// that can contain client matter, so it stays behind the session cookie.
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -45,7 +45,6 @@ export function proxy(req: NextRequest) {
   const isPublic =
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/mcp") ||
-    pathname.startsWith("/api/ingest") ||
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico" ||
     pathname === "/signin" ||

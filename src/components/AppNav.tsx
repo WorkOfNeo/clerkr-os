@@ -22,16 +22,13 @@ export function AppNav({ email }: { email: string }) {
   return (
     <header className="border-b border-border bg-card/50 backdrop-blur">
       <div className="container flex h-14 items-center justify-between">
-        <Link href="/log" className="flex items-center gap-2 text-sm font-semibold">
+        <Link href="/tickets" className="flex items-center gap-2 text-sm font-semibold">
           <ClerkrLogo className="h-4 w-auto" />
           <span>Clerkr OS</span>
         </Link>
         <nav className="flex items-center gap-1 text-sm">
-          <Link href="/log" className={navLink}>
-            Log
-          </Link>
-          <Link href="/threads" className={navLink}>
-            Threads
+          <Link href="/tickets" className={navLink}>
+            Tickets
           </Link>
           <Link href="/meetings" className={navLink}>
             Meetings

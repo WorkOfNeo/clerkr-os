@@ -8,7 +8,6 @@ import { AppNav } from "@/components/AppNav";
 
 import { ConnectGuide } from "./ConnectGuide";
 import { CreateTokenForm } from "./CreateTokenForm";
-import { SessionHookGuide } from "./SessionHookGuide";
 import { SkillSection } from "./SkillSection";
 import { TokenList } from "./TokenList";
 
@@ -35,8 +34,8 @@ export default async function SettingsPage() {
         <div>
           <h1 className="text-xl font-semibold">Settings</h1>
           <p className="text-sm text-muted-foreground">
-            Personal API tokens for the MCP server, the setup guide for connecting
-            Claude, and the session-end hook that feeds your work into the log.
+            Personal API tokens for the MCP server, plus the setup guide for
+            connecting Claude to Clerkr OS.
           </p>
         </div>
 
@@ -74,21 +73,21 @@ export default async function SettingsPage() {
         </section>
 
         <section className="space-y-3">
-          <div>
-            <h2 className="text-base font-semibold">
-              Step 4 &mdash; Capture your sessions automatically
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Optional, and the highest-leverage thing here: it logs the work you
-              didn&apos;t stop to write down.
-            </p>
-          </div>
-          <SessionHookGuide origin={origin} />
-        </section>
-
-        <section className="space-y-3">
           <h2 className="text-base font-semibold">Your active tokens</h2>
           <TokenList tokens={tokens} />
+        </section>
+
+        <section className="space-y-2 border-t pt-6">
+          <h2 className="text-base font-semibold">Ticket categories</h2>
+          <p className="text-xs text-muted-foreground">
+            Add, rename or recolour the types you can tag a ticket with.
+          </p>
+          <a
+            href="/settings/categories"
+            className="inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Edit ticket categories →
+          </a>
         </section>
 
         <section className="space-y-2 border-t pt-6">

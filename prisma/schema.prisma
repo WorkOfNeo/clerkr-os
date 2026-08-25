@@ -27,15 +27,15 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
 
-  sessions     Session[]
-  accounts     Account[]
-  apiTokens    ApiToken[]
-  posts        Post[]
-  wikiNotes    WikiNote[]
-  chatSessions ChatSession[]
-  meetings     Meeting[]
-  threads      Thread[]
-  logEntries   LogEntry[]
+  sessions       Session[]
+  accounts       Account[]
+  apiTokens      ApiToken[]
+  posts          Post[]
+  wikiNotes      WikiNote[]
+  chatSessions   ChatSession[]
+  meetings       Meeting[]
+  tickets        Ticket[]
+  ticketComments TicketComment[]
 
   @@map("user")
 }
@@ -168,8 +168,8 @@ model ChatSession {
   title     String
   userId    String
   user      User     @relation(fields: [userId], references: [id])
-  threadId  String?
-  thread    Thread?  @relation(fields: [threadId], references: [id])
+  ticketId  String?
+  ticket    Ticket?  @relation(fields: [ticketId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
@@ -270,17 +270,17 @@ model FeatureSignal {
 }
 
 model ActionItem {
-  id         String    @id @default(uuid())
-  meetingId  String
-  meeting    Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  content    String
-  assignee   String?
-  dueDate    DateTime?
-  done       Boolean   @default(false)
-  // Set when this action item has been pushed to the work log (1:1).
-  logEntryId String?   @unique
-  logEntry   LogEntry? @relation(fields: [logEntryId], references: [id])
-  createdAt  DateTime  @default(now())
+  id        String    @id @default(uuid())
+  meetingId String
+  meeting   Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  content   String
+  assignee  String?
+  dueDate   DateTime?
+  done      Boolean   @default(false)
+  // Set when this action item has been raised as a ticket (1:1).
+  ticketId  String?   @unique
+  ticket    Ticket?   @relation(fields: [ticketId], references: [id])
+  createdAt DateTime  @default(now())
 
   @@index([meetingId])
   @@map("action_item")
@@ -328,7 +328,6 @@ model Cluster {
   updatedAt     DateTime @default(now()) @updatedAt
 
   features Feature[]
-  threads  Thread[]
 
   @@map("cluster")
 }
@@ -351,8 +350,6 @@ model Feature {
   roadmapItems RoadmapItem[]
   linksFrom    FeatureLink[]   @relation("FeatureLinkFrom")
   linksTo      FeatureLink[]   @relation("FeatureLinkTo")
-  threads      Thread[]
-  logEntries   LogEntry[]
 
   @@index([clusterId])
   @@index([status])
@@ -416,146 +413,139 @@ model RoadmapItem {
   @@map("roadmap_item")
 }
 
-// ─── Work log (Threads + LogEntry) ───────────────────────────────────────────
-// This replaces the sprint/task board. The unit of work is not a planned task
-// but a DECISION already taken: a Thread. Everything that happens while acting
-// on it — right paths, dead ends, blockers, ideas thrown off along the way —
-// lands as a LogEntry on that thread. When the thread closes,
-// `src/lib/ai/roll-up-thread.ts` reads the whole stream and writes the outcome,
-// promoting IDEA entries into the Feature Library (deduped by embedding).
+// ─── Tickets ─────────────────────────────────────────────────────────────────
+// Replaces the Google Doc: anything raised — an idea, a bug, a feature request,
+// an open question — becomes a Ticket. Neo (or a teammate, or Claude via MCP)
+// files it; the developer comments on it and marks it fixed/shipped.
 //
-// Entries can also live with no thread at all — a loose note is still worth
-// keeping, and `attachEntry` can file it later.
+// The TYPE is an editable row (TicketCategory), not an enum, so a new category
+// can be added from /settings/categories without a deploy. The STATUS is an
+// enum on purpose — code branches on "is this resolved", and that shouldn't be
+// editable out from under the logic.
 
-enum ThreadState {
-  OPEN // decided, in flight
-  DONE // finished; outcome rolled up
-  PARKED // paused, will come back
-  ABANDONED // dropped on purpose (the dead end IS the learning)
+enum TicketStatus {
+  OPEN // raised, nobody's on it
+  IN_PROGRESS // being worked on
+  FIXED // done in code, not yet released
+  SHIPPED // out and live
+  WONT_FIX // deliberately closed without doing it
 }
 
-enum LogKind {
-  DECISION // "we're doing X, because Y"
-  WORKED // right path — this is what worked
-  DEAD_END // bad path — tried it, didn't work, here's why
-  BLOCKER // stuck on this
-  IDEA // for later — feeds the Feature Library on rollup
-  QUESTION // open, unresolved
-  SHIPPED // landed
-  NOTE // everything else
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
 
-enum LogSource {
-  MANUAL // typed into /log
-  MCP // written by Claude via an MCP tool
-  SESSION // extracted from a Claude Code session by the session-end hook
+enum TicketSource {
+  MANUAL // filed in the web UI
+  MCP // filed by Claude through the MCP server
   MEETING // pushed over from a meeting action item
 }
 
-model Thread {
-  id       String      @id @default(uuid())
-  slug     String      @unique
-  title    String
-  decision String? // the call that started it
-  why      String? // the reasoning behind the call
-  state    ThreadState @default(OPEN)
-
-  clusterId String?
-  cluster   Cluster? @relation(fields: [clusterId], references: [id])
-
-  featureId String?
-  feature   Feature? @relation(fields: [featureId], references: [id])
-
-  // Written by the AI rollup when the thread closes.
-  outcome   String?
-  outcomeAt DateTime?
-
-  embedding  Unsupported("vector(1536)")? // semantic recall + hook auto-attach
-  embeddedAt DateTime?
-
-  authorId String
-  author   User   @relation(fields: [authorId], references: [id])
-
-  startedAt DateTime  @default(now())
-  closedAt  DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @default(now()) @updatedAt
-
-  entries      LogEntry[]
-  chatSessions ChatSession[]
-
-  @@index([state, startedAt])
-  @@index([authorId])
-  @@map("thread")
-}
-
-model LogEntry {
-  id   String  @id @default(uuid())
-  kind LogKind @default(NOTE)
-  body String
-
-  threadId String?
-  thread   Thread? @relation(fields: [threadId], references: [id])
-
-  source LogSource @default(MANUAL)
-
-  // Provenance for SESSION-sourced entries (set by the session-end hook).
-  sessionId String?
-  repo      String?
-  branch    String?
-
-  // AI-written entries land unreviewed and surface in the /log review tray;
-  // anything typed by hand is reviewed on arrival.
-  reviewed Boolean @default(true)
-
-  // Set when an IDEA entry has been promoted into the Feature Library.
-  featureId  String?
-  feature    Feature?  @relation(fields: [featureId], references: [id])
-  promotedAt DateTime?
-
-  embedding  Unsupported("vector(1536)")?
-  embeddedAt DateTime?
-
-  authorId String
-  author   User   @relation(fields: [authorId], references: [id])
-
-  sourceActionItem ActionItem?
-
-  occurredAt DateTime @default(now())
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt
-
-  @@index([occurredAt])
-  @@index([threadId, occurredAt])
-  @@index([kind, occurredAt])
-  @@index([reviewed])
-  @@index([sessionId])
-  @@map("log_entry")
-}
-
-// One row per Claude Code session the session-end hook offered us. Keyed on the
-// Claude session id so a re-fired hook can never double-log, and kept even when
-// the session was judged irrelevant — that's the audit trail for "why didn't my
-// session show up?".
-model SessionIngest {
-  id          String  @id @default(uuid())
-  sessionId   String  @unique
-  cwd         String?
-  repo        String?
-  branch      String?
-  contentHash String
-
-  relevant Boolean @default(false)
-  reason   String? // why it was skipped, or a one-line summary when kept
-
-  entriesCreated  Int @default(0)
-  threadsCreated  Int @default(0)
-  featuresCreated Int @default(0)
-  transcriptChars Int @default(0)
-
-  error     String?
+// Editable taxonomy — seeded with Idea / Bug / Feature request / Question, then
+// maintained from the app. Slug is the stable key so re-seeding is idempotent
+// even after a label is renamed.
+model TicketCategory {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  label     String   @unique
+  color     String // hex, drives the badge
+  sortOrder Int      @default(0)
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
-  @@index([createdAt])
-  @@map("session_ingest")
+  tickets Ticket[]
+
+  @@map("ticket_category")
+}
+
+model Ticket {
+  id     String  @id @default(uuid())
+  slug   String  @unique
+  number Int     @unique @default(autoincrement()) // human handle: #14
+  title  String
+  body   String? // markdown
+
+  // Nullable so deleting a category never deletes the tickets filed under it.
+  categoryId String?
+  category   TicketCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  status   TicketStatus   @default(OPEN)
+  priority TicketPriority @default(MEDIUM)
+
+  // Who put it in the system (always a real user — Claude files under the owner
+  // of its API token) vs. who it actually came from, which may be someone with
+  // no account here at all: a teammate, or a lawyer at a customer firm.
+  authorId   String
+  author     User    @relation(fields: [authorId], references: [id])
+  reportedBy String?
+
+  source TicketSource @default(MANUAL)
+
+  embedding  Unsupported("vector(1536)")? // semantic search + duplicate detection
+  embeddedAt DateTime?
+
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+
+  comments     TicketComment[]
+  attachments  TicketAttachment[]
+  chatSessions ChatSession[]
+  actionItem   ActionItem?
+
+  @@index([status, updatedAt])
+  @@index([categoryId])
+  @@index([authorId])
+  @@map("ticket")
+}
+
+model TicketComment {
+  id       String @id @default(uuid())
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  body     String
+  authorId String
+  author   User         @relation(fields: [authorId], references: [id])
+  source   TicketSource @default(MANUAL)
+
+  attachments TicketAttachment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_comment")
+}
+
+// Screenshot bytes live in Postgres, same pattern as prod-spec's rejection
+// attachments (wiki cmquudjcd001ypf159yd5frw8) — no S3, no new dependency.
+// Images are downscaled client-side before upload so rows stay small, and are
+// served back behind auth from /api/attachments/[id].
+model TicketAttachment {
+  id String @id @default(uuid())
+
+  // Attached either to the ticket itself or to one of its comments.
+  ticketId String?
+  ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  commentId String?
+  comment   TicketComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  data     Bytes
+  mimeType String
+  fileName String
+  byteSize Int
+  width    Int?
+  height   Int?
+
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([commentId])
+  @@map("ticket_attachment")
 }

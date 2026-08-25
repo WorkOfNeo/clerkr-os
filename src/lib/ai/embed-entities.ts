@@ -96,98 +96,41 @@ export async function semanticSearchFeatures(query: string, limit = 6): Promise<
   `);
 }
 
-export async function embedThread(
-  id: string,
-  title: string,
-  decision: string,
-  why: string,
-): Promise<void> {
-  const literal = toVectorLiteral(await embedText(`${title}\n\n${decision}\n\n${why}`));
+export async function embedTicket(id: string, title: string, body: string): Promise<void> {
+  const literal = toVectorLiteral(await embedText(`${title}\n\n${body}`));
   await db.$executeRaw`
-    UPDATE thread
+    UPDATE ticket
        SET embedding = ${literal}::vector, "embeddedAt" = NOW()
      WHERE id = ${id}
   `;
 }
 
-export async function embedLogEntry(id: string, body: string): Promise<void> {
-  const literal = toVectorLiteral(await embedText(body));
-  await db.$executeRaw`
-    UPDATE log_entry
-       SET embedding = ${literal}::vector, "embeddedAt" = NOW()
-     WHERE id = ${id}
-  `;
-}
-
-export interface SimilarThread {
+export interface TicketHit {
   id: string;
   slug: string;
+  number: number;
   title: string;
+  body: string | null;
+  status: string;
+  category: string | null;
   similarity: number;
 }
 
 /**
- * Nearest OPEN thread to `text`. The session-end hook uses this to file an
- * extracted entry onto the thread it belongs to instead of spawning a new one
- * for every session. Closed threads are excluded on purpose — finished work
- * should not silently reopen.
+ * Semantic search over tickets. Used for "has this already been reported?"
+ * before filing a duplicate, and to give the Copilot the real backlog.
  */
-export async function findSimilarThread(text: string): Promise<SimilarThread | null> {
-  const literal = toVectorLiteral(await embedText(text));
-  const rows = await db.$queryRaw<SimilarThread[]>(Prisma.sql`
-    SELECT id, slug, title, 1 - (embedding <=> ${literal}::vector) AS similarity
-      FROM thread
-     WHERE embedding IS NOT NULL
-       AND state IN ('OPEN', 'PARKED')
-     ORDER BY embedding <=> ${literal}::vector
-     LIMIT 1
-  `);
-  return rows[0] ?? null;
-}
-
-export interface LogHit {
-  id: string;
-  kind: string;
-  body: string;
-  threadTitle: string | null;
-  occurredAt: Date;
-  similarity: number;
-}
-
-export async function semanticSearchLog(query: string, limit = 6): Promise<LogHit[]> {
+export async function semanticSearchTickets(query: string, limit = 6): Promise<TicketHit[]> {
   const literal = toVectorLiteral(await embedText(query));
-  return db.$queryRaw<LogHit[]>(Prisma.sql`
-    SELECT e.id,
-           e.kind::text AS kind,
-           e.body,
-           t.title AS "threadTitle",
-           e."occurredAt",
-           1 - (e.embedding <=> ${literal}::vector) AS similarity
-      FROM log_entry e
-      LEFT JOIN thread t ON t.id = e."threadId"
-     WHERE e.embedding IS NOT NULL
-     ORDER BY e.embedding <=> ${literal}::vector
-     LIMIT ${limit}
-  `);
-}
-
-export interface ThreadHit {
-  id: string;
-  slug: string;
-  title: string;
-  decision: string | null;
-  state: string;
-  similarity: number;
-}
-
-export async function semanticSearchThreads(query: string, limit = 4): Promise<ThreadHit[]> {
-  const literal = toVectorLiteral(await embedText(query));
-  return db.$queryRaw<ThreadHit[]>(Prisma.sql`
-    SELECT id, slug, title, decision, state::text AS state,
-           1 - (embedding <=> ${literal}::vector) AS similarity
-      FROM thread
-     WHERE embedding IS NOT NULL
-     ORDER BY embedding <=> ${literal}::vector
+  return db.$queryRaw<TicketHit[]>(Prisma.sql`
+    SELECT t.id, t.slug, t.number, t.title, t.body,
+           t.status::text AS status,
+           c.label AS category,
+           1 - (t.embedding <=> ${literal}::vector) AS similarity
+      FROM ticket t
+      LEFT JOIN ticket_category c ON c.id = t."categoryId"
+     WHERE t.embedding IS NOT NULL
+     ORDER BY t.embedding <=> ${literal}::vector
      LIMIT ${limit}
   `);
 }

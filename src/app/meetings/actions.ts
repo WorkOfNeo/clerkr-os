@@ -7,7 +7,7 @@ import { z } from "zod";
 import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { db } from "@/lib/db";
 import { runStructurePipeline } from "@/lib/meetings/structure";
-import { writeLogEntry } from "@/lib/log";
+import { createTicket } from "@/lib/tickets";
 import { requireSession } from "@/lib/session";
 import { slugify, uniqueSlug } from "@/lib/slug";
 
@@ -87,36 +87,39 @@ export async function toggleActionItem(input: { id: string; done: boolean }): Pr
   revalidatePath(`/meetings/${item.meetingId}`);
 }
 
-export async function sendActionItemToLog(
+export async function sendActionItemToTicket(
   actionItemId: string,
-): Promise<{ entryId: string }> {
+): Promise<{ slug: string }> {
   const session = await requireSession();
   if (!actionItemId) throw new Error("id required");
 
-  const item = await db.actionItem.findUnique({ where: { id: actionItemId } });
+  const item = await db.actionItem.findUnique({
+    where: { id: actionItemId },
+    include: { meeting: { select: { title: true } } },
+  });
   if (!item) throw new Error("Action item not found");
 
-  // Already pushed — idempotent, return the existing entry.
-  if (item.logEntryId) {
-    const existing = await db.logEntry.findUnique({
-      where: { id: item.logEntryId },
-      select: { id: true },
+  // Already raised — idempotent, return the existing ticket.
+  if (item.ticketId) {
+    const existing = await db.ticket.findUnique({
+      where: { id: item.ticketId },
+      select: { slug: true },
     });
-    if (existing) return { entryId: existing.id };
+    if (existing) return existing;
   }
 
-  const entry = await writeLogEntry({
-    body: item.content,
-    kind: "NOTE",
+  const ticket = await createTicket({
+    title: item.content,
+    body: `From the meeting brief: **${item.meeting.title}**.`,
+    reportedBy: item.assignee,
     source: "MEETING",
-    reviewed: true,
     authorId: session.user.id,
   });
-  await db.actionItem.update({ where: { id: item.id }, data: { logEntryId: entry.id } });
+  await db.actionItem.update({ where: { id: item.id }, data: { ticketId: ticket.id } });
 
-  revalidatePath("/log");
+  revalidatePath("/tickets");
   revalidatePath(`/meetings/${item.meetingId}`);
-  return { entryId: entry.id };
+  return { slug: ticket.slug };
 }
 
 export async function updateSignalStatus(input: {

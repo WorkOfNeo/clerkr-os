@@ -25,14 +25,14 @@ export interface ChatTurnResponse {
 
 export async function createChatSession(input: {
   title?: string;
-  threadId?: string | null;
+  ticketId?: string | null;
 }): Promise<{ id: string }> {
   const session = await requireSession();
   const created = await db.chatSession.create({
     data: {
       title: input.title?.trim() || "New chat",
       userId: session.user.id,
-      threadId: input.threadId ?? null,
+      ticketId: input.ticketId ?? null,
     },
     select: { id: true },
   });
@@ -58,7 +58,7 @@ export async function getSessionMessages(sessionId: string): Promise<ChatMessage
 export async function sendChatMessage(input: {
   sessionId: string | null;
   userMessage: string;
-  threadId?: string | null;
+  ticketId?: string | null;
 }): Promise<ChatTurnResponse> {
   const session = await requireSession();
   const userMessage = input.userMessage.trim();
@@ -78,24 +78,24 @@ export async function sendChatMessage(input: {
     // Auto-create.
     const title = userMessage.length > 60 ? `${userMessage.slice(0, 60)}…` : userMessage;
     const created = await db.chatSession.create({
-      data: { title, userId: session.user.id, threadId: input.threadId ?? null },
+      data: { title, userId: session.user.id, ticketId: input.ticketId ?? null },
       select: { id: true },
     });
     sessionId = created.id;
   }
 
-  // Thread context, when the chat was opened from a thread.
-  let thread = null;
-  if (input.threadId) {
-    const t = await db.thread.findUnique({
-      where: { id: input.threadId },
-      select: { id: true, title: true, state: true, decision: true },
+  // Ticket context, when the chat was opened from a ticket.
+  let ticket = null;
+  if (input.ticketId) {
+    const t = await db.ticket.findUnique({
+      where: { id: input.ticketId },
+      select: { id: true, number: true, title: true, status: true },
     });
-    if (t) thread = t;
+    if (t) ticket = t;
   }
 
   try {
-    const turn = await runChatTurn({ sessionId, userMessage, thread });
+    const turn = await runChatTurn({ sessionId, userMessage, ticket });
 
     const messages = await getSessionMessages(sessionId);
     const citedNotes = turn.citedNoteIds.length
@@ -135,15 +135,15 @@ export async function saveAssistantTurnToWiki(input: {
   const session = await requireSession();
   const msg = await db.chatMessage.findUnique({
     where: { id: input.messageId },
-    select: { sessionId: true, session: { select: { thread: { select: { slug: true } } } } },
+    select: { sessionId: true, session: { select: { ticket: { select: { number: true } } } } },
   });
 
   const tags = input.tags ?? [];
-  // Tag the note with the thread the conversation belonged to, so the wiki and
-  // the work log stay cross-referenced.
-  if (msg?.session?.thread?.slug) {
-    const threadTag = `thread-${msg.session.thread.slug}`;
-    if (!tags.includes(threadTag)) tags.push(threadTag);
+  // Tag the note with the ticket the conversation belonged to, so the wiki and
+  // the ticket queue stay cross-referenced.
+  if (msg?.session?.ticket?.number) {
+    const ticketTag = `ticket-${msg.session.ticket.number}`;
+    if (!tags.includes(ticketTag)) tags.push(ticketTag);
   }
 
   const { createWikiNote } = await import("@/app/wiki/actions");
@@ -151,13 +151,13 @@ export async function saveAssistantTurnToWiki(input: {
   return { slug };
 }
 
-export async function ensureSessionForThread(input: {
-  threadId: string | null;
+export async function ensureSessionForTicket(input: {
+  ticketId: string | null;
 }): Promise<{ id: string; messages: ChatMessageDTO[] } | null> {
   const session = await requireSession();
-  // Reuse the most recent session for this thread context; create one if none.
+  // Reuse the most recent session for this ticket context; create one if none.
   const existing = await db.chatSession.findFirst({
-    where: { userId: session.user.id, threadId: input.threadId ?? null },
+    where: { userId: session.user.id, ticketId: input.ticketId ?? null },
     orderBy: { updatedAt: "desc" },
     select: { id: true },
   });
@@ -165,9 +165,9 @@ export async function ensureSessionForThread(input: {
   if (!sessionId) {
     const created = await db.chatSession.create({
       data: {
-        title: input.threadId ? "Thread chat" : "Chat",
+        title: input.ticketId ? "Ticket chat" : "Chat",
         userId: session.user.id,
-        threadId: input.threadId ?? null,
+        ticketId: input.ticketId ?? null,
       },
       select: { id: true },
     });

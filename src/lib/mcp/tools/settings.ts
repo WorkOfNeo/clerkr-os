@@ -2,9 +2,8 @@ import { z } from "zod";
 
 import {
   DEFAULT_CHAT_PROMPT,
-  DEFAULT_INGEST_PROMPT,
   DEFAULT_MEETING_PROMPT,
-  DEFAULT_ROLLUP_PROMPT,
+  DEFAULT_TRIAGE_PROMPT,
   PROMPT_KEYS,
 } from "@/lib/ai/prompts";
 import { db } from "@/lib/db";
@@ -27,14 +26,9 @@ const KEY_INFO = [
     default: DEFAULT_CHAT_PROMPT,
   },
   {
-    key: PROMPT_KEYS.ingest,
-    label: "Claude session → work log",
-    default: DEFAULT_INGEST_PROMPT,
-  },
-  {
-    key: PROMPT_KEYS.rollup,
-    label: "Thread roll-up on close",
-    default: DEFAULT_ROLLUP_PROMPT,
+    key: PROMPT_KEYS.triage,
+    label: "Rough note → ticket",
+    default: DEFAULT_TRIAGE_PROMPT,
   },
 ] as const;
 
@@ -48,7 +42,7 @@ export const SETTINGS_TOOLS: ToolDef[] = [
   {
     name: "list_prompts",
     description:
-      "List the editable AI system prompts (meeting extraction, Copilot chat, Claude-session harvesting, thread roll-up): current " +
+      "List the editable AI system prompts (meeting extraction, Copilot chat, ticket triage): current " +
       "effective value, whether it's customized or the code default, and the default text.",
     inputSchema: { type: "object", properties: {} },
     handler: async () => {

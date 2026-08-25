@@ -5,11 +5,10 @@ import { db } from "@/lib/db";
 import { ANALYTICS_TOOLS } from "./tools/analytics";
 import { CHAT_TOOLS } from "./tools/chat";
 import { FEATURE_TOOLS } from "./tools/feature";
-import { LOG_TOOLS } from "./tools/log";
 import { MEETING_TOOLS } from "./tools/meeting";
 import { ROADMAP_TOOLS } from "./tools/roadmap";
 import { SETTINGS_TOOLS } from "./tools/settings";
-import { THREAD_TOOLS } from "./tools/thread";
+import { TICKET_TOOLS } from "./tools/ticket";
 import { WIKI_TOOLS } from "./tools/wiki";
 import type { ToolContext, ToolDef } from "./tools/types";
 
@@ -317,9 +316,8 @@ export const TOOLS: ToolDef[] = [
     },
   },
 
-  // ─── Work log (threads + entries) ─────────────────────────────────────────
-  ...LOG_TOOLS,
-  ...THREAD_TOOLS,
+  // ─── Tickets ──────────────────────────────────────────────────────────────
+  ...TICKET_TOOLS,
   ...WIKI_TOOLS,
   ...CHAT_TOOLS,
   ...ANALYTICS_TOOLS,
