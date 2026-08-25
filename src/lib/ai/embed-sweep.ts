@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 
-import { embedFeature, embedMeeting } from "./embed-entities";
+import { embedFeature, embedLogEntry, embedMeeting, embedThread } from "./embed-entities";
 import { embedNote } from "./embed-wiki";
 import { isOpenAIAvailable } from "./openai";
 
@@ -12,12 +12,14 @@ import { isOpenAIAvailable } from "./openai";
 
 export interface SweepResult {
   skipped: boolean; // true when OpenAI is not configured
-  embedded: { wikiNotes: number; features: number; meetings: number };
+  embedded: { wikiNotes: number; features: number; meetings: number; threads: number; logEntries: number };
   errors: number;
-  remaining: { wikiNotes: number; features: number; meetings: number };
+  remaining: { wikiNotes: number; features: number; meetings: number; threads: number; logEntries: number };
 }
 
-async function remainingCount(table: "wiki_note" | "feature" | "meeting"): Promise<number> {
+type EmbeddedTable = "wiki_note" | "feature" | "meeting" | "thread" | "log_entry";
+
+async function remainingCount(table: EmbeddedTable): Promise<number> {
   // Table name comes from a closed union above — safe to inline.
   const rows = await db.$queryRawUnsafe<{ count: bigint }[]>(
     `SELECT COUNT(*)::bigint AS count FROM ${table} WHERE embedding IS NULL`,
@@ -26,7 +28,7 @@ async function remainingCount(table: "wiki_note" | "feature" | "meeting"): Promi
 }
 
 export async function sweepMissingEmbeddings(limitPerKind = 25): Promise<SweepResult> {
-  const embedded = { wikiNotes: 0, features: 0, meetings: 0 };
+  const embedded = { wikiNotes: 0, features: 0, meetings: 0, threads: 0, logEntries: 0 };
   let errors = 0;
 
   if (!isOpenAIAvailable()) {
@@ -34,11 +36,7 @@ export async function sweepMissingEmbeddings(limitPerKind = 25): Promise<SweepRe
       skipped: true,
       embedded,
       errors,
-      remaining: {
-        wikiNotes: await remainingCount("wiki_note"),
-        features: await remainingCount("feature"),
-        meetings: await remainingCount("meeting"),
-      },
+      remaining: await remainingCounts(),
     };
   }
 
@@ -93,14 +91,51 @@ export async function sweepMissingEmbeddings(limitPerKind = 25): Promise<SweepRe
     }
   }
 
+  const threads = await db.$queryRaw<{ id: string }[]>`
+    SELECT id FROM thread WHERE embedding IS NULL LIMIT ${limitPerKind}`;
+  for (const { id } of threads) {
+    try {
+      const t = await db.thread.findUnique({
+        where: { id },
+        select: { title: true, decision: true, why: true, outcome: true },
+      });
+      if (!t) continue;
+      await embedThread(
+        id,
+        t.title,
+        t.decision ?? "",
+        [t.why, t.outcome].filter(Boolean).join("\n\n"),
+      );
+      embedded.threads++;
+    } catch (err) {
+      errors++;
+      console.warn(`[embed-sweep] thread ${id} failed:`, err);
+    }
+  }
+
+  const entries = await db.$queryRaw<{ id: string }[]>`
+    SELECT id FROM log_entry WHERE embedding IS NULL LIMIT ${limitPerKind}`;
+  for (const { id } of entries) {
+    try {
+      const e = await db.logEntry.findUnique({ where: { id }, select: { body: true } });
+      if (!e) continue;
+      await embedLogEntry(id, e.body);
+      embedded.logEntries++;
+    } catch (err) {
+      errors++;
+      console.warn(`[embed-sweep] log_entry ${id} failed:`, err);
+    }
+  }
+
+  return { skipped: false, embedded, errors, remaining: await remainingCounts() };
+}
+
+async function remainingCounts(): Promise<SweepResult["remaining"]> {
   return {
-    skipped: false,
-    embedded,
-    errors,
-    remaining: {
-      wikiNotes: await remainingCount("wiki_note"),
-      features: await remainingCount("feature"),
-      meetings: await remainingCount("meeting"),
-    },
+    wikiNotes: await remainingCount("wiki_note"),
+    features: await remainingCount("feature"),
+    meetings: await remainingCount("meeting"),
+    threads: await remainingCount("thread"),
+    logEntries: await remainingCount("log_entry"),
   };
 }

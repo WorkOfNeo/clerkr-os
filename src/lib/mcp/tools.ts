@@ -5,12 +5,11 @@ import { db } from "@/lib/db";
 import { ANALYTICS_TOOLS } from "./tools/analytics";
 import { CHAT_TOOLS } from "./tools/chat";
 import { FEATURE_TOOLS } from "./tools/feature";
+import { LOG_TOOLS } from "./tools/log";
 import { MEETING_TOOLS } from "./tools/meeting";
 import { ROADMAP_TOOLS } from "./tools/roadmap";
 import { SETTINGS_TOOLS } from "./tools/settings";
-import { SPRINT_TOOLS } from "./tools/sprint";
-import { TASK_TOOLS } from "./tools/task";
-import { TAXONOMY_TOOLS } from "./tools/taxonomy";
+import { THREAD_TOOLS } from "./tools/thread";
 import { WIKI_TOOLS } from "./tools/wiki";
 import type { ToolContext, ToolDef } from "./tools/types";
 
@@ -318,10 +317,9 @@ export const TOOLS: ToolDef[] = [
     },
   },
 
-  // ─── Sprint board ─────────────────────────────────────────────────────────
-  ...TASK_TOOLS,
-  ...SPRINT_TOOLS,
-  ...TAXONOMY_TOOLS,
+  // ─── Work log (threads + entries) ─────────────────────────────────────────
+  ...LOG_TOOLS,
+  ...THREAD_TOOLS,
   ...WIKI_TOOLS,
   ...CHAT_TOOLS,
   ...ANALYTICS_TOOLS,

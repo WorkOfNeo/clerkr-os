@@ -18,8 +18,7 @@ export async function register(): Promise<void> {
     try {
       const { sweepMissingEmbeddings } = await import("@/lib/ai/embed-sweep");
       const result = await sweepMissingEmbeddings(25);
-      const total =
-        result.embedded.wikiNotes + result.embedded.features + result.embedded.meetings;
+      const total = Object.values(result.embedded).reduce((a, b) => a + b, 0);
       if (total > 0 || result.errors > 0) {
         console.log("[embed-sweep]", JSON.stringify(result));
       }

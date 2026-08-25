@@ -2,27 +2,23 @@ import { db } from "@/lib/db";
 
 import {
   semanticSearchFeatures,
+  semanticSearchLog,
   semanticSearchMeetings,
+  semanticSearchThreads,
   type FeatureHit,
+  type LogHit,
   type MeetingHit,
+  type ThreadHit,
 } from "./embed-entities";
 import { CHAT_MODEL, getOpenAI } from "./openai";
 import { getChatPrompt } from "./prompts";
 import { semanticSearchWiki } from "./wiki-search";
 
-export interface SprintContextLite {
+export interface ThreadContextLite {
   id: string;
-  name: string;
+  title: string;
   state: string;
-  goal: string | null;
-  startDate: Date;
-  endDate: Date;
-}
-
-export interface FocusTaskLite {
-  id: string;
-  name: string;
-  status: string;
+  decision: string | null;
 }
 
 export interface ChatTurnResult {
@@ -35,10 +31,9 @@ const HISTORY_LIMIT = 12;
 export async function runChatTurn(params: {
   sessionId: string;
   userMessage: string;
-  sprint?: SprintContextLite | null;
-  focusTask?: FocusTaskLite | null;
+  thread?: ThreadContextLite | null;
 }): Promise<ChatTurnResult> {
-  const { sessionId, userMessage, sprint, focusTask } = params;
+  const { sessionId, userMessage, thread } = params;
   const client = getOpenAI();
 
   await db.chatMessage.create({
@@ -56,10 +51,14 @@ export async function runChatTurn(params: {
 
   let meetingHits: MeetingHit[] = [];
   let featureHits: FeatureHit[] = [];
+  let threadHits: ThreadHit[] = [];
+  let logHits: LogHit[] = [];
   try {
-    [meetingHits, featureHits] = await Promise.all([
+    [meetingHits, featureHits, threadHits, logHits] = await Promise.all([
       semanticSearchMeetings(userMessage, 3),
       semanticSearchFeatures(userMessage, 5),
+      semanticSearchThreads(userMessage, 3),
+      semanticSearchLog(userMessage, 6),
     ]);
   } catch (err) {
     console.warn("[chat] entity semantic search failed:", err);
@@ -74,9 +73,11 @@ export async function runChatTurn(params: {
   const prior = recent.reverse().slice(0, -1);
 
   const [product, basePrompt] = await Promise.all([loadProductContext(), getChatPrompt()]);
-  const systemPrompt = buildSystemPrompt(basePrompt, sprint ?? null, focusTask ?? null, citedNotes, product, {
+  const systemPrompt = buildSystemPrompt(basePrompt, thread ?? null, citedNotes, product, {
     meetings: meetingHits,
     features: featureHits,
+    threads: threadHits,
+    log: logHits,
   });
   const messages = [
     { role: "system" as const, content: systemPrompt },
@@ -115,11 +116,12 @@ interface ProductContext {
   roadmap: { title: string; lane: string; themeTag: string | null }[];
   features: { title: string; status: string; cluster: string | null }[];
   meetings: { title: string; tldr: string | null; date: string }[];
+  openThreads: { title: string; decision: string | null; entries: number }[];
 }
 
 async function loadProductContext(): Promise<ProductContext> {
   try {
-    const [roadmap, features, meetings] = await Promise.all([
+    const [roadmap, features, meetings, openThreads] = await Promise.all([
       db.roadmapItem.findMany({
         orderBy: [{ lane: "asc" }, { order: "asc" }],
         select: { title: true, lane: true, themeTag: true },
@@ -135,6 +137,12 @@ async function loadProductContext(): Promise<ProductContext> {
         take: 8,
         select: { title: true, tldr: true, meetingDate: true },
       }),
+      db.thread.findMany({
+        where: { state: { in: ["OPEN", "PARKED"] } },
+        orderBy: { updatedAt: "desc" },
+        take: 20,
+        select: { title: true, decision: true, _count: { select: { entries: true } } },
+      }),
     ]);
     return {
       roadmap: roadmap.map((r) => ({ title: r.title, lane: r.lane, themeTag: r.themeTag })),
@@ -148,41 +156,60 @@ async function loadProductContext(): Promise<ProductContext> {
         tldr: m.tldr,
         date: m.meetingDate.toISOString().slice(0, 10),
       })),
+      openThreads: openThreads.map((t) => ({
+        title: t.title,
+        decision: t.decision,
+        entries: t._count.entries,
+      })),
     };
   } catch (err) {
     // Degrade gracefully — product context is additive, never block the turn.
     console.warn("[chat] loadProductContext failed:", err);
-    return { roadmap: [], features: [], meetings: [] };
+    return { roadmap: [], features: [], meetings: [], openThreads: [] };
   }
 }
 
 function buildSystemPrompt(
   basePrompt: string,
-  sprint: SprintContextLite | null,
-  focusTask: FocusTaskLite | null,
+  thread: ThreadContextLite | null,
   notes: { id: string; title: string; body: string }[],
   product: ProductContext,
-  semantic: { meetings: MeetingHit[]; features: FeatureHit[] },
+  semantic: {
+    meetings: MeetingHit[];
+    features: FeatureHit[];
+    threads: ThreadHit[];
+    log: LogHit[];
+  },
 ): string {
   const parts: string[] = [];
 
   parts.push(basePrompt);
 
-  if (sprint) {
-    const range = `${sprint.startDate.toISOString().slice(0, 10)} → ${sprint.endDate
-      .toISOString()
-      .slice(0, 10)}`;
+  if (thread) {
     parts.push(
-      `Active sprint: ${sprint.name} (state: ${sprint.state}, ${range})` +
-        (sprint.goal ? `. Goal: ${sprint.goal}` : "."),
+      `Focused thread: ${thread.title} (state: ${thread.state})` +
+        (thread.decision ? `. Decision: ${thread.decision}` : "."),
     );
   }
-  if (focusTask) {
-    parts.push(`Focused task: ${focusTask.name} (status: ${focusTask.status}).`);
-  }
 
-  if (product.roadmap.length || product.features.length || product.meetings.length) {
+  if (
+    product.roadmap.length ||
+    product.features.length ||
+    product.meetings.length ||
+    product.openThreads.length
+  ) {
     parts.push("PRODUCT CONTEXT (live data — cite specific titles):");
+    if (product.openThreads.length) {
+      parts.push(
+        "Open threads (work in flight) —\n" +
+          product.openThreads
+            .map(
+              (t) =>
+                `- ${t.title} [${t.entries} entries]${t.decision ? `: ${t.decision}` : ""}`,
+            )
+            .join("\n"),
+      );
+    }
     if (product.roadmap.length) {
       const byLane = (lane: string) =>
         product.roadmap
@@ -211,7 +238,12 @@ function buildSystemPrompt(
     }
   }
 
-  if (semantic.features.length || semantic.meetings.length) {
+  if (
+    semantic.features.length ||
+    semantic.meetings.length ||
+    semantic.threads.length ||
+    semantic.log.length
+  ) {
     parts.push("MOST RELEVANT TO THIS QUESTION (semantic search — prefer these):");
     if (semantic.features.length) {
       parts.push(
@@ -225,6 +257,26 @@ function buildSystemPrompt(
       parts.push(
         "Meetings —\n" +
           semantic.meetings.map((m) => `- ${m.title}${m.tldr ? `: ${m.tldr}` : ""}`).join("\n"),
+      );
+    }
+    if (semantic.threads.length) {
+      parts.push(
+        "Threads —\n" +
+          semantic.threads
+            .map((t) => `- ${t.title} [${t.state}]${t.decision ? `: ${t.decision}` : ""}`)
+            .join("\n"),
+      );
+    }
+    if (semantic.log.length) {
+      parts.push(
+        "Work-log entries (what was actually decided, tried and hit) —\n" +
+          semantic.log
+            .map(
+              (e) =>
+                `- ${e.occurredAt.toISOString().slice(0, 10)} ${e.kind}` +
+                `${e.threadTitle ? ` (${e.threadTitle})` : ""}: ${e.body}`,
+            )
+            .join("\n"),
       );
     }
   }

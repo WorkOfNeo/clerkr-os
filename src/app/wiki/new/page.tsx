@@ -33,7 +33,7 @@ export default async function NewWikiPage({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="tags">Tags (comma-separated)</Label>
-            <Input id="tags" name="tags" defaultValue={initialTags ?? ""} placeholder="convention, sprint-3" />
+            <Input id="tags" name="tags" defaultValue={initialTags ?? ""} placeholder="convention, gotcha:pgvector" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="body">Body (markdown)</Label>

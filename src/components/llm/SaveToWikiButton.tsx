@@ -73,7 +73,7 @@ export function SaveToWikiButton({ messageId, defaultTitle, defaultBody, default
             <Input
               value={tagsStr}
               onChange={(e) => setTagsStr(e.target.value)}
-              placeholder="decision, sprint-3"
+              placeholder="decision, dead-end, pgvector"
             />
           </div>
           <div className="space-y-1">

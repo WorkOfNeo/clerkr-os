@@ -8,6 +8,7 @@ import { AppNav } from "@/components/AppNav";
 
 import { ConnectGuide } from "./ConnectGuide";
 import { CreateTokenForm } from "./CreateTokenForm";
+import { SessionHookGuide } from "./SessionHookGuide";
 import { SkillSection } from "./SkillSection";
 import { TokenList } from "./TokenList";
 
@@ -34,8 +35,8 @@ export default async function SettingsPage() {
         <div>
           <h1 className="text-xl font-semibold">Settings</h1>
           <p className="text-sm text-muted-foreground">
-            Personal API tokens for the MCP server, plus the setup guide for
-            connecting Claude to the board.
+            Personal API tokens for the MCP server, the setup guide for connecting
+            Claude, and the session-end hook that feeds your work into the log.
           </p>
         </div>
 
@@ -70,6 +71,19 @@ export default async function SettingsPage() {
             </p>
           </div>
           <SkillSection />
+        </section>
+
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-base font-semibold">
+              Step 4 &mdash; Capture your sessions automatically
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Optional, and the highest-leverage thing here: it logs the work you
+              didn&apos;t stop to write down.
+            </p>
+          </div>
+          <SessionHookGuide origin={origin} />
         </section>
 
         <section className="space-y-3">

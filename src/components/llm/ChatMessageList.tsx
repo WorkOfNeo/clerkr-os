@@ -23,12 +23,12 @@ export interface CitedNote {
 interface Props {
   messages: ChatMessageItem[];
   citedNotes: CitedNote[];
-  sprintSlug?: string | null;
+  threadSlug?: string | null;
   loading?: boolean;
   emptyState?: string;
 }
 
-export function ChatMessageList({ messages, citedNotes, sprintSlug, loading, emptyState }: Props) {
+export function ChatMessageList({ messages, citedNotes, threadSlug, loading, emptyState }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export function ChatMessageList({ messages, citedNotes, sprintSlug, loading, emp
   if (messages.length === 0 && !loading) {
     return (
       <div className="px-4 py-12 text-center text-xs text-muted-foreground">
-        {emptyState ?? "Ask the assistant anything about this sprint."}
+        {emptyState ?? "Ask about anything in here — what you decided, what you already tried, what's tracked."}
       </div>
     );
   }
@@ -85,7 +85,7 @@ export function ChatMessageList({ messages, citedNotes, sprintSlug, loading, emp
                 messageId={m.id}
                 defaultTitle={m.content.slice(0, 60).trim() || "Note"}
                 defaultBody={m.content}
-                defaultTags={sprintSlug ? [`sprint-${sprintSlug}`] : []}
+                defaultTags={threadSlug ? [`thread-${threadSlug}`] : []}
               />
             </div>
           )}
