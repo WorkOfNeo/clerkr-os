@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { runChatTurn, type ThreadContextLite } from "@/lib/ai/chat";
+import { runChatTurn, type TicketContextLite } from "@/lib/ai/chat";
 import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { db } from "@/lib/db";
 
@@ -10,10 +10,10 @@ const sessionSelect = {
   id: true,
   title: true,
   userId: true,
-  threadId: true,
+  ticketId: true,
   createdAt: true,
   updatedAt: true,
-  thread: { select: { id: true, slug: true, title: true } },
+  ticket: { select: { id: true, slug: true, number: true, title: true } },
   _count: { select: { messages: true } },
 } as const;
 
@@ -21,27 +21,27 @@ export const CHAT_TOOLS: ToolDef[] = [
   {
     name: "create_chat_session",
     description:
-      "Start a new chat session with the in-app assistant. Optional threadId " +
+      "Start a new chat session with the in-app assistant. Optional ticketId " +
       "are auto-injected into the system prompt as context. The session is owned by the API token holder.",
     inputSchema: {
       type: "object",
       properties: {
         title: { type: "string", description: "Defaults to 'New chat'." },
-        threadId: { type: "string" },
+        ticketId: { type: "string" },
       },
     },
     handler: async (args, ctx) => {
-      const { title, threadId } = z
+      const { title, ticketId } = z
         .object({
           title: z.string().optional(),
-          threadId: z.string().optional(),
+          ticketId: z.string().optional(),
         })
         .parse(args);
       const session = await db.chatSession.create({
         data: {
           title: title ?? "New chat",
           userId: ctx.userId,
-          threadId: threadId ?? null,
+          ticketId: ticketId ?? null,
         },
         select: sessionSelect,
       });
@@ -87,7 +87,7 @@ export const CHAT_TOOLS: ToolDef[] = [
       properties: {
         sessionId: { type: "string", description: "Existing session; omit to auto-create." },
         content: { type: "string", description: "The user message." },
-        threadId: { type: "string", description: "Optional thread context (only used when auto-creating)." },
+        ticketId: { type: "string", description: "Optional ticket context (only used when auto-creating)." },
       },
       required: ["content"],
     },
@@ -96,7 +96,7 @@ export const CHAT_TOOLS: ToolDef[] = [
         .object({
           sessionId: z.string().optional(),
           content: z.string().min(1),
-          threadId: z.string().optional(),
+          ticketId: z.string().optional(),
         })
         .parse(args);
       if (!isOpenAIAvailable()) {
@@ -104,37 +104,37 @@ export const CHAT_TOOLS: ToolDef[] = [
       }
 
       let sessionId = input.sessionId ?? null;
-      let threadId = input.threadId ?? null;
+      let ticketId = input.ticketId ?? null;
       if (sessionId) {
         const existing = await db.chatSession.findUnique({
           where: { id: sessionId },
-          select: { threadId: true },
+          select: { ticketId: true },
         });
         if (!existing) throw new Error(`Chat session not found: ${sessionId}`);
-        threadId = existing.threadId;
+        ticketId = existing.ticketId;
       } else {
         const title =
           input.content.length > 60 ? `${input.content.slice(0, 60)}…` : input.content;
         const created = await db.chatSession.create({
-          data: { title, userId: ctx.userId, threadId },
+          data: { title, userId: ctx.userId, ticketId },
           select: { id: true },
         });
         sessionId = created.id;
       }
 
-      let thread: ThreadContextLite | null = null;
-      if (threadId) {
-        const t = await db.thread.findUnique({
-          where: { id: threadId },
-          select: { id: true, title: true, state: true, decision: true },
+      let ticket: TicketContextLite | null = null;
+      if (ticketId) {
+        const t = await db.ticket.findUnique({
+          where: { id: ticketId },
+          select: { id: true, number: true, title: true, status: true },
         });
-        if (t) thread = t;
+        if (t) ticket = t;
       }
 
       const turn = await runChatTurn({
         sessionId,
         userMessage: input.content,
-        thread,
+        ticket,
       });
       const citedNotes = turn.citedNoteIds.length
         ? await db.wikiNote.findMany({
@@ -148,27 +148,27 @@ export const CHAT_TOOLS: ToolDef[] = [
 
   {
     name: "list_chat_sessions",
-    description: "List chat sessions, default sort updatedAt desc. Optionally filter by thread.",
+    description: "List chat sessions, default sort updatedAt desc. Optionally filter by ticket.",
     inputSchema: {
       type: "object",
       properties: {
-        threadId: { type: "string" },
-        threadSlug: { type: "string" },
+        ticketId: { type: "string" },
+        ticketSlug: { type: "string" },
         limit: { type: "integer", minimum: 1, maximum: 200 },
       },
     },
     handler: async (args, ctx) => {
-      const { threadId, threadSlug, limit } = z
+      const { ticketId, ticketSlug, limit } = z
         .object({
-          threadId: z.string().optional(),
-          threadSlug: z.string().optional(),
+          ticketId: z.string().optional(),
+          ticketSlug: z.string().optional(),
           limit: z.number().int().min(1).max(200).optional(),
         })
         .parse(args);
 
       const where: Record<string, unknown> = { userId: ctx.userId };
-      if (threadId) where.threadId = threadId;
-      else if (threadSlug) where.thread = { slug: threadSlug };
+      if (ticketId) where.ticketId = ticketId;
+      else if (ticketSlug) where.ticket = { slug: ticketSlug };
 
       const sessions = await db.chatSession.findMany({
         where,
@@ -194,7 +194,7 @@ export const CHAT_TOOLS: ToolDef[] = [
         where: { id },
         include: {
           messages: { orderBy: { createdAt: "asc" } },
-          thread: { select: { id: true, slug: true, title: true } },
+          ticket: { select: { id: true, slug: true, number: true, title: true } },
         },
       });
       if (!session) throw new Error(`Chat session not found: ${id}`);

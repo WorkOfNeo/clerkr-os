@@ -3,8 +3,7 @@ import { z } from "zod";
 import { semanticSearchMeetings } from "@/lib/ai/embed-entities";
 import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { db } from "@/lib/db";
-import { entrySelect, resolveThread, writeLogEntry } from "@/lib/log";
-import { LOG_KIND_ORDER } from "@/lib/log-kinds";
+import { createTicket, ticketListSelect } from "@/lib/tickets";
 import { runStructurePipeline } from "@/lib/meetings/structure";
 import { slugify, uniqueSlug } from "@/lib/slug";
 
@@ -385,56 +384,54 @@ export const MEETING_TOOLS: ToolDef[] = [
   },
 
   {
-    name: "send_action_item_to_log",
+    name: "send_action_item_to_ticket",
     description:
-      "Push a meeting action item into the work log as an entry (1:1 — idempotent, returns the " +
-      "existing entry if already pushed). Optionally file it onto a thread. Action items are " +
-      "things that came out of a conversation; the log is where they live now that there is no " +
-      "task board.",
+      "Raise a meeting action item as a ticket (1:1 — idempotent, returns the existing ticket " +
+      "if already raised). Meeting action items are things a conversation decided someone should " +
+      "do; the ticket queue is where they live so they can be commented on and closed.",
     inputSchema: {
       type: "object",
       properties: {
         id: { type: "string" },
-        thread: { type: "string", description: "Thread id or slug to file it under." },
-        kind: {
-          type: "string",
-          enum: LOG_KIND_ORDER,
-          description: "Defaults to NOTE. Use DECISION when the meeting actually settled something.",
-        },
+        category: { type: "string", description: "Category slug or label, e.g. 'feature-request'." },
       },
       required: ["id"],
     },
     handler: async (args, ctx) => {
       const input = z
-        .object({
-          id: z.string().min(1),
-          thread: z.string().optional(),
-          kind: z.enum(LOG_KIND_ORDER as [string, ...string[]]).optional(),
-        })
+        .object({ id: z.string().min(1), category: z.string().optional() })
         .parse(args);
 
-      const item = await db.actionItem.findUnique({ where: { id: input.id } });
+      const item = await db.actionItem.findUnique({
+        where: { id: input.id },
+        include: { meeting: { select: { title: true } } },
+      });
       if (!item) throw new Error(`Action item not found: ${input.id}`);
 
-      if (item.logEntryId) {
-        const existing = await db.logEntry.findUnique({
-          where: { id: item.logEntryId },
-          select: entrySelect,
+      if (item.ticketId) {
+        const existing = await db.ticket.findUnique({
+          where: { id: item.ticketId },
+          select: ticketListSelect,
         });
         if (existing) return { ...existing, alreadyExisted: true };
       }
 
-      const thread = input.thread ? await resolveThread(input.thread) : null;
-      const entry = await writeLogEntry({
-        body: item.content,
-        kind: (input.kind ?? "NOTE") as never,
-        threadId: thread?.id ?? null,
+      const ticket = await createTicket({
+        title: item.content,
+        body: `From the meeting brief: **${item.meeting.title}**.`,
+        category: input.category,
+        reportedBy: item.assignee,
         source: "MEETING",
-        reviewed: true,
         authorId: ctx.userId,
       });
-      await db.actionItem.update({ where: { id: item.id }, data: { logEntryId: entry.id } });
-      return { ...entry, alreadyExisted: false };
+      await db.actionItem.update({ where: { id: item.id }, data: { ticketId: ticket.id } });
+      return {
+        id: ticket.id,
+        number: ticket.number,
+        slug: ticket.slug,
+        title: ticket.title,
+        alreadyExisted: false,
+      };
     },
   },
 ];

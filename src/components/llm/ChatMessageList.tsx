@@ -23,12 +23,12 @@ export interface CitedNote {
 interface Props {
   messages: ChatMessageItem[];
   citedNotes: CitedNote[];
-  threadSlug?: string | null;
+  ticketNumber?: number | null;
   loading?: boolean;
   emptyState?: string;
 }
 
-export function ChatMessageList({ messages, citedNotes, threadSlug, loading, emptyState }: Props) {
+export function ChatMessageList({ messages, citedNotes, ticketNumber, loading, emptyState }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -85,7 +85,7 @@ export function ChatMessageList({ messages, citedNotes, threadSlug, loading, emp
                 messageId={m.id}
                 defaultTitle={m.content.slice(0, 60).trim() || "Note"}
                 defaultBody={m.content}
-                defaultTags={threadSlug ? [`thread-${threadSlug}`] : []}
+                defaultTags={ticketNumber ? [`ticket-${ticketNumber}`] : []}
               />
             </div>
           )}

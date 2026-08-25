@@ -12,42 +12,35 @@ import { TOOLS, type ToolContext } from "./tools";
 // `$schema` into the wire shape, and some clients silently drop tools with
 // unknown fields.
 
-const INSTRUCTIONS = `This is Clerkr OS — NEO Labs' internal Product OS. It is run by one person, so
-it is built around a WORK LOG rather than a task board: nothing is planned up
-front, everything is recorded as it happens.
+const INSTRUCTIONS = `This is Clerkr OS — NEO Labs' internal Product OS for the Clerkr product.
 
-## The work log (the part you write to most)
+## Tickets (the part you write to most)
 
-A THREAD is one call the user has made, plus everything that happened while
-acting on it. A LOG ENTRY is one durable thing that happened.
+Anything raised lives here as a TICKET: an idea, a bug, a feature request, an
+open question. Neo files them, teammates file them, and so do you. The developer
+then comments on them and marks them fixed or shipped.
 
-Write an entry with \`log_entry\` the moment something durable happens — do not
-wait to be asked, and do not batch it up at the end:
+- **Search before you file.** Run \`search_tickets\` first — it matches on meaning,
+  not keywords. If something close already exists, \`comment_on_ticket\` on that
+  instead. A duplicate ticket is worse than no ticket.
+- **Categories are editable rows, not a fixed list.** Call
+  \`list_ticket_categories\` and tag with one that actually exists rather than
+  inventing a label. Don't create new categories unprompted — Neo maintains them
+  at /settings/categories.
+- **Title the symptom, not your guess at the cause.** "Search returns nothing
+  when the matter name has an apostrophe", not "Fix SQL escaping".
+- **For a bug, the body needs what happened, what was expected, and how to
+  reproduce it.** Never invent reproduction steps or error text the user didn't
+  give you — leave them out and say so.
+- Use \`reportedBy\` when it came from someone other than the token owner: a
+  teammate, or a lawyer at a customer firm.
+- Statuses: OPEN, IN_PROGRESS, FIXED (done in code, not released), SHIPPED (out
+  and live), WONT_FIX (deliberately closed). Prefer WONT_FIX over
+  \`delete_ticket\` — it keeps the record of the decision.
+- When you fix something, \`comment_on_ticket\` with what the fix was and set the
+  status in the same call.
 
-- \`DECISION\`  the user made a call, and why
-- \`WORKED\`    the right path — what worked, so it isn't re-derived
-- \`DEAD_END\`  a bad path — what was tried and why it failed
-- \`BLOCKER\`   what is stopping progress
-- \`IDEA\`      for later (these roll up into the Feature Library)
-- \`QUESTION\`  open and unresolved
-- \`SHIPPED\`   it landed
-- \`NOTE\`      everything else worth remembering
-
-Rules that matter:
-
-- Each entry body must stand alone. Write "Postgres 42703 — raw SQL must quote
-  camelCase pgvector columns like \"embeddedAt\"", not "fixed that SQL bug".
-- DEAD_END entries must say what was tried AND why it failed. That is the single
-  most valuable thing in here.
-- Only log a DECISION the user actually made. Your own suggestion is not one.
-- Call \`list_threads\` or \`search_threads\` first and file the entry onto the
-  right thread; only \`open_thread\` when the user commits to something genuinely
-  new.
-- Before proposing an approach, run \`search_log\` — if it was already tried and
-  failed, say so instead of suggesting it again.
-- \`close_thread\` is the payoff: it writes what came of the work and carries the
-  surviving ideas into the Feature Library. Suggest it when a thread is finished,
-  and use finalState ABANDONED when the work was dropped on purpose.
+Ask before filing tickets in bulk. One well-written ticket beats five vague ones.
 
 ## The idea board
 
@@ -76,10 +69,12 @@ the card renders text-only. Never inline image bytes or base64 into any field.
 
 ## Everything else
 
-Meetings structure into briefs (\`create_meeting\` + \`structure_meeting\`); the
-Feature Library, clusters and roadmap are the product side; the wiki holds
-longer-form knowledge. Authorship on everything you create is set automatically
-from the owner of the API token you are calling with.`;
+Meetings structure into briefs (\`create_meeting\` + \`structure_meeting\`), and a
+meeting action item can be raised as a ticket with
+\`send_action_item_to_ticket\`. The Feature Library, clusters and roadmap are the
+product-planning side; the wiki holds longer-form knowledge. Authorship on
+everything you create is set automatically from the owner of the API token you
+are calling with.`;
 
 export function buildServer({ userId }: ToolContext): Server {
   const server = new Server(

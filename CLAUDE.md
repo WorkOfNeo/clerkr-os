@@ -3,61 +3,58 @@
 Internal NEO Labs tool. Two parts in one Next.js app:
 
 1. **Idea board** (`/grid`) — Pinterest-style cards backed by `Post`, populated via MCP.
-2. **Work log + wiki + LLM** (`/log`, `/threads`, `/wiki`, `/chat`) — the activity log that
-   replaced the sprint board, embedded wiki for living knowledge, OpenAI-powered assistant.
+2. **Tickets + wiki + LLM** (`/tickets`, `/wiki`, `/chat`) — the ticket queue that replaced
+   the sprint board and a Google Doc, embedded wiki, OpenAI-powered assistant.
 3. **Product OS** (`/meetings`, `/features`, `/roadmap`, `/knowledge`) — meetings structure
    into briefs; ideas accumulate in the Feature Library.
 
-## The work log (read this before changing anything in `/log` or `/threads`)
+## Tickets (read this before changing anything in `/tickets`)
 
-This is a **one-person tool**, and the model is built for that. There is no sprint, no
-backlog and no task board — those were removed deliberately in favour of recording work
-as it happens rather than planning it up front.
+The ticket queue replaced both the sprint/task board and a Google Doc. Anything
+raised — an idea, a bug, a feature request, an open question — is a **Ticket**;
+the developer comments on it and marks it fixed/shipped. There is no sprint, no
+backlog and no planning horizon.
 
-- A **Thread** is one call that's been made, plus everything that happened while acting
-  on it. `title` / `decision` / `why` / `state` (OPEN, PARKED, DONE, ABANDONED).
-- A **LogEntry** is one durable thing that happened, typed by `LogKind`: `DECISION`,
-  `WORKED`, `DEAD_END`, `BLOCKER`, `IDEA`, `QUESTION`, `SHIPPED`, `NOTE`. Entries can
-  live with no thread — a loose note is still worth having, and gets filed later.
-- Closing a thread runs `src/lib/ai/roll-up-thread.ts`: the AI reads the whole stream,
-  writes the `outcome`, and promotes the surviving `IDEA` entries into the Feature
-  Library via `upsertFeatureFromIdea` (deduped by embedding, so the same idea from two
-  threads lands on one feature row). **This is the payoff for logging as you go** — don't
-  break it casually.
-- `DEAD_END` is the most valuable kind in here. The Copilot searches it before suggesting
-  an approach so a failed path isn't retried.
+- **Category is an editable row** (`TicketCategory`), not an enum, so a new type
+  can be added at `/settings/categories` without a deploy. Seeded with Idea /
+  Bug / Feature request / Question. `Ticket.categoryId` is nullable with
+  `onDelete: SetNull` — deleting a category must never delete its tickets.
+- **Status IS an enum** (`OPEN`, `IN_PROGRESS`, `FIXED`, `SHIPPED`, `WONT_FIX`)
+  on purpose: code branches on "is this resolved" via `TICKET_STATUSES[s].resolved`
+  in [src/lib/ticket-meta.ts](src/lib/ticket-meta.ts). That must not be editable
+  out from under the logic.
+- `Ticket.number` is an autoincrement human handle (#14). `resolveTicket` accepts
+  an id, a slug, `14` or `#14` — MCP callers pass whichever they have.
+- `authorId` is who put it in the system; `reportedBy` is free text for who it
+  actually came from (a teammate, or a lawyer at a customer firm). They are not
+  the same thing, and the UI shows `reportedBy` in preference.
 
-**Single write path:** everything — server actions, MCP tools, session ingest — goes
-through `createThread` / `writeLogEntry` in [src/lib/log.ts](src/lib/log.ts). Slugging,
-embedding and provenance live there. Don't write `db.logEntry.create` directly.
+**Single write path:** server actions and MCP tools both go through
+`createTicket` / `addComment` in [src/lib/tickets.ts](src/lib/tickets.ts).
+Slugging, embedding, attachments and provenance live there.
 
-Kind/state labels, colours and prompt vocabulary all come from
-[src/lib/log-kinds.ts](src/lib/log-kinds.ts) — the AI prompts inject `kindVocabulary()`
-at read time, so the enum and the prompt can never drift.
+## Screenshots on tickets
 
-## Session-end capture
+Images are **bytes in Postgres** (`TicketAttachment.data`), not S3 — same pattern
+as prod-spec's rejection attachments (wiki `cmquudjcd001ypf159yd5frw8`).
 
-`scripts/clerkr-session-hook.mjs` is a Claude Code **SessionEnd** hook. Install with
-`npm run hook:install -- --url <origin> --token <api-token>`; it appends to
-`~/.claude/settings.json` and leaves existing hooks (nah-hook, ledger) alone.
-
-The hook is a **dumb pipe** on purpose: its only local decision is "does this session's
-cwd look like Clerkr work?" (`CLERKR_REPOS`, default `clerkr`). It strips tool calls out
-of the transcript, keeps the tail, and POSTs to `/api/ingest/session`. Judging relevance,
-extracting entries, matching a thread and embedding all happen server-side in
-[src/lib/ai/ingest-session.ts](src/lib/ai/ingest-session.ts), where the OpenAI key and the
-editable prompt already live. No model call and no OpenAI key ever touches the hook.
-
-Two invariants in the hook, both load-bearing: it **always exits 0**, and it **never
-writes to stdout** (SessionEnd can't block, and stdout would be parsed as a decision).
-
-Ingest is idempotent on the Claude session id + a content hash, so a re-fired hook can't
-double-log. Every offered session gets a `SessionIngest` row — *including* the ones judged
-irrelevant, with the reason. That's the answer to "why didn't my session show up?"
-(`ingest_history` MCP tool).
-
-Entries the hook creates land with `reviewed: false` and surface in the review tray at the
-top of `/log`. AI guesses must never quietly become fact.
+- Downscaled **client-side** by [src/lib/images/downscale-image.ts](src/lib/images/downscale-image.ts)
+  before upload (canvas; longest edge ≤2000px; PNG kept for crisp screenshots,
+  JPEG fallback when too heavy). No `sharp`, no native dep. A 4000×3000 / 10MB
+  screenshot lands at ~35KB.
+- They ride inline as base64 in the normal server-action payload and are decoded
+  by [src/lib/images/decode-data-url.ts](src/lib/images/decode-data-url.ts). No
+  separate upload endpoint, so there are no orphan rows to garbage-collect.
+- **Paste is the primary path** — ⌘V on macOS, Ctrl+V on Windows. Both surface a
+  clipboard screenshot as a `kind: "file"` item on the paste event, so
+  `imagesFromClipboard` needs no per-platform branch. It returns `[]` for a
+  text-only paste, and `ImageDropzone` only calls `preventDefault()` when an
+  image was actually found — otherwise pasting text into the textarea breaks.
+- **Never select `data` in a list query.** `attachmentSelect` in `tickets.ts`
+  deliberately omits it; pulling bytes into `/tickets` would be megabytes a page.
+- Served from `/api/attachments/[id]` behind the session cookie — screenshots can
+  contain client matter, so that route is deliberately NOT in the `src/proxy.ts`
+  public allowlist.
 
 ## Stack
 
@@ -73,16 +70,17 @@ top of `/log`. AI guesses must never quietly become fact.
 
 ## Conventions
 
-- Routes: **kebab-case** (`/log`, `/threads/[slug]`).
+- Routes: **kebab-case** (`/tickets`, `/tickets/[slug]`).
 - Components: **PascalCase** under `src/components/<domain>/<Component>.tsx`.
 - Functions / vars: **camelCase**.
 - Path alias `@/*` → `src/*`.
 
 ## Mutations
 
-Server actions only — never `/api/*` for app code. Three exceptions, all
-machine-to-machine callers with no session cookie: `/api/auth/[...all]` (Better Auth),
-`/api/mcp` (MCP server) and `/api/ingest/session` (the session-end hook, Bearer ApiToken).
+Server actions only — never `/api/*` for app code. Exceptions: `/api/auth/[...all]`
+(Better Auth) and `/api/mcp` (MCP server), both machine-to-machine with no session
+cookie; plus `/api/attachments/[id]`, which serves binary rather than data for a
+component — the rule is about mutations. That route stays session-gated.
 
 Pattern (see [src/app/grid/actions.ts](src/app/grid/actions.ts)):
 
@@ -119,7 +117,7 @@ npm run typecheck
 ## Auth & access
 
 - Better Auth + bcrypt password; `ALLOWED_EMAILS` env var gates signups (`src/lib/auth.ts` `databaseHooks.user.create.before`).
-- **Single-tenant** — any signed-in user can read/edit everything (log, threads, wiki). Don't accidentally add per-user scopes without an explicit decision.
+- **Single-tenant** — any signed-in user can read/edit everything (tickets, wiki). Don't accidentally add per-user scopes without an explicit decision.
 - MCP uses Bearer `ApiToken` (created in `/settings`).
 
 ## AI wiring
@@ -130,9 +128,7 @@ All under [src/lib/ai/](src/lib/ai/):
 - `embed.ts` / `embed-wiki.ts` — wiki notes embed inline on save via raw SQL (`db.$executeRaw` with the pgvector `::vector` cast — Prisma can't bind to `Unsupported` columns from the generated client).
 - `wiki-search.ts` — semantic search via `embedding <=> ${vec}::vector` cosine distance, with `Prisma.sql` for optional tag-array filter.
 - `chat.ts` — `runChatTurn`: persists user msg, runs semantic search for context, calls `gpt-4o-mini`, persists assistant msg.
-- `roll-up-thread.ts` — `rollUpThread`: closes a thread, writes its outcome, promotes ideas into the Feature Library.
-- `ingest-session.ts` — `ingestSession`: the server side of the session-end hook (relevance gate → extraction → thread attach → entries).
-- `embed-sweep.ts` — `sweepMissingEmbeddings`: embeds any wiki note / feature / meeting / thread / log entry whose `embedding` is NULL. Runs every 10 min (+ ~30s after boot) via `src/instrumentation.ts`, and on demand via the `backfill_embeddings` MCP tool. Nothing stays unsearchable even when an inline embed fails.
+- `embed-sweep.ts` — `sweepMissingEmbeddings`: embeds any wiki note / feature / meeting / ticket whose `embedding` is NULL. Runs every 10 min (+ ~30s after boot) via `src/instrumentation.ts`, and on demand via the `backfill_embeddings` MCP tool. Nothing stays unsearchable even when an inline embed fails.
 
 **Raw-SQL column gotcha:** the pgvector tables use camelCase column names (`"embeddedAt"`) because the Prisma fields have no `@map`. Raw `$executeRaw`/`$queryRaw` must quote them — unquoted `embedded_at` fails with Postgres `42703`, and inside `tryEmbed`-style wrappers it fails *silently*. This once left every wiki note / feature / meeting in prod unembedded.
 
@@ -143,8 +139,6 @@ If `OPENAI_API_KEY` is missing, AI call sites must return a friendly "OpenAI not
 ## Don't touch
 
 - The `Post` model and the `/grid` page — the idea board is shipping; leave it alone.
-- The `exit 0` / empty-stdout contract in `scripts/clerkr-session-hook.mjs`. A hook that
-  throws or prints breaks every Claude Code session on the machine.
 - The flip-card CSS in `globals.css` — preserve-3d + overflow-hidden interaction is load-bearing.
 
 ## Hydration gotcha
@@ -168,22 +162,29 @@ npm run dev            # Next dev
 npm run typecheck      # tsc --noEmit
 npm run probe          # MCP wire-shape probe
 npm run db:studio      # Prisma Studio
-npm run db:seed        # idempotent — seeds the "how the work log works" wiki note
-npm run hook:install   # register the SessionEnd hook in ~/.claude/settings.json
+npm run db:seed        # idempotent — seeds the default ticket categories + a wiki note
 ```
 
 Schema changes go through `prisma db push` for now (no migration files yet); the `db:migrate` script is wired to `prisma migrate dev` for when we baseline.
 
-HNSW indexes on the `embedding` columns are *not* generated by `db push` — recreate them
-manually if you wipe and re-push. (They were missing entirely in prod until 2026-08-22, so
-every semantic search was a sequential scan. Check `pg_indexes` after any re-push.)
+**HNSW indexes are dropped by every `prisma db push`.** They aren't expressible
+in the schema (Prisma can't model index opclasses on `Unsupported` columns), so
+push reconciles them away as unknown objects — this is not just a
+wipe-and-re-push hazard, it happens on *every* push. Re-run the block below
+after each one and confirm with `pg_indexes`.
+
+They were missing entirely in prod until 2026-08-22, which meant every semantic
+search was a sequential scan.
 
 ```sql
 CREATE INDEX IF NOT EXISTS wiki_note_embedding_idx ON wiki_note USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS feature_embedding_idx   ON feature   USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS meeting_embedding_idx   ON meeting   USING hnsw (embedding vector_cosine_ops);
-CREATE INDEX IF NOT EXISTS thread_embedding_idx    ON thread    USING hnsw (embedding vector_cosine_ops);
-CREATE INDEX IF NOT EXISTS log_entry_embedding_idx ON log_entry USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS ticket_embedding_idx    ON ticket    USING hnsw (embedding vector_cosine_ops);
+```
+
+```bash
+psql "$DIRECT_URL" -c "SELECT tablename, indexname FROM pg_indexes WHERE indexdef ILIKE '%hnsw%';"
 ```
 
 ## `npm run lint` is broken

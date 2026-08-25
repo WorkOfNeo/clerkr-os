@@ -53,7 +53,7 @@ export function ChatConversation({
       { id: `local-${prev.length}`, role: "USER", content: trimmed, citedNoteIds: [] },
     ]);
     start(async () => {
-      const res = await sendChatMessage({ sessionId, userMessage: trimmed, threadId: null });
+      const res = await sendChatMessage({ sessionId, userMessage: trimmed, ticketId: null });
       if (res.sessionId && res.sessionId !== sessionId) setSessionId(res.sessionId);
       if (res.messages.length) setMessages(res.messages);
       setCitedNotes((prev) => {

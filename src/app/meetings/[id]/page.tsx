@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { AppNav } from "@/components/AppNav";
-import { ActionItemLogButton } from "@/components/meeting/ActionItemLogButton";
+import { ActionItemTicketButton } from "@/components/meeting/ActionItemTicketButton";
 import { ActionItemToggle } from "@/components/meeting/ActionItemToggle";
 import { PromoteSignalButton } from "@/components/meeting/PromoteSignalButton";
 import { StructureButton } from "@/components/meeting/StructureButton";
@@ -38,7 +38,10 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
         orderBy: { createdAt: "asc" },
         include: { feature: { select: { slug: true } } },
       },
-      actionItems: { orderBy: { createdAt: "asc" } },
+      actionItems: {
+        orderBy: { createdAt: "asc" },
+        include: { ticket: { select: { slug: true } } },
+      },
       openQuestions: { orderBy: { createdAt: "asc" } },
     },
   });
@@ -162,7 +165,7 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
                       </p>
                     </div>
                   </div>
-                  <ActionItemLogButton actionItemId={a.id} inLog={Boolean(a.logEntryId)} />
+                  <ActionItemTicketButton actionItemId={a.id} ticketSlug={a.ticket?.slug ?? null} />
                 </li>
               ))}
             </BriefSection>
