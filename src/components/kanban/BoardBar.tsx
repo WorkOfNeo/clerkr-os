@@ -6,7 +6,11 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { MoreHorizontal, Plus } from "lucide-react";
 
-import { deleteBoard, setDefaultBoard } from "@/app/kanban/actions";
+import {
+  deleteBoard,
+  setMyDefaultBoard,
+  setWorkspaceDefaultBoard,
+} from "@/app/kanban/actions";
 import { BoardEditor } from "@/components/kanban/BoardEditor";
 import {
   DropdownMenu,
@@ -16,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/toast";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export interface BoardOption {
@@ -35,9 +40,12 @@ export interface BoardOption {
 export function BoardBar({
   boards,
   activeSlug,
+  myDefaultBoardId,
 }: {
   boards: BoardOption[];
   activeSlug: string;
+  /** This person's own landing board, if they've chosen one. */
+  myDefaultBoardId: string | null;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -73,14 +81,15 @@ export function BoardBar({
           );
         })}
 
-        <button
-          onClick={() => setCreating(true)}
-          className="pressable ml-0.5 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          aria-label="New board"
-          title="New board"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
+        <Tooltip label="New board">
+          <button
+            onClick={() => setCreating(true)}
+            className="pressable ml-0.5 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="New board"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </Tooltip>
 
         {active && (
           <DropdownMenu>
@@ -88,6 +97,7 @@ export function BoardBar({
               <button
                 className="pressable flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 aria-label={`${active.name} board options`}
+                title="Board settings — or right-click the board"
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </button>
@@ -96,16 +106,44 @@ export function BoardBar({
               <DropdownMenuItem onSelect={() => setEditing(active)}>
                 Rename & describe…
               </DropdownMenuItem>
+              {/* Mine vs everyone's — two different promises, so two items. */}
+              <DropdownMenuItem
+                disabled={myDefaultBoardId === active.id}
+                onSelect={() =>
+                  startTransition(async () => {
+                    await setMyDefaultBoard(active.id);
+                    toast(`Kanban opens on “${active.name}” for you`, { tone: "success" });
+                  })
+                }
+              >
+                {myDefaultBoardId === active.id
+                  ? "Opens for you by default"
+                  : "Open this one by default"}
+              </DropdownMenuItem>
+              {myDefaultBoardId !== null && (
+                <DropdownMenuItem
+                  onSelect={() =>
+                    startTransition(async () => {
+                      await setMyDefaultBoard(null);
+                      toast("Following the workspace default again");
+                    })
+                  }
+                >
+                  Clear my default
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 disabled={active.isDefault}
                 onSelect={() =>
                   startTransition(async () => {
-                    await setDefaultBoard(active.id);
-                    toast(`“${active.name}” is now the board Kanban opens on`, { tone: "success" });
+                    await setWorkspaceDefaultBoard(active.id);
+                    toast(`New cards land on “${active.name}” by default`, { tone: "success" });
                   })
                 }
               >
-                {active.isDefault ? "Opens by default" : "Open this one by default"}
+                {active.isDefault
+                  ? "Workspace default"
+                  : "Make workspace default"}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

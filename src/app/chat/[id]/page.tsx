@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { getProposalsForSession } from "@/app/chat/intake-actions";
@@ -6,6 +7,19 @@ import { IntakeConversation } from "@/components/intake/IntakeConversation";
 import { ChatSidebar } from "@/components/llm/ChatSidebar";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const chat = await db.chatSession.findUnique({ where: { id }, select: { title: true } });
+  return {
+    title: chat?.title ?? "Intake",
+    description: "An intake conversation in Clerkr OS.",
+  };
+}
 
 export default async function ChatSessionPage({
   params,

@@ -40,6 +40,19 @@ model User {
   notifications  Notification[]
   pushSubs       PushSubscription[]
 
+  // Which board /kanban opens on FOR THIS PERSON. Distinct from
+  // KanbanBoard.isDefault, which is the workspace-wide fallback and where an
+  // unrouted card lands (MCP, chat intake) — those have no user to ask.
+  // Nullable: unset simply falls back to the workspace default.
+  defaultBoardId String?
+
+  // Whether activity on a card you follow reaches you. Toggled from the
+  // Kanban view settings — subscribing is per card, but wanting to hear about
+  // it at all is a preference about you.
+  notifySubscribedCards Boolean @default(true)
+
+  cardSubscriptions CardSubscriber[]
+
   @@map("user")
 }
 
@@ -565,6 +578,7 @@ model KanbanCard {
   feature   Feature? @relation(fields: [featureId], references: [id])
 
   attachments Attachment[]
+  subscribers CardSubscriber[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -823,11 +837,15 @@ model Document {
 // nobody reads, which is worse than no bell.
 
 enum NotificationKind {
+  CARD_ACTIVITY
+  CARD_BLOCKED_STALE
   CARD_DUE
   CARD_OVERDUE
   TICKET_FILED
   PROPOSALS_WAITING
   TICKET_STALE
+  MEETING_UNSTRUCTURED
+  COLUMN_OVER_WIP
 }
 
 model Notification {
@@ -877,4 +895,23 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscription")
+}
+
+// Following a card. You are subscribed to anything you create, and can follow
+// or drop any other card — so "tell me when this moves" is a per-card choice,
+// while "tell me at all" is the per-person `notifySubscribedCards` flag.
+model CardSubscriber {
+  id String @id @default(uuid())
+
+  cardId String
+  card   KanbanCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([cardId, userId])
+  @@index([userId])
+  @@map("card_subscriber")
 }

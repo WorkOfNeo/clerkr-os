@@ -7,6 +7,7 @@ import { useState } from "react";
 import { MoreHorizontal, Plus } from "lucide-react";
 
 import { ColumnIcon } from "@/components/kanban/ColumnIcon";
+import { CardContextMenu } from "@/components/kanban/CardContextMenu";
 import { KanbanCard } from "@/components/kanban/KanbanCard";
 import {
   DropdownMenu,
@@ -15,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 import type { BoardCard, BoardColumn } from "./types";
@@ -33,9 +35,14 @@ export function KanbanColumnView({
   onOpenCard,
   onSetDefault,
   onDelete,
+  subscribed,
+  allColumns,
 }: {
   column: BoardColumn;
   cards: BoardCard[];
+  /** Card ids this person follows — drives the right-click menu's wording. */
+  subscribed: Set<string>;
+  allColumns: BoardColumn[];
   onQuickAdd: (columnId: string, title: string) => void;
   onEdit: (column: BoardColumn) => void;
   onOpenCard: (card: BoardCard) => void;
@@ -56,7 +63,7 @@ export function KanbanColumnView({
   }
 
   return (
-    <div className="flex w-[290px] shrink-0 flex-col">
+    <div className="flex w-[86vw] max-w-[320px] shrink-0 snap-start flex-col sm:w-[290px]">
       <div className="mb-2 flex items-center gap-2 px-1">
         <ColumnIcon name={column.icon} color={column.color} />
         <h3 className="text-[13px] font-semibold tracking-[-0.01em]">{column.name}</h3>
@@ -86,6 +93,7 @@ export function KanbanColumnView({
               <button
                 className="pressable rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 aria-label={`${column.name} column options`}
+                title={`${column.name} options`}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </button>
@@ -108,20 +116,26 @@ export function KanbanColumnView({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <button
-            onClick={() => setAdding(true)}
-            className="pressable rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label={`Add a card to ${column.name}`}
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
+          <Tooltip label={`Add to ${column.name}`}>
+            <button
+              onClick={() => setAdding(true)}
+              className="pressable rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label={`Add a card to ${column.name}`}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </Tooltip>
         </div>
       </div>
 
       <div
         ref={setNodeRef}
         className={cn(
-          "flex min-h-[140px] flex-1 flex-col gap-2 rounded-xl p-2 transition-colors duration-200 ease-apple",
+          "scroll-soft flex min-h-[140px] flex-1 flex-col gap-2 overflow-y-auto overscroll-y-contain rounded-xl p-2 transition-colors duration-200 ease-apple",
+          // Bounded so the column scrolls internally instead of pushing the
+          // page taller than the screen, which is what made the lower cards
+          // unreachable on a phone.
+          "max-h-[calc(100dvh-16rem)] sm:max-h-[calc(100dvh-19rem)]",
           // The drop target lights up rather than outlining — a ring on a
           // container this large reads as an error state.
           isOver ? "bg-primary/[0.06]" : "bg-muted/45",
@@ -130,7 +144,15 @@ export function KanbanColumnView({
         <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
           {cards.map((card) => (
             <motion.div key={card.id} layout transition={SPRING}>
-              <KanbanCard card={card} accent={column.color} onOpen={onOpenCard} />
+              <CardContextMenu
+                card={card}
+                columns={allColumns}
+                subscribed={subscribed.has(card.id)}
+              >
+                <div>
+                  <KanbanCard card={card} accent={column.color} onOpen={onOpenCard} />
+                </div>
+              </CardContextMenu>
             </motion.div>
           ))}
         </SortableContext>

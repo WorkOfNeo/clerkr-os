@@ -1,8 +1,16 @@
+import type { Metadata } from "next";
+
 import Link from "next/link";
 
 import { ClerkrLogo } from "@/components/ClerkrLogo";
 
 import { SignUpForm } from "./signup-form";
+
+export const metadata: Metadata = {
+  title: "Create account",
+  description:
+    "Create a Clerkr OS account. Allowlisted addresses only.",
+};
 
 export default function SignUpPage() {
   return (

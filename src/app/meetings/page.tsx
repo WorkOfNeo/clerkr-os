@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import Link from "next/link";
 
 import { AppShell } from "@/components/AppShell";
@@ -13,6 +15,12 @@ const KIND_LABEL = {
   CUSTOMER: "Customer",
   PROSPECT: "Prospect",
 } as const;
+
+export const metadata: Metadata = {
+  title: "Meetings",
+  description:
+    "Transcripts structured into briefs — decisions, feature signals, action items and open questions.",
+};
 
 export default async function MeetingsPage() {
   const session = await requireSession();

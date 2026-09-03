@@ -1,3 +1,6 @@
+import type { Metadata } from "next";
+
+import { myKanbanPrefs } from "@/app/kanban/actions";
 import { AppShell } from "@/components/AppShell";
 import { PageHeader } from "@/components/PageHeader";
 import { BoardBar, type BoardOption } from "@/components/kanban/BoardBar";
@@ -10,6 +13,12 @@ import { requireSession } from "@/lib/session";
 // Several boards, each its own workflow with its own columns — see the
 // KanbanBoard note in schema.prisma.
 
+export const metadata: Metadata = {
+  title: "Kanban",
+  description:
+    "Boards with columns you define yourself, including which ones count as done.",
+};
+
 export default async function KanbanPage({
   searchParams,
 }: {
@@ -18,11 +27,21 @@ export default async function KanbanPage({
   const session = await requireSession();
   const params = await searchParams;
 
-  const boardRows = await ensureBoards();
-  // An unknown ?board= falls back to the default rather than 404ing — a stale
-  // bookmark should land you somewhere useful.
+  const [boardRows, me, prefs] = await Promise.all([
+    ensureBoards(),
+    db.user.findUnique({
+      where: { id: session.user.id },
+      select: { defaultBoardId: true },
+    }),
+    myKanbanPrefs(),
+  ]);
+
+  // Preference order: the URL, then this person's own default, then the
+  // workspace default, then whatever exists. An unknown ?board= falls through
+  // rather than 404ing — a stale bookmark should still land somewhere useful.
   const active =
     boardRows.find((b) => b.slug === params.board) ??
+    boardRows.find((b) => b.id === me?.defaultBoardId) ??
     boardRows.find((b) => b.isDefault) ??
     boardRows[0];
 
@@ -74,9 +93,21 @@ export default async function KanbanPage({
           }
         />
 
-        <BoardBar boards={boards} activeSlug={active.slug} />
+        <BoardBar
+          boards={boards}
+          activeSlug={active.slug}
+          myDefaultBoardId={me?.defaultBoardId ?? null}
+        />
 
-        <KanbanBoard boardId={active.id} columns={columns} cards={cards} />
+        <KanbanBoard
+          boardId={active.id}
+          boardName={active.name}
+          isMyDefault={me?.defaultBoardId === active.id}
+          notifySubscribed={prefs.notifySubscribedCards}
+          subscribedCardIds={prefs.subscribedCardIds}
+          columns={columns}
+          cards={cards}
+        />
       </main>
     </AppShell>
   );

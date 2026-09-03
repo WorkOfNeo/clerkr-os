@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Eye, ImagePlus, Link2, Pencil, Trash2 } from "lucide-react";
+import { ImagePlus, Link2, Trash2 } from "lucide-react";
 
 import {
   addCardAttachments,
@@ -12,13 +12,13 @@ import {
   updateCard,
 } from "@/app/kanban/actions";
 import { ImageDropzone, type PendingImage } from "@/components/attachments/ImageDropzone";
+import { RichTextEditor } from "@/components/editor/RichTextEditor";
 import { ColumnIcon } from "@/components/kanban/ColumnIcon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SheetContent } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
-import { MarkdownView } from "@/components/wiki/MarkdownView";
 import { formatISODate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -76,7 +76,6 @@ function Body({
   const [themeTag, setThemeTag] = useState(card.themeTag ?? "");
   const [blocked, setBlocked] = useState(card.blocked);
   const [blockerNote, setBlockerNote] = useState(card.blockerNote ?? "");
-  const [editing, setEditing] = useState(!card.description);
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
 
   const column = columns.find((c) => c.id === card.columnId);
@@ -167,69 +166,32 @@ function Body({
       <div>
         <div className="mb-1.5 flex items-center justify-between">
           <span className="text-[13px] font-medium">Notes</span>
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() => {
-              if (editing) save();
-              setEditing((e) => !e);
-            }}
-          >
-            {editing ? (
-              <>
-                <Eye className="h-3 w-3" />
-                Preview
-              </>
-            ) : (
-              <>
-                <Pencil className="h-3 w-3" />
-                Edit
-              </>
-            )}
-          </Button>
+          <span className="text-[11.5px] text-muted-foreground">Saves when you click away</span>
         </div>
 
-        {editing ? (
-          <ImageDropzone
-            images={pendingImages}
-            onChange={(next) => {
-              setPendingImages(next);
-              // Insert as markdown the moment one is dropped, so the writer
-              // sees where it landed instead of hunting for it after saving.
-              const added = next.slice(pendingImages.length);
-              if (added.length) {
-                setBody(
-                  (b) =>
-                    `${b}${b && !b.endsWith("\n") ? "\n\n" : ""}` +
-                    added.map((i) => `![${i.fileName}](${i.dataUrl})`).join("\n"),
-                );
-              }
-            }}
-            max={12}
-            hint="paste or drop images — they're inserted where the cursor left off"
-          >
-            <Textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={14}
-              placeholder={"Markdown. # headings, - lists, [links](https://…), ![images](…), > quotes, `code`."}
-              className="min-h-[220px] resize-y border-0 bg-transparent shadow-none ring-0 focus:ring-0"
-            />
-          </ImageDropzone>
-        ) : body ? (
-          <div className="rounded-md bg-card p-3 shadow-xs ring-1 ring-inset ring-hairline">
-            <MarkdownView body={body} />
-          </div>
-        ) : (
-          <button
-            onClick={() => setEditing(true)}
-            className="w-full rounded-md border border-dashed border-hairline py-8 text-[13px] text-muted-foreground hover:text-foreground"
-          >
-            Add notes — markdown, images, links
-          </button>
-        )}
+        {/* Live markdown — it formats as you type rather than hiding behind a
+            preview toggle. Images dropped in are inserted at the end as
+            markdown, so they show in place immediately. */}
+        <ImageDropzone
+          images={pendingImages}
+          onChange={(next) => {
+            setPendingImages(next);
+            const added = next.slice(pendingImages.length);
+            if (added.length) {
+              setBody(
+                (b) =>
+                  `${b}${b && !b.endsWith("\n") ? "\n\n" : ""}` +
+                  added.map((i) => `![${i.fileName}](${i.dataUrl})`).join("\n"),
+              );
+            }
+          }}
+          max={12}
+          hint="paste or drop images — they land at the end of the note"
+        >
+          <RichTextEditor value={body} onChange={setBody} onBlur={save} className="border-0 shadow-none ring-0 focus-within:ring-0" />
+        </ImageDropzone>
 
-        {editing && pendingImages.length > 0 && (
+        {pendingImages.length > 0 && (
           <Button size="xs" className="mt-2" onClick={attach} disabled={isPending}>
             <ImagePlus className="h-3 w-3" />
             Upload {pendingImages.length} image{pendingImages.length === 1 ? "" : "s"}

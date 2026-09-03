@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { marked } from "marked";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -13,6 +14,23 @@ import { formatShortDate } from "@/lib/format";
 import { TICKET_SOURCES } from "@/lib/ticket-meta";
 import { ticketDetailSelect } from "@/lib/tickets";
 import { requireSession } from "@/lib/session";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const ticket = await db.ticket.findUnique({
+    where: { slug },
+    select: { number: true, title: true, body: true },
+  });
+  if (!ticket) return { title: "Ticket" };
+  return {
+    title: `#${ticket.number} ${ticket.title}`,
+    description: ticket.body?.slice(0, 160) ?? `Ticket #${ticket.number} in the Clerkr OS queue.`,
+  };
+}
 
 export default async function TicketPage({
   params,

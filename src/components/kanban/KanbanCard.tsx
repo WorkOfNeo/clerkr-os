@@ -6,6 +6,7 @@ import { CalendarDays, Flag, Link2, Paperclip } from "lucide-react";
 
 import { ConfidenceMeter } from "@/components/kanban/ConfidenceMeter";
 import { formatShortDate } from "@/lib/format";
+import { markdownExcerpt } from "@/lib/markdown/convert";
 import { cn } from "@/lib/utils";
 
 import type { BoardCard } from "./types";
@@ -49,6 +50,9 @@ export function KanbanCard({
       onClick={() => onOpen?.(card)}
       className={cn(
         "group relative w-full cursor-grab select-none rounded-lg bg-card p-3 text-left active:cursor-grabbing",
+        // Keep vertical panning with the browser so the column still scrolls;
+        // the touch sensor's hold is what claims the card.
+        "touch-pan-y",
         "shadow-[0_0_0_1px_hsl(var(--hairline)),0_1px_2px_rgb(0_0_0/0.04)]",
         "transition-[box-shadow,transform] duration-200 ease-apple",
         "hover:shadow-[0_0_0_1px_hsl(var(--foreground)/0.08),0_6px_16px_-6px_rgb(0_0_0/0.12)]",
@@ -71,9 +75,11 @@ export function KanbanCard({
         {card.title}
       </p>
 
+      {/* The note is markdown, so the card shows a stripped excerpt — a card
+          face reading "## Context" would be worse than showing nothing. */}
       {(card.feature || card.themeTag || card.description) && (
-        <p className="mt-0.5 line-clamp-1 text-[12px] leading-snug text-muted-foreground">
-          {card.feature?.title ?? card.themeTag ?? card.description}
+        <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-muted-foreground">
+          {card.feature?.title ?? card.themeTag ?? markdownExcerpt(card.description, 110)}
         </p>
       )}
 

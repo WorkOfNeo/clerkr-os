@@ -11,6 +11,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { isActive, NAV_SECTIONS } from "@/components/nav-items";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { signOut } from "@/lib/auth-client";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export function SidebarNav({
@@ -68,6 +69,7 @@ export function SidebarNav({
             <ClerkrLogo className="h-4 w-auto shrink-0" />
             <span className={cn("truncate", collapsed && "hidden")}>Clerkr OS</span>
           </Link>
+          <Tooltip label={collapsed ? "Expand sidebar" : "Collapse sidebar"} side="right">
           <button
             onClick={toggle}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -78,6 +80,7 @@ export function SidebarNav({
           >
             <PanelLeft className="h-4 w-4" />
           </button>
+          </Tooltip>
         </div>
 
         <button

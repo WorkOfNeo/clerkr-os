@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Mic, Square, X } from "lucide-react";
 
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 import { useVoiceRecorder, voiceInputSupported } from "./useVoiceRecorder";
@@ -102,12 +103,12 @@ export function MicButton({ voice, disabled }: { voice: VoiceInput; disabled?: b
   if (!voice.supported) return null;
   const busy = voice.active;
   return (
+    <Tooltip label="Dictate — speak, then stop">
     <button
       type="button"
       onClick={voice.start}
       disabled={disabled || busy}
       aria-label="Dictate"
-      title="Dictate (speak, then press stop)"
       className={cn(
         // Solid and larger than the other actions on purpose: dictation is the
         // primary way notes get in on a phone, and a ghost icon sitting among
@@ -122,6 +123,7 @@ export function MicButton({ voice, disabled }: { voice: VoiceInput; disabled?: b
     >
       <Mic className="h-5 w-5 sm:h-4 sm:w-4" strokeWidth={2} />
     </button>
+    </Tooltip>
   );
 }
 

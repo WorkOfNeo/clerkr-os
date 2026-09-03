@@ -1,8 +1,16 @@
+import type { Metadata } from "next";
+
 import Link from "next/link";
 
 import { AppShell } from "@/components/AppShell";
 import { MeetingIntakeForm } from "@/components/meeting/MeetingIntakeForm";
 import { requireSession } from "@/lib/session";
+
+export const metadata: Metadata = {
+  title: "New meeting",
+  description:
+    "Paste a transcript or rough notes and have them structured into a brief.",
+};
 
 export default async function NewMeetingPage() {
   const session = await requireSession();

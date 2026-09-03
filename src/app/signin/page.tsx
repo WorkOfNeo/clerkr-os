@@ -1,9 +1,17 @@
+import type { Metadata } from "next";
+
 import { Suspense } from "react";
 import Link from "next/link";
 
 import { ClerkrLogo } from "@/components/ClerkrLogo";
 
 import { SignInForm } from "./signin-form";
+
+export const metadata: Metadata = {
+  title: "Sign in",
+  description:
+    "Sign in to Clerkr OS.",
+};
 
 export default function SignInPage() {
   return (

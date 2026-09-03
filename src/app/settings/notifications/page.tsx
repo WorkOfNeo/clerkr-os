@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import Link from "next/link";
 
 import { deviceCount, pushStatus } from "@/app/notifications/actions";
@@ -6,6 +8,12 @@ import { PageHeader } from "@/components/PageHeader";
 import { InstallGuide } from "@/components/notifications/InstallGuide";
 import { PushToggle } from "@/components/notifications/PushToggle";
 import { requireSession } from "@/lib/session";
+
+export const metadata: Metadata = {
+  title: "Install & notifications",
+  description:
+    "Put Clerkr OS on your home screen, and choose what reaches you when it's closed.",
+};
 
 export default async function NotificationSettingsPage() {
   const session = await requireSession();

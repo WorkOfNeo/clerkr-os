@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { headers } from "next/headers";
 
 import { listApiTokens } from "@/lib/api-tokens";
@@ -19,6 +21,12 @@ async function deriveOrigin() {
   const proto = h.get("x-forwarded-proto") ?? "http";
   return host ? `${proto}://${host}` : "http://localhost:3000";
 }
+
+export const metadata: Metadata = {
+  title: "Settings",
+  description:
+    "API tokens for the MCP server, and the guide for connecting Claude to Clerkr OS.",
+};
 
 export default async function SettingsPage() {
   const session = await requireSession();

@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import Link from "next/link";
 
 import { db } from "@/lib/db";
@@ -8,6 +10,12 @@ import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { WikiSearchBox } from "@/components/wiki/WikiSearchBox";
+
+export const metadata: Metadata = {
+  title: "Wiki",
+  description:
+    "Living knowledge — decisions, retros and conventions, searchable by meaning.",
+};
 
 export default async function WikiPage() {
   const session = await requireSession();

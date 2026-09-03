@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -9,6 +10,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MarkdownView } from "@/components/wiki/MarkdownView";
 import { WikiNoteEditor } from "@/components/wiki/WikiNoteEditor";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const note = await db.wikiNote.findUnique({
+    where: { slug },
+    select: { title: true, body: true },
+  });
+  if (!note) return { title: "Note" };
+  return { title: note.title, description: note.body.slice(0, 160) };
+}
 
 export default async function WikiNotePage({
   params,

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
@@ -25,6 +26,23 @@ const SIGNAL_META = {
   ALREADY_TRACKED: { label: "Already tracked", variant: "secondary" as const },
   SMALL_UNIQUE: { label: "Small / unique", variant: "outline" as const },
 };
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const meeting = await db.meeting.findUnique({
+    where: { id },
+    select: { title: true, tldr: true },
+  });
+  if (!meeting) return { title: "Meeting" };
+  return {
+    title: meeting.title,
+    description: meeting.tldr?.slice(0, 160) ?? "A meeting brief in Clerkr OS.",
+  };
+}
 
 export default async function MeetingBriefPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();

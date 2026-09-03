@@ -3,7 +3,7 @@
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
   closestCorners,
   useSensor,
   useSensors,
@@ -21,6 +21,7 @@ import {
   quickAddCard,
   setDefaultColumn,
 } from "@/app/kanban/actions";
+import { BoardContextMenu } from "@/components/kanban/BoardContextMenu";
 import { CardPanel } from "@/components/kanban/CardPanel";
 import { ColumnEditor } from "@/components/kanban/ColumnEditor";
 import { DeleteColumnDialog } from "@/components/kanban/DeleteColumnDialog";
@@ -39,13 +40,22 @@ interface Move {
 
 export function KanbanBoard({
   boardId,
+  boardName,
+  isMyDefault,
+  notifySubscribed,
+  subscribedCardIds,
   columns,
   cards: initialCards,
 }: {
   boardId: string;
+  boardName: string;
+  isMyDefault: boolean;
+  notifySubscribed: boolean;
+  subscribedCardIds: string[];
   columns: BoardColumn[];
   cards: BoardCard[];
 }) {
+  const subscribed = new Set(subscribedCardIds);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -62,9 +72,18 @@ export function KanbanBoard({
   const [deleting, setDeleting] = useState<BoardColumn | null>(null);
   const [openCard, setOpenCard] = useState<BoardCard | null>(null);
 
-  // 4px of slop: below that it's a click, above it it's a drag. Without the
-  // threshold, opening a card by clicking becomes a coin toss.
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  // MOUSE ONLY, deliberately. A touch sensor claims the gesture on the way to
+  // recognising a drag, and a phone only has so many gestures to give:
+  //
+  //   - a swipe has to scroll, or half the board is unreachable;
+  //   - a press-and-hold has to open the context menu, because that IS the
+  //     right-click on a phone — and a drag sensor would eat the hold before
+  //     the menu ever fires.
+  //
+  // So on touch a card is moved from the long-press menu's "Move to" list,
+  // which is faster than dragging across a horizontally-scrolling board
+  // anyway. Dragging stays the mouse gesture it is good at.
+  const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 4 } }));
 
   const byColumn = new Map<string, BoardCard[]>();
   for (const column of columns) byColumn.set(column.id, []);
@@ -122,7 +141,13 @@ export function KanbanBoard({
         onDragCancel={() => setActiveId(null)}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex items-start gap-3 overflow-x-auto pb-6">
+        <BoardContextMenu
+          boardId={boardId}
+          boardName={boardName}
+          isMyDefault={isMyDefault}
+          notifySubscribed={notifySubscribed}
+        >
+        <div className="scroll-rail flex min-h-[60vh] snap-x snap-mandatory items-start gap-3 overflow-x-auto overscroll-x-contain pb-6 sm:snap-none">
           {columns.map((column) => (
             <KanbanColumnView
               key={column.id}
@@ -136,6 +161,8 @@ export function KanbanBoard({
               }
               onEdit={setEditing}
               onOpenCard={setOpenCard}
+              subscribed={subscribed}
+              allColumns={columns}
               onSetDefault={(id) =>
                 startTransition(async () => {
                   await setDefaultColumn(id);
@@ -154,6 +181,7 @@ export function KanbanBoard({
             Add column
           </button>
         </div>
+        </BoardContextMenu>
 
         {/* The lifted card tilts and grows a little — it reads as picked up off
             the board rather than sliding along it. */}

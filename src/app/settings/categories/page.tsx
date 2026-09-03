@@ -1,9 +1,17 @@
+import type { Metadata } from "next";
+
 import Link from "next/link";
 
 import { AppShell } from "@/components/AppShell";
 import { CategoryEditor } from "@/components/ticket/CategoryEditor";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
+
+export const metadata: Metadata = {
+  title: "Ticket categories",
+  description:
+    "The editable list of ticket types — add or rename one without a deploy.",
+};
 
 export default async function CategoriesSettingsPage() {
   const session = await requireSession();

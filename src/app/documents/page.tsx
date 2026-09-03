@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { AppShell } from "@/components/AppShell";
 import { PageHeader } from "@/components/PageHeader";
 import { DocumentFilters } from "@/components/document/DocumentFilters";
@@ -16,6 +18,12 @@ import { requireSession } from "@/lib/session";
 function isKind(v: string | undefined): v is DocumentKind {
   return Boolean(v) && DOCUMENT_KINDS.some((k) => k.value === v);
 }
+
+export const metadata: Metadata = {
+  title: "Documents",
+  description:
+    "The file store — PDFs, images, spreadsheets and decks, kept whole.",
+};
 
 export default async function DocumentsPage({
   searchParams,

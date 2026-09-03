@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 
 import { MotionProvider } from "@/components/MotionProvider";
 import { ToastProvider } from "@/components/ui/toast";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "./globals.css";
 
@@ -15,7 +16,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Clerkr OS",
+  // Every page supplies its own name; this appends the app so a tab, a task
+  // switcher and the installed window all read "<page> · Clerkr OS".
+  title: {
+    default: "Clerkr OS",
+    template: "%s · Clerkr OS",
+  },
   description: "Internal Product OS — chat intake, tickets, kanban, meetings, features.",
 };
 
@@ -50,7 +56,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         <MotionProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <TooltipProvider delayDuration={350} skipDelayDuration={300}>
+            <ToastProvider>{children}</ToastProvider>
+          </TooltipProvider>
         </MotionProvider>
       </body>
     </html>

@@ -56,6 +56,13 @@ export async function createCardAction(
   });
 
   await attachImages(parsed.attachments, { kind: "kanbanCard", id: card.id }, session.user.id);
+
+  // You follow what you raise. Anything else would mean opting in to news
+  // about your own work.
+  await db.cardSubscriber.create({
+    data: { cardId: card.id, userId: session.user.id },
+  });
+
   revalidatePath("/kanban");
   return { id: card.id };
 }
@@ -69,7 +76,7 @@ const moveInput = z.object({
 /** Drag autosave. The `completedAt` stamp is derived from the destination
  *  column's isDone flag — moving a card is the only way it gets set. */
 export async function moveCard(input: z.infer<typeof moveInput>): Promise<void> {
-  await requireSession();
+  const session = await requireSession();
   const parsed = moveInput.parse(input);
 
   const current = await db.kanbanCard.findUnique({
@@ -77,14 +84,30 @@ export async function moveCard(input: z.infer<typeof moveInput>): Promise<void> 
     select: { completedAt: true },
   });
 
-  await db.kanbanCard.update({
+  const moved = await db.kanbanCard.update({
     where: { id: parsed.id },
     data: {
       columnId: parsed.columnId,
       order: parsed.order,
       completedAt: await completionFor(parsed.columnId, current?.completedAt ?? null),
     },
+    select: { id: true, number: true, title: true, column: { select: { name: true } } },
   });
+
+  // Tell the followers — everyone except whoever just did it, who watched it
+  // happen. Best-effort: a notification must never fail a drag.
+  try {
+    const { notifyCardActivity } = await import("@/lib/notifications/card-activity");
+    await notifyCardActivity({
+      cardId: moved.id,
+      actorId: session.user.id,
+      title: `#${moved.number} moved to ${moved.column.name}`,
+      body: moved.title,
+    });
+  } catch (err) {
+    console.warn("[kanban] follower notify failed:", err);
+  }
+
   revalidatePath("/kanban");
 }
 
@@ -413,7 +436,28 @@ export async function updateBoard(input: {
   revalidatePath("/kanban");
 }
 
-export async function setDefaultBoard(id: string): Promise<void> {
+/**
+ * The board /kanban opens on FOR THIS PERSON. Everyone picks their own — one
+ * person lives on the app board, another on web — so this is a preference on
+ * the user, not a flag on the board.
+ *
+ * Pass null to go back to following the workspace default.
+ */
+export async function setMyDefaultBoard(id: string | null): Promise<void> {
+  const session = await requireSession();
+  await db.user.update({
+    where: { id: session.user.id },
+    data: { defaultBoardId: id },
+  });
+  revalidatePath("/kanban");
+}
+
+/**
+ * The workspace-wide fallback: where a card lands when nobody said which board
+ * — MCP calls and chat intake have no user to ask — and what someone sees
+ * before they have picked their own.
+ */
+export async function setWorkspaceDefaultBoard(id: string): Promise<void> {
   await requireSession();
   await db.$transaction([
     db.kanbanBoard.updateMany({ where: { isDefault: true }, data: { isDefault: false } }),
@@ -456,4 +500,54 @@ export async function deleteBoard(id: string): Promise<void> {
   }
 
   revalidatePath("/kanban");
+}
+
+// ─── Following a card ────────────────────────────────────────────────────────
+
+/** Follow or stop following. Idempotent both ways — the button is a toggle and
+ *  double-clicks happen. */
+export async function setCardSubscription(cardId: string, follow: boolean): Promise<void> {
+  const session = await requireSession();
+  if (follow) {
+    await db.cardSubscriber.upsert({
+      where: { cardId_userId: { cardId, userId: session.user.id } },
+      create: { cardId, userId: session.user.id },
+      update: {},
+    });
+  } else {
+    await db.cardSubscriber.deleteMany({ where: { cardId, userId: session.user.id } });
+  }
+  revalidatePath("/kanban");
+}
+
+/** Whether activity on followed cards reaches this person at all. Per person,
+ *  not per card — the per-card choice is the subscription itself. */
+export async function setNotifySubscribedCards(enabled: boolean): Promise<void> {
+  const session = await requireSession();
+  await db.user.update({
+    where: { id: session.user.id },
+    data: { notifySubscribedCards: enabled },
+  });
+  revalidatePath("/kanban");
+}
+
+export async function myKanbanPrefs(): Promise<{
+  notifySubscribedCards: boolean;
+  subscribedCardIds: string[];
+}> {
+  const session = await requireSession();
+  const [me, subs] = await Promise.all([
+    db.user.findUnique({
+      where: { id: session.user.id },
+      select: { notifySubscribedCards: true },
+    }),
+    db.cardSubscriber.findMany({
+      where: { userId: session.user.id },
+      select: { cardId: true },
+    }),
+  ]);
+  return {
+    notifySubscribedCards: me?.notifySubscribedCards ?? true,
+    subscribedCardIds: subs.map((s) => s.cardId),
+  };
 }

@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { requireSession } from "@/lib/session";
 
 import { AppShell } from "@/components/AppShell";
@@ -7,6 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 import { createWikiNoteFromForm } from "../actions";
+
+export const metadata: Metadata = {
+  title: "New note",
+  description:
+    "Write down a decision, a gotcha or a convention so it isn't re-derived later.",
+};
 
 export default async function NewWikiPage({
   searchParams,

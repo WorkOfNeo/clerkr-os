@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import Link from "next/link";
 import { Settings2 } from "lucide-react";
 
@@ -16,6 +18,12 @@ import type { TicketStatus } from "@prisma/client";
 function isStatus(v: string | undefined): v is TicketStatus {
   return Boolean(v) && (TICKET_STATUS_ORDER as string[]).includes(v as string);
 }
+
+export const metadata: Metadata = {
+  title: "Tickets",
+  description:
+    "Everything raised in one queue: ideas, bugs, feature requests and open questions, with what's still open first.",
+};
 
 export default async function TicketsPage({
   searchParams,

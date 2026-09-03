@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 
@@ -33,6 +35,12 @@ function orderBy(sort: SortValue) {
       return { createdAt: "desc" as const };
   }
 }
+
+export const metadata: Metadata = {
+  title: "Ideas",
+  description:
+    "The inspiration board — product, design and marketing references found around the web.",
+};
 
 export default async function GridPage({
   searchParams,

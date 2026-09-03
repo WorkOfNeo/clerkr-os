@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import Link from "next/link";
 
 import { AppShell } from "@/components/AppShell";
@@ -14,6 +16,12 @@ import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 
 import { PromptEditor } from "./PromptEditor";
+
+export const metadata: Metadata = {
+  title: "AI prompts",
+  description:
+    "The system prompts the AI reads before firing. Shared by everyone on the team.",
+};
 
 export default async function PromptsSettingsPage() {
   const session = await requireSession();

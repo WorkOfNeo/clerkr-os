@@ -10,19 +10,32 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    // A stable id keeps it the SAME installed app across start_url changes —
+    // without it, changing start_url can install a second copy.
+    id: "/",
     name: "Clerkr OS",
-    short_name: "Clerkr OS",
+    short_name: "Clerkr",
     description: "Internal Product OS — intake, tickets, kanban, meetings, features.",
     start_url: "/chat",
     scope: "/",
     display: "standalone",
+    // Falls back left to right where a browser supports a richer mode.
+    display_override: ["standalone", "minimal-ui"],
     orientation: "portrait",
     background_color: "#FBFBFD",
     theme_color: "#FBFBFD",
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      // Separate asset: a maskable icon is cropped to a circle on some
+      // launchers, so the mark needs its own padding. Reusing the square one
+      // gets the logo's edges shaved off.
+      {
+        src: "/icons/icon-maskable-512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable",
+      },
     ],
     shortcuts: [
       { name: "Intake", short_name: "Intake", url: "/chat" },

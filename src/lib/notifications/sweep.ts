@@ -108,6 +108,65 @@ export async function sweepNotifications(): Promise<SweepResult> {
     });
   }
 
+  // ── A meeting pasted but never turned into a brief ────────────────────────
+  // The transcript is the raw material; the brief is the point. One sitting
+  // unstructured means the value never got extracted.
+  const unstructured = await db.meeting.findMany({
+    where: { structuredAt: null, createdAt: { lte: new Date(now.getTime() - 2 * 60 * 60 * 1000) } },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, title: true },
+    take: 5,
+  });
+  for (const m of unstructured) {
+    rows.push({
+      kind: "MEETING_UNSTRUCTURED",
+      title: `${m.title} hasn't been structured`,
+      body: "The transcript is saved but no brief was extracted from it.",
+      href: `/meetings/${m.id}`,
+      dedupeKey: `meeting-unstructured:${m.id}:${weekKey(now)}`,
+    });
+  }
+
+  // ── A column past the limit its owner set ─────────────────────────────────
+  const limited = await db.kanbanColumn.findMany({
+    where: { wipLimit: { not: null } },
+    select: {
+      id: true,
+      name: true,
+      wipLimit: true,
+      board: { select: { name: true } },
+      _count: { select: { cards: true } },
+    },
+  });
+  for (const c of limited) {
+    if (c._count.cards <= (c.wipLimit ?? Infinity)) continue;
+    rows.push({
+      kind: "COLUMN_OVER_WIP",
+      title: `${c.name} is over its limit`,
+      body: `${c._count.cards} cards against a limit of ${c.wipLimit} on ${c.board.name}.`,
+      href: "/kanban",
+      dedupeKey: `column-wip:${c.id}:${dayKey(now)}`,
+    });
+  }
+
+  // ── Blocked and left there ────────────────────────────────────────────────
+  // Blocked means someone else has to act; a week of that means nobody chased.
+  const blockedSince = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const stuck = await db.kanbanCard.findMany({
+    where: { blocked: true, completedAt: null, updatedAt: { lte: blockedSince } },
+    select: { id: true, number: true, title: true, blockerNote: true },
+    take: 5,
+  });
+  for (const c of stuck) {
+    rows.push({
+      kind: "CARD_BLOCKED_STALE",
+      title: `#${c.number} has been blocked a week`,
+      body: c.blockerNote ?? c.title,
+      href: "/kanban",
+      dedupeKey: `card-blocked:${c.id}:${weekKey(now)}`,
+    });
+  }
+
   if (rows.length === 0) return { created: 0, byKind: {} };
 
   const { count } = await db.notification.createMany({ data: rows, skipDuplicates: true });

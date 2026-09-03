@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import Link from "next/link";
 
 import { AppShell } from "@/components/AppShell";
@@ -7,6 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
+
+export const metadata: Metadata = {
+  title: "Knowledge",
+  description:
+    "How the product's features cluster and cross-link, as a graph.",
+};
 
 export default async function KnowledgePage({
   searchParams,

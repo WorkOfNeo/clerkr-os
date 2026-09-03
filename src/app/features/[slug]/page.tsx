@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -11,6 +12,23 @@ import { Badge } from "@/components/ui/badge";
 import { db } from "@/lib/db";
 import { formatShortDate } from "@/lib/format";
 import { requireSession } from "@/lib/session";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const feature = await db.feature.findUnique({
+    where: { slug },
+    select: { title: true, description: true },
+  });
+  if (!feature) return { title: "Feature" };
+  return {
+    title: feature.title,
+    description: feature.description?.slice(0, 160) ?? "A feature in the Clerkr OS library.",
+  };
+}
 
 export default async function FeatureDetailPage({
   params,

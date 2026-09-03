@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import Link from "next/link";
 
 import { AppShell } from "@/components/AppShell";
@@ -20,6 +22,12 @@ interface FeatureRow {
   cluster: { id: string; name: string } | null;
   _count: { signals: number; kanbanCards: number };
 }
+
+export const metadata: Metadata = {
+  title: "Features",
+  description:
+    "The self-growing catalogue of every feature signal, clustered by product area.",
+};
 
 export default async function FeaturesPage({
   searchParams,
