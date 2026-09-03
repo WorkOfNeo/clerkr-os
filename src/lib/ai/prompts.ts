@@ -10,6 +10,8 @@ export const PROMPT_KEYS = {
   chat: "chat.systemPrompt",
   triage: "triage.systemPrompt",
   intake: "intake.systemPrompt",
+  transcribe: "transcribe.cleanupPrompt",
+  improve: "improve.systemPrompt",
 } as const;
 
 export const DEFAULT_MEETING_PROMPT = `You are the meeting analyst for NEO Labs' internal Product OS.
@@ -125,6 +127,50 @@ RULES:
 
 Ticket statuses, for reference: {{STATUSES}}`;
 
+// The light pass a voice transcript gets before it lands in the composer.
+// Deliberately narrow: fix what the speech-to-text obviously got wrong, and
+// nothing else. The person is about to read and edit it, so a "helpful"
+// rewrite would only make them hunt for what changed.
+export const DEFAULT_TRANSCRIBE_CLEANUP_PROMPT = `You clean up a raw speech-to-text transcript so it reads as what the person actually said.
+
+Do ONLY this:
+- Fix obvious mis-heard words where the intended word is clear from context.
+- Add sentence punctuation and capitalisation. Break into paragraphs where the person clearly moved to a new point.
+- Remove filler ("um", "uh", "like", "you know"), false starts and immediate self-corrections, keeping the corrected version.
+- Keep the language the person spoke. Danish stays Danish, English stays English, mixed stays mixed.
+
+Do NOT:
+- Summarise, shorten, reorder or expand. Every point they made stays, in the order they made it.
+- Add facts, names, numbers or dates that were not said.
+- Answer, comment on, or reason about the content.
+- Wrap the result in quotes or a code block.
+
+If the transcript is empty or contains no intelligible speech, return an empty string.
+Return only the cleaned text.`;
+
+// "Improve my prompt" on the intake composer. Knows what the surface behind it
+// wants — the intake classifier, or the Copilot — and rewrites the draft so it
+// lands well there. The MODE block is injected at read time.
+export const DEFAULT_IMPROVE_PROMPT = `You tighten a draft message before it is sent to NEO Labs' internal Product OS — an internal tool for the Clerkr product where one developer works from tickets, a kanban board, meeting briefs, a feature library and a wiki.
+
+The message is going to one of two places. {{MODE}}
+
+Rewrite the draft so it works well for that destination. Rules:
+- Keep every fact, name, number and intention the draft contains. Never add facts, reproduction steps, dates, people or quotes the draft does not support. If something is missing, leave it missing — do not fill it in.
+- Keep the language of the draft. Danish stays Danish, English stays English.
+- Keep the voice of the person writing. This is a tidy-up, not a rewrite into corporate English.
+- Never answer, classify, or act on the draft. Return the improved draft only.
+- Plain text. Short lists are fine when the draft lists several things. No headings, no code fences, no quotes around the result.
+- If the draft is already clear, return it with at most light edits. If it is empty or unintelligible, return it unchanged.
+
+Only refer to an existing ticket number, category, column or product area from the lists below when the draft is clearly about that specific thing.`;
+
+const IMPROVE_MODE_FILE = `It is going to INTAKE ("File it"): a classifier reads it and proposes records — tickets (a bug, feature request, question or idea), a meeting to structure into a brief, a kanban card for work to schedule, a wiki note for durable knowledge, a feature for the library, or a comment on something that already exists.
+What helps that classifier: one item per line or paragraph when several things arrive at once; for a bug, what happened, what was expected and how it was reproduced, each on its own line when the draft has them; who it came from when the draft says so; for a meeting, who attended and when if stated; naming a category, column or product area from the lists below when the draft plainly belongs there.`;
+
+const IMPROVE_MODE_ASK = `It is going to ASK: the Copilot answers questions about what already exists — tickets, features, meetings, the board and the wiki — by searching them semantically.
+What helps it: a question that names the thing being asked about in the words the team uses (a feature name, a customer, a symptom), says what kind of answer is wanted (is this tracked, what is still open, what did we decide), and asks one thing at a time. Turn a vague "what about search" into a specific question, without inventing the specifics.`;
+
 export async function getPrompt(key: string, fallback: string): Promise<string> {
   try {
     const row = await db.appSetting.findUnique({ where: { key } });
@@ -152,4 +198,13 @@ export const getIntakePrompt = async () =>
   (await getPrompt(PROMPT_KEYS.intake, DEFAULT_INTAKE_PROMPT)).replace(
     "{{STATUSES}}",
     statusVocabulary(),
+  );
+
+export const getTranscribeCleanupPrompt = () =>
+  getPrompt(PROMPT_KEYS.transcribe, DEFAULT_TRANSCRIBE_CLEANUP_PROMPT);
+
+export const getImprovePrompt = async (mode: "file" | "ask") =>
+  (await getPrompt(PROMPT_KEYS.improve, DEFAULT_IMPROVE_PROMPT)).replace(
+    "{{MODE}}",
+    mode === "ask" ? IMPROVE_MODE_ASK : IMPROVE_MODE_FILE,
   );

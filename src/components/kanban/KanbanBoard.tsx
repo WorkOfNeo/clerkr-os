@@ -21,6 +21,7 @@ import {
   quickAddCard,
   setDefaultColumn,
 } from "@/app/kanban/actions";
+import { CardPanel } from "@/components/kanban/CardPanel";
 import { ColumnEditor } from "@/components/kanban/ColumnEditor";
 import { DeleteColumnDialog } from "@/components/kanban/DeleteColumnDialog";
 import { KanbanCard } from "@/components/kanban/KanbanCard";
@@ -37,9 +38,11 @@ interface Move {
 }
 
 export function KanbanBoard({
+  boardId,
   columns,
   cards: initialCards,
 }: {
+  boardId: string;
   columns: BoardColumn[];
   cards: BoardCard[];
 }) {
@@ -57,6 +60,7 @@ export function KanbanBoard({
   const [editing, setEditing] = useState<BoardColumn | null>(null);
   const [creatingColumn, setCreatingColumn] = useState(false);
   const [deleting, setDeleting] = useState<BoardColumn | null>(null);
+  const [openCard, setOpenCard] = useState<BoardCard | null>(null);
 
   // 4px of slop: below that it's a click, above it it's a drag. Without the
   // threshold, opening a card by clicking becomes a coin toss.
@@ -131,7 +135,7 @@ export function KanbanBoard({
                 })
               }
               onEdit={setEditing}
-              onOpenCard={(card) => router.push(`/kanban/${card.slug}`)}
+              onOpenCard={setOpenCard}
               onSetDefault={(id) =>
                 startTransition(async () => {
                   await setDefaultColumn(id);
@@ -167,8 +171,17 @@ export function KanbanBoard({
         </DragOverlay>
       </DndContext>
 
+      {/* Kept in sync with the server copy so an edit made in the panel shows
+          on the board without closing it. */}
+      <CardPanel
+        card={openCard ? (cards.find((c) => c.id === openCard.id) ?? openCard) : null}
+        columns={columns}
+        onClose={() => setOpenCard(null)}
+      />
+
       <ColumnEditor
         open={creatingColumn || editing !== null}
+        boardId={boardId}
         column={editing}
         onClose={() => {
           setCreatingColumn(false);

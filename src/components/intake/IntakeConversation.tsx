@@ -119,8 +119,8 @@ export function IntakeConversation({
         <div className="mx-auto w-full max-w-3xl px-4">
           {isEmpty && !pending ? (
             <div className="flex min-h-[58vh] flex-col items-center justify-center gap-5 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-purple-500 text-primary-foreground shadow-lg">
-                <Sparkles className="h-5 w-5" />
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-foreground text-background">
+                <Sparkles className="h-5 w-5" strokeWidth={1.75} />
               </div>
               <div className="max-w-md">
                 <h2 className="text-[19px] font-semibold tracking-[-0.02em]">
@@ -143,14 +143,14 @@ export function IntakeConversation({
                 const cards = proposals[m.id] ?? [];
                 return m.role === "USER" ? (
                   <div key={m.id} className="flex justify-end">
-                    <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-[13.5px] text-primary-foreground">
+                    <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-foreground px-3.5 py-2.5 text-[13.5px] leading-relaxed text-background">
                       {m.content}
                     </div>
                   </div>
                 ) : (
                   <div key={m.id} className="group flex gap-3">
-                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-purple-500 text-primary-foreground">
-                      <Sparkles className="h-3.5 w-3.5" />
+                    <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                      <Sparkles className="h-3 w-3" strokeWidth={2} />
                     </div>
                     <div className="min-w-0 flex-1 space-y-2.5">
                       {m.content && (
@@ -202,8 +202,8 @@ export function IntakeConversation({
 
               {pending && (
                 <div className="flex gap-3">
-                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-purple-500 text-primary-foreground">
-                    <Sparkles className="h-3.5 w-3.5" />
+                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                    <Sparkles className="h-3 w-3" strokeWidth={2} />
                   </div>
                   <motion.div
                     className="flex items-center gap-1 pt-2"
@@ -227,7 +227,7 @@ export function IntakeConversation({
         </div>
       </div>
 
-      <div className="border-t border-hairline bg-background/80 backdrop-blur">
+      <div className="border-t border-hairline bg-background/80 pb-safe backdrop-blur">
         <div className="mx-auto w-full max-w-3xl space-y-2 px-4 py-3">
           {error && (
             <div className="rounded-md bg-destructive/10 px-3 py-2 text-[12.5px] text-destructive ring-1 ring-inset ring-destructive/25">
@@ -263,12 +263,17 @@ export function IntakeConversation({
                 }
               }}
               rows={3}
+              // Taller on a phone: this is the surface the PWA exists for, and a
+              // three-line box makes pasting notes feel like a scratch pad
+              // rather than a search field.
+              onFocus={(e) => e.currentTarget.setAttribute("rows", "6")}
+              onBlur={(e) => e.currentTarget.setAttribute("rows", "3")}
               placeholder={
                 mode === "file"
                   ? "Paste your notes… (⌘↵ to send)"
                   : "Ask about tickets, features, meetings or the wiki… (⌘↵ to send)"
               }
-              className="max-h-64 w-full resize-none bg-transparent px-3 py-2.5 text-[13.5px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
+              className="max-h-[45vh] min-h-[64px] w-full resize-none bg-transparent px-3 py-2.5 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/60 sm:min-h-0 sm:text-[13.5px]"
             />
           </ImageDropzone>
 
@@ -284,7 +289,7 @@ export function IntakeConversation({
               disabled={pending || (!text.trim() && images.length === 0)}
               aria-label="Send"
               className={cn(
-                "pressable flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-opacity",
+                "pressable flex h-9 w-9 items-center justify-center rounded-lg bg-foreground text-background transition-opacity",
                 (pending || (!text.trim() && images.length === 0)) && "opacity-40",
               )}
             >

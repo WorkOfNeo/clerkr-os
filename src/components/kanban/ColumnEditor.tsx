@@ -24,10 +24,13 @@ const SWATCHES = [
 
 export function ColumnEditor({
   open,
+  boardId,
   column,
   onClose,
 }: {
   open: boolean;
+  /** Which board a NEW column belongs to. Ignored when editing. */
+  boardId: string;
   column: BoardColumn | null;
   onClose: () => void;
 }) {
@@ -44,13 +47,23 @@ export function ColumnEditor({
         }
       >
         {/* Keyed so the fields reflect whichever column was opened. */}
-        {open && <Form key={column?.id ?? "new"} column={column} onClose={onClose} />}
+        {open && (
+          <Form key={column?.id ?? "new"} boardId={boardId} column={column} onClose={onClose} />
+        )}
       </ModalContent>
     </DialogPrimitive.Root>
   );
 }
 
-function Form({ column, onClose }: { column: BoardColumn | null; onClose: () => void }) {
+function Form({
+  boardId,
+  column,
+  onClose,
+}: {
+  boardId: string;
+  column: BoardColumn | null;
+  onClose: () => void;
+}) {
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -79,7 +92,7 @@ function Form({ column, onClose }: { column: BoardColumn | null; onClose: () => 
       try {
         const payload = { name: clean, color, icon, isDone, wipLimit: limit };
         if (column) await updateColumn({ id: column.id, ...payload });
-        else await createColumn(payload);
+        else await createColumn({ boardId, ...payload });
         toast(column ? "Column updated" : `“${clean}” added`, { tone: "success" });
         onClose();
         router.refresh();

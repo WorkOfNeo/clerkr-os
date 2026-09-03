@@ -19,8 +19,19 @@ import { slugify, uniqueSlug } from "@/lib/slug";
 // handler on the client can share it without importing Prisma.
 export { orderForSlot };
 
+export const boardSelect = {
+  id: true,
+  slug: true,
+  name: true,
+  description: true,
+  sortOrder: true,
+  isDefault: true,
+  _count: { select: { columns: true } },
+} satisfies Prisma.KanbanBoardSelect;
+
 export const columnSelect = {
   id: true,
+  boardId: true,
   slug: true,
   name: true,
   description: true,
@@ -54,6 +65,7 @@ export const cardSelect = {
   attachments: { select: attachmentSelect },
 } satisfies Prisma.KanbanCardSelect;
 
+export type KanbanBoardRow = Prisma.KanbanBoardGetPayload<{ select: typeof boardSelect }>;
 export type KanbanColumnRow = Prisma.KanbanColumnGetPayload<{ select: typeof columnSelect }>;
 export type KanbanCardRow = Prisma.KanbanCardGetPayload<{ select: typeof cardSelect }>;
 
@@ -68,19 +80,31 @@ export const DEFAULT_COLUMNS = [
 ] as const;
 
 /**
- * Read the board. Creates the starter columns on first visit rather than
- * shipping a seed step — an empty board with no columns has no "add column"
- * affordance that makes sense, and a first run shouldn't be a setup chore.
+ * Read the boards, creating a first one on an empty install. A board with no
+ * columns has no sensible "add column" affordance, and a first run shouldn't be
+ * a setup chore — so the starter set is seeded rather than shipped as a seed
+ * step.
  */
-export async function ensureColumns(): Promise<KanbanColumnRow[]> {
-  const existing = await db.kanbanColumn.findMany({
+export async function ensureBoards(): Promise<KanbanBoardRow[]> {
+  const existing = await db.kanbanBoard.findMany({
     orderBy: { sortOrder: "asc" },
-    select: columnSelect,
+    select: boardSelect,
   });
   if (existing.length > 0) return existing;
 
+  const board = await db.kanbanBoard.create({
+    data: { slug: "main", name: "Main", sortOrder: 10, isDefault: true },
+    select: { id: true },
+  });
+  await seedColumns(board.id);
+  return db.kanbanBoard.findMany({ orderBy: { sortOrder: "asc" }, select: boardSelect });
+}
+
+/** The starter columns a brand-new board opens with. */
+export async function seedColumns(boardId: string): Promise<void> {
   await db.kanbanColumn.createMany({
     data: DEFAULT_COLUMNS.map((c, i) => ({
+      boardId,
       slug: slugify(c.name),
       name: c.name,
       color: c.color,
@@ -91,16 +115,50 @@ export async function ensureColumns(): Promise<KanbanColumnRow[]> {
     })),
     skipDuplicates: true,
   });
-  return db.kanbanColumn.findMany({ orderBy: { sortOrder: "asc" }, select: columnSelect });
+}
+
+/** Columns of one board, in board order. */
+export async function columnsFor(boardId: string): Promise<KanbanColumnRow[]> {
+  return db.kanbanColumn.findMany({
+    where: { boardId },
+    orderBy: { sortOrder: "asc" },
+    select: columnSelect,
+  });
+}
+
+/** Resolve a board by id, slug or name. */
+export async function resolveBoardId(ref?: string | null): Promise<string | null> {
+  if (!ref?.trim()) return null;
+  const needle = ref.trim();
+  const board = await db.kanbanBoard.findFirst({
+    where: {
+      OR: [{ id: needle }, { slug: slugify(needle) }, { name: { equals: needle, mode: "insensitive" } }],
+    },
+    select: { id: true },
+  });
+  if (!board) throw new Error(`No such kanban board: ${ref}`);
+  return board.id;
+}
+
+/** The board /kanban opens on, and where an unrouted card lands. */
+export async function defaultBoardId(): Promise<string> {
+  const boards = await ensureBoards();
+  const board = boards.find((b) => b.isDefault) ?? boards[0];
+  if (!board) throw new Error("There are no kanban boards.");
+  return board.id;
 }
 
 /** Resolve a column by id, slug or name — MCP and chat callers pass whichever
  *  they have, and "In Progress" is what a human types. */
-export async function resolveColumnId(ref?: string | null): Promise<string | null> {
+export async function resolveColumnId(
+  ref?: string | null,
+  boardId?: string | null,
+): Promise<string | null> {
   if (!ref?.trim()) return null;
   const needle = ref.trim();
   const column = await db.kanbanColumn.findFirst({
     where: {
+      ...(boardId ? { boardId } : {}),
       OR: [{ id: needle }, { slug: slugify(needle) }, { name: { equals: needle, mode: "insensitive" } }],
     },
     select: { id: true },
@@ -111,10 +169,11 @@ export async function resolveColumnId(ref?: string | null): Promise<string | nul
 
 /** The column a card lands in when nobody said. Falls back to the leftmost so
  *  a board whose default was deleted still accepts cards. */
-export async function defaultColumnId(): Promise<string> {
-  const columns = await ensureColumns();
+export async function defaultColumnId(boardId?: string | null): Promise<string> {
+  const board = boardId ?? (await defaultBoardId());
+  const columns = await columnsFor(board);
   const fallback = columns.find((c) => c.isDefault) ?? columns[0];
-  if (!fallback) throw new Error("The board has no columns.");
+  if (!fallback) throw new Error("That board has no columns.");
   return fallback.id;
 }
 
@@ -154,6 +213,7 @@ export async function completionFor(
 export interface CreateCardInput {
   title: string;
   description?: string | null;
+  board?: string | null; // id, slug or name — scopes the column lookup
   column?: string | null; // id, slug or name
   columnId?: string | null;
   confidence?: number;
@@ -165,8 +225,11 @@ export interface CreateCardInput {
 }
 
 export async function createCard(input: CreateCardInput) {
+  const boardId = input.board ? await resolveBoardId(input.board) : null;
   const columnId =
-    input.columnId ?? (await resolveColumnId(input.column)) ?? (await defaultColumnId());
+    input.columnId ??
+    (await resolveColumnId(input.column, boardId)) ??
+    (await defaultColumnId(boardId));
 
   const slug = await uniqueSlug(slugify(input.title), async (c) =>
     Boolean(await db.kanbanCard.findUnique({ where: { slug: c }, select: { id: true } })),

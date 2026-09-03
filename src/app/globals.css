@@ -94,6 +94,28 @@
     --sidebar-w: 64px;
   }
 
+  /* Installed as a PWA the app runs edge to edge (viewportFit: cover), so
+   * anything pinned to an edge has to clear the notch and the home indicator
+   * itself. These are 0 in a browser tab. */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .px-safe {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Standalone means installed — the browser's own overscroll bounce reveals a
+   * white gap behind the app, so lock the body and let panes scroll instead. */
+  @media (display-mode: standalone) {
+    body {
+      overscroll-behavior-y: none;
+    }
+  }
+
   /* Thin scrollbars so panes don't get a heavy grey gutter. */
   * {
     scrollbar-width: thin;

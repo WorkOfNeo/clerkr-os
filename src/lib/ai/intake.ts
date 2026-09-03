@@ -96,7 +96,7 @@ export async function findNearest(
 
 /** The vocabulary the model must pick from. Passing the live lists is what
  *  stops it inventing a category or a column that doesn't exist. */
-async function loadVocabulary() {
+export async function loadVocabulary() {
   const [categories, columns, clusters, recentTickets, recentFeatures] = await Promise.all([
     db.ticketCategory.findMany({ orderBy: { sortOrder: "asc" }, select: { slug: true, label: true } }),
     db.kanbanColumn.findMany({ orderBy: { sortOrder: "asc" }, select: { name: true, isDone: true } }),
@@ -112,7 +112,7 @@ async function loadVocabulary() {
   return { categories, columns, clusters, recentTickets, recentFeatures };
 }
 
-function vocabularyBlock(v: Awaited<ReturnType<typeof loadVocabulary>>): string {
+export function vocabularyBlock(v: Awaited<ReturnType<typeof loadVocabulary>>): string {
   const parts: string[] = ["WHAT ALREADY EXISTS — use these exact values, and prefer COMMENT over a near-duplicate:"];
   parts.push(
     "Ticket categories (use the slug) —\n" +

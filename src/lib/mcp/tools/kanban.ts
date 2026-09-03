@@ -2,15 +2,20 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 import {
+  boardSelect,
   cardSelect,
   clampConfidence,
   columnSelect,
+  columnsFor,
   completionFor,
   createCard,
+  defaultBoardId,
   endOfColumnOrder,
-  ensureColumns,
+  ensureBoards,
+  resolveBoardId,
   resolveCard,
   resolveColumnId,
+  seedColumns,
 } from "@/lib/kanban";
 import { slugify, uniqueSlug } from "@/lib/slug";
 
@@ -33,16 +38,74 @@ async function resolveFeatureId(idOrSlug: string): Promise<string> {
 
 export const KANBAN_TOOLS: ToolDef[] = [
   {
-    name: "list_kanban_columns",
+    name: "list_kanban_boards",
     description:
-      "List the board's columns in order, with their card counts and which ones are " +
-      "terminal (isDone). Call this before creating or moving a card so you use a column " +
-      "that actually exists — the columns are editable, so never assume Now/Next/Later or " +
-      "To Do/Doing/Done.",
+      "List the kanban boards. There are several — each is a separate workflow with its " +
+      "own columns — so call this first and pass the right board to everything else.",
     inputSchema: { type: "object", properties: {} },
     handler: async () => {
-      const columns = await ensureColumns();
-      return { columns, count: columns.length };
+      const boards = await ensureBoards();
+      return { boards, count: boards.length };
+    },
+  },
+
+  {
+    name: "create_kanban_board",
+    description:
+      "Create a board. It opens with the standard starter columns, which can then be " +
+      "renamed. Don't create boards unprompted — a board is a whole workflow.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        description: { type: "string" },
+      },
+      required: ["name"],
+    },
+    handler: async (args) => {
+      const input = z
+        .object({ name: z.string().trim().min(1).max(80), description: z.string().optional() })
+        .parse(args);
+      const slug = await uniqueSlug(slugify(input.name), async (c) =>
+        Boolean(await db.kanbanBoard.findUnique({ where: { slug: c }, select: { id: true } })),
+      );
+      const last = await db.kanbanBoard.findFirst({
+        orderBy: { sortOrder: "desc" },
+        select: { sortOrder: true },
+      });
+      const board = await db.kanbanBoard.create({
+        data: {
+          slug,
+          name: input.name,
+          description: input.description ?? null,
+          sortOrder: (last?.sortOrder ?? 0) + 10,
+        },
+        select: boardSelect,
+      });
+      await seedColumns(board.id);
+      return board;
+    },
+  },
+
+  {
+    name: "list_kanban_columns",
+    description:
+      "List one board's columns in order, with their card counts and which ones are " +
+      "terminal (isDone). Call this before creating or moving a card so you use a column " +
+      "that actually exists — columns are editable, so never assume Now/Next/Later or " +
+      "To Do/Doing/Done. Omit `board` for the default board.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        board: { type: "string", description: "Board name, slug or id. Defaults to the default board." },
+      },
+    },
+    handler: async (args) => {
+      const input = z.object({ board: z.string().optional() }).parse(args);
+      await ensureBoards();
+      const boardId = (await resolveBoardId(input.board)) ?? (await defaultBoardId());
+      const columns = await columnsFor(boardId);
+      return { boardId, columns, count: columns.length };
     },
   },
 
@@ -56,6 +119,7 @@ export const KANBAN_TOOLS: ToolDef[] = [
       type: "object",
       properties: {
         name: { type: "string" },
+        board: { type: "string", description: "Board name, slug or id. Defaults to the default board." },
         description: { type: "string" },
         color: { type: "string", description: "Hex, e.g. '#0A84FF'." },
         isDone: { type: "boolean", description: "Landing here means finished. Default false." },
@@ -67,6 +131,7 @@ export const KANBAN_TOOLS: ToolDef[] = [
       const input = z
         .object({
           name: z.string().trim().min(1).max(60),
+          board: z.string().optional(),
           description: z.string().optional(),
           color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
           isDone: z.boolean().optional(),
@@ -74,15 +139,20 @@ export const KANBAN_TOOLS: ToolDef[] = [
         })
         .parse(args);
 
+      const boardId = (await resolveBoardId(input.board)) ?? (await defaultBoardId());
       const slug = await uniqueSlug(slugify(input.name), async (c) =>
-        Boolean(await db.kanbanColumn.findUnique({ where: { slug: c }, select: { id: true } })),
+        Boolean(
+          await db.kanbanColumn.findFirst({ where: { boardId, slug: c }, select: { id: true } }),
+        ),
       );
       const last = await db.kanbanColumn.findFirst({
+        where: { boardId },
         orderBy: { sortOrder: "desc" },
         select: { sortOrder: true },
       });
       return db.kanbanColumn.create({
         data: {
+          boardId,
           slug,
           name: input.name,
           description: input.description ?? null,
@@ -107,7 +177,8 @@ export const KANBAN_TOOLS: ToolDef[] = [
       properties: {
         title: { type: "string" },
         description: { type: "string" },
-        column: { type: "string", description: "Column name, slug or id. Defaults to the board default." },
+        board: { type: "string", description: "Board name, slug or id. Defaults to the default board." },
+        column: { type: "string", description: "Column name, slug or id. Defaults to the board's default column." },
         confidence: { type: "integer", minimum: 0, maximum: 5 },
         themeTag: { type: "string", description: "Short theme label, e.g. 'AI', 'Integrations'." },
         dueDate: { type: "string", description: "ISO date." },
@@ -120,6 +191,7 @@ export const KANBAN_TOOLS: ToolDef[] = [
         .object({
           title: z.string().min(1),
           description: z.string().optional(),
+          board: z.string().optional(),
           column: z.string().optional(),
           confidence: z.number().int().min(0).max(5).optional(),
           themeTag: z.string().optional(),
@@ -131,6 +203,7 @@ export const KANBAN_TOOLS: ToolDef[] = [
       return createCard({
         title: input.title,
         description: input.description,
+        board: input.board,
         column: input.column,
         confidence: input.confidence,
         themeTag: input.themeTag,
@@ -156,9 +229,12 @@ export const KANBAN_TOOLS: ToolDef[] = [
       required: ["ref", "column"],
     },
     handler: async (args) => {
-      const input = z.object({ ref: z.string().min(1), column: z.string().min(1) }).parse(args);
+      const input = z
+        .object({ ref: z.string().min(1), column: z.string().min(1), board: z.string().optional() })
+        .parse(args);
       const card = await resolveCard(input.ref);
-      const columnId = await resolveColumnId(input.column);
+      const boardId = input.board ? await resolveBoardId(input.board) : null;
+      const columnId = await resolveColumnId(input.column, boardId);
       if (!columnId) throw new Error(`No such kanban column: ${input.column}`);
 
       return db.kanbanCard.update({
@@ -238,16 +314,19 @@ export const KANBAN_TOOLS: ToolDef[] = [
     inputSchema: {
       type: "object",
       properties: {
+        board: { type: "string", description: "Board name, slug or id. Defaults to the default board." },
         column: { type: "string", description: "Optional single column, by name/slug/id." },
       },
     },
     handler: async (args) => {
-      const input = z.object({ column: z.string().optional() }).parse(args);
-      const columns = await ensureColumns();
-      const only = input.column ? await resolveColumnId(input.column) : null;
+      const input = z.object({ column: z.string().optional(), board: z.string().optional() }).parse(args);
+      await ensureBoards();
+      const boardId = (await resolveBoardId(input.board)) ?? (await defaultBoardId());
+      const columns = await columnsFor(boardId);
+      const only = input.column ? await resolveColumnId(input.column, boardId) : null;
 
       const cards = await db.kanbanCard.findMany({
-        where: only ? { columnId: only } : undefined,
+        where: only ? { columnId: only } : { column: { boardId } },
         orderBy: { order: "asc" },
         select: cardSelect,
       });

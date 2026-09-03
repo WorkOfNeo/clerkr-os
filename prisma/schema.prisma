@@ -472,10 +472,39 @@ model AppSetting {
 // branches on resolved-ness and must not have that changed underneath it. Here
 // the board IS the workflow, so the workflow has to be editable.
 
-model KanbanColumn {
+// A board is a whole workflow: its own columns, its own cards. Multiple boards
+// exist because one team runs several unrelated processes — a product board and
+// a hiring board share nothing but the mechanics.
+model KanbanBoard {
   id          String  @id @default(uuid())
   slug        String  @unique
-  name        String  @unique
+  name        String
+  description String?
+
+  sortOrder Int     @default(0) // order of the pills under the page title
+  isDefault Boolean @default(false) // the one /kanban opens on
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  columns KanbanColumn[]
+
+  @@map("kanban_board")
+}
+
+model KanbanColumn {
+  id String @id @default(uuid())
+
+  // Cascade: deleting a board takes its columns with it. The cards' own
+  // Restrict FK then blocks that whole cascade while any card still exists, so
+  // a board holding work cannot be deleted by accident — the database enforces
+  // it, and deleteBoard() checks first so the user gets a sentence rather than
+  // a foreign-key error.
+  boardId String
+  board   KanbanBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  slug        String
+  name        String
   description String?
   color       String // hex, drives the header dot and the card accent
   icon        String? // lucide icon name rendered in the column header
@@ -498,7 +527,9 @@ model KanbanColumn {
 
   cards KanbanCard[]
 
-  @@index([sortOrder])
+  @@unique([boardId, slug])
+  @@unique([boardId, name])
+  @@index([boardId, sortOrder])
   @@map("kanban_column")
 }
 

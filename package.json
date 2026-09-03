@@ -13,7 +13,8 @@
     "db:deploy": "bash scripts/deploy-db.sh",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
-    "probe": "tsx scripts/probe-mcp.ts"
+    "probe": "tsx scripts/probe-mcp.ts",
+    "db:sql": "prisma db execute --schema prisma/schema.prisma --file"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

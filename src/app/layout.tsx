@@ -25,6 +25,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   // Let the layout breathe on iOS without the zoom-on-focus jump.
   maximumScale: 5,
+  // Installed, the app runs edge to edge — `cover` is what exposes the
+  // safe-area insets that globals.css then pads with, so nothing hides under
+  // the notch or the home indicator.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

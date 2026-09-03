@@ -30,15 +30,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
-/** What each kind IS, in the user's words — the card has to be readable at a
- *  glance or confirming ten of them is worse than typing them by hand. */
-const KIND_META: Record<string, { label: string; Icon: LucideIcon; tint: string }> = {
-  TICKET: { label: "Ticket", Icon: Ticket, tint: "text-blue-600 bg-blue-500/10" },
-  KANBAN_CARD: { label: "Board card", Icon: KanbanSquare, tint: "text-orange-600 bg-orange-500/10" },
-  WIKI_NOTE: { label: "Wiki note", Icon: FileText, tint: "text-emerald-600 bg-emerald-500/10" },
-  MEETING: { label: "Meeting", Icon: Users, tint: "text-violet-600 bg-violet-500/10" },
-  FEATURE: { label: "Feature", Icon: Lightbulb, tint: "text-amber-600 bg-amber-500/10" },
-  COMMENT: { label: "Comment", Icon: MessageSquarePlus, tint: "text-sky-600 bg-sky-500/10" },
+/**
+ * What each kind IS, in the user's words.
+ *
+ * Monochrome on purpose: six tinted chips turned a column of proposals into a
+ * paint chart, and the glyph plus the word already say which is which. Colour
+ * is kept for the one thing that genuinely needs attention — the duplicate
+ * warning below — so that when something IS coloured, it means something.
+ */
+const KIND_META: Record<string, { label: string; Icon: LucideIcon }> = {
+  TICKET: { label: "Ticket", Icon: Ticket },
+  KANBAN_CARD: { label: "Board card", Icon: KanbanSquare },
+  WIKI_NOTE: { label: "Wiki note", Icon: FileText },
+  MEETING: { label: "Meeting", Icon: Users },
+  FEATURE: { label: "Feature", Icon: Lightbulb },
+  COMMENT: { label: "Comment", Icon: MessageSquarePlus },
 };
 
 export function ProposalCard({ proposal }: { proposal: ProposalDTO }) {
@@ -100,11 +106,11 @@ export function ProposalCard({ proposal }: { proposal: ProposalDTO }) {
       transition={{ type: "spring", bounce: 0, duration: 0.35 }}
       className={cn(
         "rounded-xl bg-card p-3 shadow-[0_0_0_1px_hsl(var(--hairline)),0_1px_2px_rgb(0_0_0/0.04)]",
-        created && "bg-success/[0.04] shadow-[0_0_0_1px_hsl(var(--success)/0.3)]",
+        created && "opacity-70",
       )}
     >
       <div className="flex items-start gap-2.5">
-        <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-md", meta.tint)}>
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
           <meta.Icon className="h-3.5 w-3.5" strokeWidth={2} />
         </span>
 
@@ -170,7 +176,7 @@ export function ProposalCard({ proposal }: { proposal: ProposalDTO }) {
           {created ? (
             <Link
               href={created.href}
-              className="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-success hover:underline"
+              className="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-medium hover:underline"
             >
               <Check className="h-3.5 w-3.5" />
               {created.label}

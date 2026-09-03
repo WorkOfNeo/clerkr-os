@@ -72,6 +72,23 @@ Replaced the fixed Now/Next/Later roadmap. **Columns are editable rows**
 (`KanbanColumn`), not an enum — the team invents whatever workflow it actually
 runs, from the UI, with no deploy.
 
+**Multiple boards.** A `KanbanBoard` is a whole workflow with its own columns;
+`?board=<slug>` selects one and the pills under the page title switch between
+them. Column `slug`/`name` are unique **per board**, so two boards can each
+have a "Done". A new board is seeded with the starter columns (`seedColumns`)
+because a board with no columns can't be used.
+
+Deleting a board cascades to its columns, and the cards' `Restrict` FK then
+blocks that cascade — so a board holding work can't be deleted. `deleteBoard`
+checks first and returns a sentence rather than letting a foreign-key error
+surface.
+
+**A card is a document.** `CardPanel` opens it in a side sheet with a markdown
+body rendered by the shared `MarkdownView` — same renderer as the wiki, so
+links, headings, lists and images behave identically. Images pasted into the
+panel become `Attachment` rows and are inserted into the body as markdown
+pointing at `/api/attachments/[id]`.
+
 - **`isDone` is the one piece of meaning the code needs.** Tick it on any column
   and cards landing there get `completedAt` stamped, cleared on the way out. Any
   number of columns can be terminal. Flipping the flag backfills the cards
@@ -175,6 +192,23 @@ volume in Railway); files already stored the other way keep serving. See
   tags — reading text out of a PDF or .docx needs a per-format extractor we
   haven't taken on. Worth doing later; it's why they're absent from
   `embed-sweep.ts`.
+
+## PWA
+
+Installable from Safari via Share → Add to Home Screen.
+[src/app/manifest.ts](src/app/manifest.ts) provides the manifest
+(`display: standalone` is what drops the address bar) and `layout.tsx` carries
+the `appleWebApp` metadata and apple-touch-icon that iOS actually reads.
+
+- **No service worker, deliberately.** iOS does not need one to install, and a
+  badly-scoped SW caching RSC payloads breaks a Next app in ways that persist
+  in the user's browser long after the fix. Offline support is a follow-up that
+  needs real device testing, not a guess.
+- `viewportFit: "cover"` exposes the safe-area insets; `.pb-safe` / `.pt-safe` /
+  `.px-safe` in globals.css pad with them. Anything pinned to a screen edge
+  needs one, or it sits under the notch or the home indicator.
+- Icons are generated from `public/icons/icon.svg`. Regenerate the PNGs with
+  `qlmanage -t -s 512` + `sips`, or any rasteriser — there is no build step.
 
 ## Layout & design system
 
@@ -348,6 +382,15 @@ in three ways:
 It deliberately does **not** pass `--accept-data-loss`: a deploy must never
 silently drop a column. If the schema needs a destructive change, the deploy
 fails and a human runs it by hand.
+
+Note that Prisma counts **adding a unique constraint** as a possible data loss
+("if there are existing duplicate values, this will fail"), so that will also
+stop the deploy. Check for duplicates, then run the push by hand with the flag —
+don't add the flag to the script.
+
+Data migrations that push can't express (a backfill between ADD COLUMN and SET
+NOT NULL, say) go in `scripts/sql/` and run first:
+`npm run db:sql scripts/sql/002-multi-board.sql`.
 
 **HNSW indexes are dropped by every `prisma db push`.** They aren't expressible
 in the schema (Prisma can't model index opclasses on `Unsupported` columns), so
