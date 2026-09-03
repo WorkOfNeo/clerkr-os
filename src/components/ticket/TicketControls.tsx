@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
 import { updateTicket } from "@/app/tickets/actions";
-import type { CategoryOption } from "@/components/ticket/NewTicketForm";
+import type { CategoryOption } from "@/components/ticket/NewTicketDialog";
 import { TICKET_PRIORITIES, TICKET_PRIORITY_ORDER, TICKET_STATUSES, TICKET_STATUS_ORDER } from "@/lib/ticket-meta";
 import { cn } from "@/lib/utils";
 

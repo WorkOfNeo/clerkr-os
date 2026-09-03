@@ -117,9 +117,10 @@ interface ProductContext {
 async function loadProductContext(): Promise<ProductContext> {
   try {
     const [roadmap, features, meetings, openTickets] = await Promise.all([
-      db.roadmapItem.findMany({
-        orderBy: [{ lane: "asc" }, { order: "asc" }],
-        select: { title: true, lane: true, themeTag: true },
+      db.kanbanCard.findMany({
+        orderBy: [{ columnId: "asc" }, { order: "asc" }],
+        take: 120,
+        select: { title: true, themeTag: true, column: { select: { name: true } } },
       }),
       db.feature.findMany({
         orderBy: { title: "asc" },
@@ -145,7 +146,7 @@ async function loadProductContext(): Promise<ProductContext> {
       }),
     ]);
     return {
-      roadmap: roadmap.map((r) => ({ title: r.title, lane: r.lane, themeTag: r.themeTag })),
+      roadmap: roadmap.map((r) => ({ title: r.title, lane: r.column.name, themeTag: r.themeTag })),
       features: features.map((f) => ({
         title: f.title,
         status: f.status,
@@ -208,13 +209,19 @@ function buildSystemPrompt(
       );
     }
     if (product.roadmap.length) {
-      const byLane = (lane: string) =>
-        product.roadmap
-          .filter((r) => r.lane === lane)
-          .map((r) => r.title)
-          .join("; ") || "(none)";
+      // Columns are user-defined now, so group by whatever they actually are
+      // rather than the three lanes this used to assume.
+      const byColumn = new Map<string, string[]>();
+      for (const r of product.roadmap) {
+        const list = byColumn.get(r.lane) ?? [];
+        list.push(r.title);
+        byColumn.set(r.lane, list);
+      }
       parts.push(
-        `Roadmap —\nNow: ${byLane("NOW")}\nNext: ${byLane("NEXT")}\nLater: ${byLane("LATER")}`,
+        "Kanban board —\n" +
+          Array.from(byColumn.entries())
+            .map(([column, titles]) => `${column}: ${titles.join("; ")}`)
+            .join("\n"),
       );
     }
     if (product.features.length) {

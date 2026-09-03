@@ -15,8 +15,9 @@ import { cn } from "@/lib/utils";
 export type PendingImage = DownscaledImage;
 
 /**
- * Screenshot intake for tickets and comments. Three ways in, because the whole
- * point is that reporting a bug shouldn't be a chore:
+ * Screenshot intake, used everywhere images can be attached — tickets, ticket
+ * comments, kanban cards and the chat intake box. Three ways in, because the
+ * whole point is that capturing something shouldn't be a chore:
  *
  *   - paste (⌘V on macOS, Ctrl+V on Windows) — the primary path, and the
  *     reason this exists. A screenshot on the clipboard arrives as a file item
@@ -32,11 +33,17 @@ export function ImageDropzone({
   images,
   onChange,
   disabled,
+  max = 8,
+  hint,
   children,
 }: {
   images: PendingImage[];
   onChange: (next: PendingImage[]) => void;
   disabled?: boolean;
+  /** How many images this surface accepts. Intake takes a bigger batch than a
+   *  bug report does. */
+  max?: number;
+  hint?: string;
   /** The textarea this dropzone wraps — paste is bound on the wrapper. */
   children: React.ReactNode;
 }) {
@@ -51,7 +58,7 @@ export function ImageDropzone({
     setError(null);
     try {
       const next = [...images];
-      for (const file of files.slice(0, 8 - images.length)) {
+      for (const file of files.slice(0, max - images.length)) {
         next.push(await downscaleImage(file));
       }
       onChange(next);
@@ -85,8 +92,8 @@ export function ImageDropzone({
         void ingest(imagesFromDrop(e));
       }}
       className={cn(
-        "rounded-lg border transition-colors",
-        dragging ? "border-sky-500 bg-sky-500/5" : "border-border",
+        "overflow-hidden rounded-md bg-card shadow-xs ring-1 ring-inset transition-colors duration-150",
+        dragging ? "ring-2 ring-primary" : "ring-input",
       )}
     >
       {children}
@@ -99,13 +106,13 @@ export function ImageDropzone({
               <img
                 src={img.dataUrl}
                 alt={img.fileName}
-                className="h-20 w-20 rounded border object-cover"
+                className="h-20 w-20 rounded-sm object-cover ring-1 ring-hairline"
               />
               <button
                 type="button"
                 aria-label={`Remove ${img.fileName}`}
                 onClick={() => onChange(images.filter((_, j) => j !== i))}
-                className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border bg-background text-xs leading-none text-muted-foreground hover:text-destructive"
+                className="pressable absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-card text-xs leading-none text-muted-foreground shadow-sm ring-1 ring-hairline transition-colors hover:text-destructive"
               >
                 ×
               </button>
@@ -114,7 +121,7 @@ export function ImageDropzone({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2 border-t px-3 py-2 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2 border-t border-hairline bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
         <input
           ref={fileRef}
           type="file"
@@ -139,11 +146,11 @@ export function ImageDropzone({
         <span>
           {busy
             ? "Processing…"
-            : "or paste a screenshot (⌘V / Ctrl+V), or drag one in"}
+            : (hint ?? "or paste a screenshot (⌘V / Ctrl+V), or drag them in")}
         </span>
         {images.length > 0 && (
           <span className="ml-auto">
-            {images.length} attached{images.length >= 8 ? " (max)" : ""}
+            {images.length} attached{images.length >= max ? " (max)" : ""}
           </span>
         )}
         {error && <span className="text-destructive">{error}</span>}

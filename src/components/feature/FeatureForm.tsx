@@ -41,7 +41,7 @@ interface FeatureFormProps {
 }
 
 const selectClass =
-  "flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm";
+  "flex h-10 w-full rounded-md bg-card px-3 text-[14px] shadow-xs ring-1 ring-inset ring-input";
 
 export function FeatureForm({
   clusters,

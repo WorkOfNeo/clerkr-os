@@ -1,6 +1,6 @@
 import { requireSession } from "@/lib/session";
 
-import { AppNav } from "@/components/AppNav";
+import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,11 +17,10 @@ export default async function NewWikiPage({
   const { title: initialTitle, tags: initialTags } = await searchParams;
 
   return (
-    <div className="min-h-screen">
-      <AppNav email={session.user.email} />
-      <main className="container max-w-2xl space-y-6 py-8">
+    <AppShell email={session.user.email}>
+      <main className="mx-auto w-full max-w-2xl px-6 space-y-6 py-8">
         <div>
-          <h1 className="text-xl font-semibold">New wiki note</h1>
+          <h1 className="text-display text-[28px] font-semibold leading-tight">New wiki note</h1>
           <p className="text-sm text-muted-foreground">
             Markdown. The note gets embedded for semantic search on save.
           </p>
@@ -47,6 +46,6 @@ export default async function NewWikiPage({
           </div>
         </form>
       </main>
-    </div>
+    </AppShell>
   );
 }

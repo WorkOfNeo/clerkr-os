@@ -17,7 +17,7 @@ export function ConnectGuide({ origin }: { origin: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="inline-flex rounded-md border border-border bg-card p-0.5 text-sm">
+      <div className="inline-flex rounded-lg bg-muted/70 p-0.5 text-sm">
         <TabButton active={tab === "web"} onClick={() => setTab("web")}>
           Claude.ai (web)
         </TabButton>

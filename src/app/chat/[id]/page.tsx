@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 
-import { AppNav } from "@/components/AppNav";
-import { ChatConversation } from "@/components/llm/ChatConversation";
+import { getProposalsForSession } from "@/app/chat/intake-actions";
+import { AppShell } from "@/components/AppShell";
+import { IntakeConversation } from "@/components/intake/IntakeConversation";
 import { ChatSidebar } from "@/components/llm/ChatSidebar";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
@@ -14,7 +15,7 @@ export default async function ChatSessionPage({
   const session = await requireSession();
   const { id } = await params;
 
-  const [chat, sessions] = await Promise.all([
+  const [chat, sessions, proposals] = await Promise.all([
     db.chatSession.findUnique({
       where: { id },
       include: { messages: { orderBy: { createdAt: "asc" } } },
@@ -25,6 +26,7 @@ export default async function ChatSessionPage({
       select: { id: true, title: true, updatedAt: true },
       take: 50,
     }),
+    getProposalsForSession(id),
   ]);
   if (!chat) notFound();
 
@@ -37,12 +39,11 @@ export default async function ChatSessionPage({
     : [];
 
   return (
-    <div className="flex h-screen flex-col">
-      <AppNav email={session.user.email} />
+    <AppShell email={session.user.email} flush>
       <div className="flex min-h-0 flex-1">
         <ChatSidebar sessions={sessions} activeId={chat.id} />
         <div className="min-w-0 flex-1">
-          <ChatConversation
+          <IntakeConversation
             initialSessionId={chat.id}
             initialMessages={chat.messages.map((m) => ({
               id: m.id,
@@ -51,9 +52,10 @@ export default async function ChatSessionPage({
               citedNoteIds: m.citedNoteIds,
             }))}
             initialCitedNotes={citedNotes}
+            initialProposals={proposals}
           />
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

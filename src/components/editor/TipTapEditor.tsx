@@ -50,7 +50,7 @@ export function TipTapEditor({
   return (
     <div
       className={cn(
-        "rounded-md border border-input bg-background px-3 py-2 text-sm",
+        "rounded-md bg-card px-3 py-2 text-[14px] shadow-xs ring-1 ring-inset ring-input",
         className,
       )}
     >

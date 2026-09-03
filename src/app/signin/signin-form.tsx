@@ -11,7 +11,7 @@ import { signIn } from "@/lib/auth-client";
 export function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/grid";
+  const callbackUrl = searchParams.get("callbackUrl") || "/tickets";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

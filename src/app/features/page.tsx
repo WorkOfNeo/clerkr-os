@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { AppNav } from "@/components/AppNav";
+import { AppShell } from "@/components/AppShell";
+import { PageHeader } from "@/components/PageHeader";
 import { ClusterForm } from "@/components/feature/ClusterForm";
 import { FeatureForm } from "@/components/feature/FeatureForm";
 import { STATUS_META, type FeatureStatus } from "@/components/feature/status";
@@ -17,7 +18,7 @@ interface FeatureRow {
   tags: string[];
   clusterId: string | null;
   cluster: { id: string; name: string } | null;
-  _count: { signals: number; roadmapItems: number };
+  _count: { signals: number; kanbanCards: number };
 }
 
 export default async function FeaturesPage({
@@ -35,7 +36,7 @@ export default async function FeaturesPage({
       orderBy: { title: "asc" },
       include: {
         cluster: { select: { id: true, name: true } },
-        _count: { select: { signals: true, roadmapItems: true } },
+        _count: { select: { signals: true, kanbanCards: true } },
       },
     }),
   ]);
@@ -44,16 +45,12 @@ export default async function FeaturesPage({
 
   const tab = "rounded px-3 py-1";
   return (
-    <div className="min-h-screen">
-      <AppNav email={session.user.email} />
-      <main className="container max-w-5xl py-6">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h1 className="text-xl font-semibold">Feature Library</h1>
-            <p className="text-sm text-muted-foreground">
-              Self-growing, clustered catalog of every feature signal.
-            </p>
-          </div>
+    <AppShell email={session.user.email}>
+      <main className="mx-auto w-full max-w-5xl px-6 py-8">
+        <PageHeader
+          title="Feature Library"
+          subtitle="Self-growing, clustered catalog of every feature signal."
+          actions={
           <div className="flex items-center gap-2">
             <div className="inline-flex rounded-md border p-0.5 text-sm">
               <Link
@@ -72,7 +69,8 @@ export default async function FeaturesPage({
             <ClusterForm />
             <FeatureForm clusters={clusterOptions} />
           </div>
-        </div>
+          }
+        />
 
         <div className="mb-5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
           {Object.entries(STATUS_META).map(([k, m]) => (
@@ -86,7 +84,7 @@ export default async function FeaturesPage({
         </div>
 
         {features.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+          <div className="surface border-dashed p-14 text-center text-sm text-muted-foreground">
             No features yet. Add one, or promote a signal from a{" "}
             <Link href="/meetings" className="underline">
               meeting brief
@@ -115,7 +113,7 @@ export default async function FeaturesPage({
           </div>
         )}
       </main>
-    </div>
+    </AppShell>
   );
 }
 
@@ -129,7 +127,7 @@ function ClusterBlock({
   items: FeatureRow[];
 }) {
   return (
-    <section className="rounded-lg border bg-card p-4">
+    <section className="surface p-4">
       <div className="mb-2 flex items-center gap-2">
         <h2 className="font-semibold">{title}</h2>
         <span className="text-[11px] text-muted-foreground">{items.length}</span>

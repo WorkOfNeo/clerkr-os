@@ -6,7 +6,10 @@ import { PROMPT_KEYS } from "@/lib/ai/prompts";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 
-const VALID_KEYS: string[] = [PROMPT_KEYS.meeting, PROMPT_KEYS.chat];
+// Derived from PROMPT_KEYS rather than listed by hand — the hand-written
+// version had drifted and silently rejected saves to the triage prompt, which
+// the page had been rendering an editor for the whole time.
+const VALID_KEYS: string[] = Object.values(PROMPT_KEYS);
 
 export async function savePrompt(formData: FormData): Promise<void> {
   await requireSession();

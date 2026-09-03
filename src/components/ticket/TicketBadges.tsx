@@ -3,6 +3,9 @@ import { cn } from "@/lib/utils";
 
 import type { TicketPriority, TicketStatus } from "@prisma/client";
 
+const PILL =
+  "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset";
+
 export function StatusBadge({
   status,
   className,
@@ -10,23 +13,16 @@ export function StatusBadge({
   status: TicketStatus;
   className?: string;
 }) {
-  const meta = TICKET_STATUSES[status];
   return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
-        meta.className,
-        className,
-      )}
-    >
-      {meta.label}
+    <span className={cn(PILL, TICKET_STATUSES[status].className, className)}>
+      {TICKET_STATUSES[status].label}
     </span>
   );
 }
 
 /**
- * Category colour comes from the DB row, so it has to be an inline style —
- * Tailwind can't generate a class for a hex it never sees at build time.
+ * Category colour is a hex from the DB, so it has to be an inline style —
+ * Tailwind can't generate a class for a value it never sees at build time.
  */
 export function CategoryBadge({
   category,
@@ -37,26 +33,18 @@ export function CategoryBadge({
 }) {
   if (!category) {
     return (
-      <span
-        className={cn(
-          "inline-flex shrink-0 items-center rounded-full border border-dashed px-2 py-0.5 text-[11px] text-muted-foreground",
-          className,
-        )}
-      >
+      <span className={cn(PILL, "text-muted-foreground ring-border", className)}>
         Uncategorised
       </span>
     );
   }
   return (
     <span
-      className={cn(
-        "inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
-        className,
-      )}
+      className={cn(PILL, className)}
       style={{
-        borderColor: `${category.color}66`,
-        backgroundColor: `${category.color}1a`,
         color: category.color,
+        backgroundColor: `${category.color}14`,
+        boxShadow: `inset 0 0 0 1px ${category.color}3d`,
       }}
     >
       {category.label}
@@ -67,7 +55,7 @@ export function CategoryBadge({
 export function PriorityLabel({ priority }: { priority: TicketPriority }) {
   if (priority === "LOW" || priority === "MEDIUM") return null;
   return (
-    <span className={cn("text-[11px] font-medium", TICKET_PRIORITIES[priority].className)}>
+    <span className={cn("text-[11px] font-semibold", TICKET_PRIORITIES[priority].className)}>
       {TICKET_PRIORITIES[priority].label}
     </span>
   );

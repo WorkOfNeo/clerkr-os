@@ -7,15 +7,12 @@ interface Props {
   className?: string;
 }
 
+/**
+ * Shared markdown renderer. Uses the hand-rolled `.md` styles from globals.css —
+ * the `prose-*` classes this used to carry did nothing, because
+ * @tailwindcss/typography was deliberately never installed.
+ */
 export function MarkdownView({ body, className }: Props) {
   const html = marked.parse(body, { async: false }) as string;
-  return (
-    <div
-      className={cn(
-        "prose prose-sm max-w-none prose-headings:font-semibold prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:text-foreground",
-        className,
-      )}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
+  return <div className={cn("md", className)} dangerouslySetInnerHTML={{ __html: html }} />;
 }

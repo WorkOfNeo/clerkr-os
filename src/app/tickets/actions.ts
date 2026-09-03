@@ -7,12 +7,8 @@ import { z } from "zod";
 import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
-import {
-  addComment,
-  attachImages,
-  createTicket,
-  tryEmbedTicket,
-} from "@/lib/tickets";
+import { attachImages } from "@/lib/attachments";
+import { addComment, createTicket, tryEmbedTicket } from "@/lib/tickets";
 import { TICKET_PRIORITY_ORDER, TICKET_STATUS_ORDER } from "@/lib/ticket-meta";
 
 const statusEnum = z.enum(TICKET_STATUS_ORDER as [string, ...string[]]);
@@ -139,7 +135,7 @@ export async function addTicketAttachments(
 ): Promise<void> {
   const session = await requireSession();
   const parsed = z.array(attachmentSchema).max(8).parse(attachments);
-  await attachImages(parsed, { ticketId, uploadedById: session.user.id });
+  await attachImages(parsed, { kind: "ticket", id: ticketId }, session.user.id);
 
   const ticket = await db.ticket.findUnique({ where: { id: ticketId }, select: { slug: true } });
   if (ticket) revalidatePath(`/tickets/${ticket.slug}`);
@@ -147,11 +143,11 @@ export async function addTicketAttachments(
 
 export async function deleteAttachment(id: string): Promise<void> {
   await requireSession();
-  const att = await db.ticketAttachment.findUnique({
+  const att = await db.attachment.findUnique({
     where: { id },
     select: { ticket: { select: { slug: true } }, comment: { select: { ticket: { select: { slug: true } } } } },
   });
-  await db.ticketAttachment.delete({ where: { id } });
+  await db.attachment.delete({ where: { id } });
   const slug = att?.ticket?.slug ?? att?.comment?.ticket?.slug;
   if (slug) revalidatePath(`/tickets/${slug}`);
 }

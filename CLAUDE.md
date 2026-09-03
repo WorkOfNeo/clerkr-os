@@ -5,7 +5,8 @@ Internal NEO Labs tool. Two parts in one Next.js app:
 1. **Idea board** (`/grid`) — Pinterest-style cards backed by `Post`, populated via MCP.
 2. **Tickets + wiki + LLM** (`/tickets`, `/wiki`, `/chat`) — the ticket queue that replaced
    the sprint board and a Google Doc, embedded wiki, OpenAI-powered assistant.
-3. **Product OS** (`/meetings`, `/features`, `/roadmap`, `/knowledge`) — meetings structure
+   `/documents` is the general file store that sits alongside them.
+3. **Product OS** (`/meetings`, `/features`, `/kanban`, `/knowledge`) — meetings structure
    into briefs; ideas accumulate in the Feature Library.
 
 ## Tickets (read this before changing anything in `/tickets`)
@@ -33,6 +34,72 @@ backlog and no planning horizon.
 `createTicket` / `addComment` in [src/lib/tickets.ts](src/lib/tickets.ts).
 Slugging, embedding, attachments and provenance live there.
 
+## Intake (`/chat`) — the front door
+
+`/` redirects here. You paste raw text — meeting notes, a list of bugs, a
+half-formed idea — and the model works out **what it is**, then proposes the
+records that should exist. Two modes on one surface: **File it** classifies,
+**Ask** is the old Copilot Q&A.
+
+- **Nothing is written until a human confirms a card.** The model produces
+  `IntakeProposal` rows (PROPOSED → ACCEPTED / DISMISSED), rendered as cards you
+  can edit in place before accepting. This is the whole safety model — don't add
+  a path that creates records straight from a classification.
+- **One paste splits into many proposals.** Five bugs in one message become five
+  tickets, not one.
+- **Every proposal is matched against what exists** — `findNearest` in
+  [src/lib/ai/intake.ts](src/lib/ai/intake.ts) runs a pgvector nearest-neighbour
+  lookup per kind. Above `DUPLICATE_THRESHOLD` (0.86) the card warns and offers
+  commenting instead. The threshold is deliberately high: a false "duplicate"
+  hides real work, which is worse than a duplicate.
+- **Accepting reuses the normal write paths** (`createTicket`, `createCard`, the
+  wiki action) via [src/lib/intake/accept.ts](src/lib/intake/accept.ts), so
+  slugging, embedding and provenance are identical however something arrived.
+- Screenshots pasted with the note are pinned to the chat message first, then
+  **follow whatever the card became** (`claimAttachments`).
+- `ProposalDTO` and `toDTO` live in [src/lib/intake/dto.ts](src/lib/intake/dto.ts),
+  NOT in the actions file — a `"use server"` module may only export async
+  functions, and even `export type { … }` there is emitted as a real binding and
+  fails the Turbopack build.
+
+**The intake prompt is shared by everyone.** `AppSetting` is a global key/value
+store, so tuning `intake.systemPrompt` at `/settings/prompts` tunes it for the
+whole team. That is intended — it's an internal tool with one workflow.
+
+## Kanban (`/kanban`)
+
+Replaced the fixed Now/Next/Later roadmap. **Columns are editable rows**
+(`KanbanColumn`), not an enum — the team invents whatever workflow it actually
+runs, from the UI, with no deploy.
+
+- **`isDone` is the one piece of meaning the code needs.** Tick it on any column
+  and cards landing there get `completedAt` stamped, cleared on the way out. Any
+  number of columns can be terminal. Flipping the flag backfills the cards
+  already in that column, so a column and its contents never disagree.
+- Contrast `TicketStatus`, which stays an **enum on purpose** — ticket code
+  branches on resolved-ness. Here the board *is* the workflow, so it must be data.
+- **Deleting a column never deletes the work in it.** `KanbanCard.columnId` is
+  required with `onDelete: Restrict`, so the DB refuses; the UI makes you pick
+  where the cards go. A board can't drop below one column.
+- Sparse ordering (gaps of 1000) — `orderForSlot` in
+  [src/lib/kanban-order.ts](src/lib/kanban-order.ts), split out of `kanban.ts`
+  so the client drag handler can use it without importing Prisma.
+- The board **seeds its own columns on first visit** (`ensureColumns`), so there
+  is no setup step on a fresh database.
+
+## Attachments — one table, every surface
+
+`TicketAttachment` became `Attachment`: one table hanging off tickets, ticket
+comments, kanban cards, meetings, wiki notes, features and chat messages.
+
+- Parents are **separate nullable FKs**, not an `(entityType, entityId)` pair —
+  the database still enforces the parent exists and still cascades on delete.
+- **`attachImages()` in [src/lib/attachments.ts](src/lib/attachments.ts) is the
+  only thing that builds those columns**, which is what keeps "exactly one
+  parent set" true.
+- `ImageDropzone` moved to `src/components/attachments/` and takes a `max` —
+  ⌘V / Ctrl+V, drag a batch, or the file picker. Still downscaled client-side.
+
 ## Screenshots on tickets
 
 Images are **bytes in Postgres** (`TicketAttachment.data`), not S3 — same pattern
@@ -56,6 +123,92 @@ as prod-spec's rejection attachments (wiki `cmquudjcd001ypf159yd5frw8`).
   contain client matter, so that route is deliberately NOT in the `src/proxy.ts`
   public allowlist.
 
+## Documents (`/documents`)
+
+The general file store — PDFs, images, spreadsheets, decks, anything. Kept
+**whole and unmodified**, which is what separates it from `TicketAttachment`:
+that one is a screenshot, downscaled on purpose, belonging to one ticket. A
+`Document` is the original file because someone will need the original.
+
+**Where the bytes live is a per-row fact, not a global one** (`Document.storage`),
+so the backend can change without a migration and old rows keep resolving:
+
+- `POSTGRES` (default) — bytes in `Document.data`. Nothing to provision, works
+  on a fresh clone, and the files ride along in the normal database backup.
+- `VOLUME` — bytes on disk under `DOCUMENTS_DIR`, a Railway volume. Uploads
+  stream to disk and downloads stream back, so memory stays flat whatever the
+  size.
+
+Switching is one env var (`DOCUMENTS_DIR=/data/documents` after attaching a
+volume in Railway); files already stored the other way keep serving. See
+[src/lib/documents/storage.ts](src/lib/documents/storage.ts) and `.env.example`.
+
+- **Upload is a route handler, not a server action** —
+  `PUT /api/documents/upload` with the file as the raw request body. This is the
+  documented exception, not a departure: a server action carries the file
+  base64'd inside the RSC payload, a third bigger and buffered whole in memory,
+  and capped by `serverActions.bodySizeLimit`. Metadata edits DO go through
+  server actions ([src/app/documents/actions.ts](src/app/documents/actions.ts)).
+- **Never select `data` in a list query.** `documentSelect` in
+  [src/lib/documents/documents.ts](src/lib/documents/documents.ts) omits it. Same
+  rule as `attachmentSelect`, and it bites harder here — these are originals, so
+  a page of twenty would be hundreds of megabytes.
+- **Only known-inert types are served `inline`.** `INLINE_SAFE` in
+  [src/lib/documents/file-types.ts](src/lib/documents/file-types.ts) is an
+  allowlist; everything else downloads. An uploaded `.html` — or an `.svg`,
+  which can carry `<script>` — served inline would execute in OUR origin against
+  the session cookie. SVG is absent from that list on purpose. The serve route
+  also sets `nosniff` and a locked-down CSP.
+- `/api/documents/*` is deliberately NOT in the `src/proxy.ts` public allowlist —
+  documents can contain client matter, same reasoning as `/api/attachments/[id]`.
+- A folder (`DocumentFolder`) is an editable row like `TicketCategory`, and
+  `Document.folderId` is nullable with `onDelete: SetNull` — **deleting a folder
+  must never delete the files in it.**
+- The serve route honours `Range`, so a large PDF opens on page one rather than
+  after the whole file lands.
+- **If `DOCUMENTS_DIR` is set but the volume isn't attached, uploads are lost
+  silently** — `mkdir -p` just creates the path on the container's ephemeral
+  disk. `checkStorageReady()` runs at boot from `src/instrumentation.ts` and
+  logs `[documents] STORAGE MISCONFIGURED` when the mount point is missing.
+  Believe it.
+- Documents are **not embedded**. Search is substring over name / description /
+  tags — reading text out of a PDF or .docx needs a per-format extractor we
+  haven't taken on. Worth doing later; it's why they're absent from
+  `embed-sweep.ts`.
+
+## Layout & design system
+
+Every page sits in [`AppShell`](src/components/AppShell.tsx) — a structural
+sidebar on the left and a raised content surface beside it. The old top nav
+(`AppNav`) is **gone**; a vertical rail scales to a dozen destinations where a
+horizontal bar was already crowded at nine.
+
+- **Add a nav destination in one place**: `NAV_SECTIONS` in
+  [src/components/nav-items.ts](src/components/nav-items.ts). The desktop rail
+  and the mobile drawer both read it, so they can't drift. Add it to
+  `CommandPalette` too — that list is separate on purpose (it holds actions like
+  "New ticket", not just pages).
+- **Page headers go through [`PageHeader`](src/components/PageHeader.tsx)** —
+  title, one line of orientation, actions. Don't hand-roll another `<h1>` block.
+- **`AppShell` takes `flush`** for pages that own the whole viewport (intake,
+  which has its own scroll regions and a pinned composer). Everything else gets
+  the standard padded `<main className="mx-auto w-full max-w-* px-6 py-8">`.
+  Don't use Tailwind's `container` inside the shell — it centres against the
+  *viewport*, which fights the sidebar.
+- **Sidebar collapse is CSS, not React state.** The width is `--sidebar-w`, and
+  a blocking script in `layout.tsx` applies the saved preference before first
+  paint. Reading `localStorage` during render would either mismatch on hydration
+  or flash the wrong width for a frame. `SidebarNav` mirrors the state only for
+  labels and aria.
+- The active-item pill is a shared `layoutId`, so moving between destinations
+  slides it rather than repainting.
+
+Motion follows [the Apple design skill](~/.claude/skills/apple-design): springs
+default to critically damped (`bounce: 0`), and bounce is reserved for
+gesture-driven motion that carried momentum — the lifted kanban card, not a menu
+that just appeared. `globals.css` honours `prefers-reduced-motion`,
+`prefers-reduced-transparency` and `prefers-contrast`.
+
 ## Stack
 
 - Next 15 App Router, **RSC-first**. Pages call `db.*` directly (no API layer).
@@ -65,7 +218,7 @@ as prod-spec's rejection attachments (wiki `cmquudjcd001ypf159yd5frw8`).
 - MCP TS SDK ≥ 1.29, low-level `Server` class with plain JSON Schema in `inputSchema` (never zod).
 - OpenAI for chat (`gpt-4o-mini`) and embeddings (`text-embedding-3-small`).
 - shadcn/ui (Radix + Tailwind 3 + class-variance-authority).
-- @dnd-kit for roadmap drag-drop.
+- @dnd-kit for kanban drag-drop.
 - @tiptap for rich-text editing (markdown shortcuts, task lists).
 
 ## Conventions

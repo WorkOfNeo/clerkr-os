@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { AppNav } from "@/components/AppNav";
+import { AppShell } from "@/components/AppShell";
 import { ActionItemTicketButton } from "@/components/meeting/ActionItemTicketButton";
 import { ActionItemToggle } from "@/components/meeting/ActionItemToggle";
 import { PromoteSignalButton } from "@/components/meeting/PromoteSignalButton";
@@ -50,9 +50,8 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
   const aiReady = isOpenAIAvailable();
 
   return (
-    <div className="min-h-screen">
-      <AppNav email={session.user.email} />
-      <main className="container max-w-3xl space-y-6 py-6">
+    <AppShell email={session.user.email}>
+      <main className="mx-auto w-full max-w-3xl px-6 space-y-6 py-6">
         {/* breadcrumb */}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Link href="/meetings" className="hover:underline">
@@ -88,7 +87,7 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
         {meeting.structuredAt ? (
           <>
             {meeting.tldr && (
-              <section className="rounded-lg border bg-card p-4">
+              <section className="surface p-4">
                 <h2 className="mb-2 text-sm font-semibold">TL;DR</h2>
                 <p className="text-sm text-muted-foreground">{meeting.tldr}</p>
               </section>
@@ -180,7 +179,7 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
             </BriefSection>
           </>
         ) : (
-          <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+          <div className="surface border-dashed p-10 text-center text-sm text-muted-foreground">
             This meeting hasn’t been structured yet.{" "}
             {aiReady
               ? "Click “Structure with AI” to extract the brief."
@@ -189,14 +188,14 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
         )}
 
         {/* transcript */}
-        <section className="rounded-lg border bg-card p-4">
+        <section className="surface p-4">
           <h2 className="mb-2 text-sm font-semibold">Transcript</h2>
           <pre className="max-h-80 overflow-auto whitespace-pre-wrap font-sans text-sm text-muted-foreground">
             {meeting.transcript}
           </pre>
         </section>
       </main>
-    </div>
+    </AppShell>
   );
 }
 
@@ -211,7 +210,7 @@ function BriefSection({
 }) {
   if (count === 0) return null;
   return (
-    <section className="rounded-lg border bg-card p-4">
+    <section className="surface p-4">
       <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
         {title}
         <span className="text-xs font-normal text-muted-foreground">{count}</span>

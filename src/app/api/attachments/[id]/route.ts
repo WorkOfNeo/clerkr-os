@@ -16,7 +16,7 @@ export async function GET(
   if (!session) return new Response("Unauthorized", { status: 401 });
 
   const { id } = await ctx.params;
-  const att = await db.ticketAttachment.findUnique({
+  const att = await db.attachment.findUnique({
     where: { id },
     select: { data: true, mimeType: true, fileName: true },
   });

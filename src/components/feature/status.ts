@@ -30,8 +30,8 @@ export const STATUS_META: Record<
     variant: "default",
   },
   IN_ROADMAP: {
-    label: "In roadmap",
-    meaning: "Scheduled on the roadmap.",
+    label: "On the board",
+    meaning: "Scheduled — it has a card on the kanban board.",
     variant: "default",
   },
   SHIPPED: {

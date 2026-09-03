@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { AppNav } from "@/components/AppNav";
+import { AppShell } from "@/components/AppShell";
+import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { db } from "@/lib/db";
@@ -28,23 +29,20 @@ export default async function MeetingsPage() {
   });
 
   return (
-    <div className="min-h-screen">
-      <AppNav email={session.user.email} />
-      <main className="container max-w-4xl py-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h1 className="text-xl font-semibold">Meetings &amp; Briefs</h1>
-            <p className="text-sm text-muted-foreground">
-              Paste a transcript — the AI structures it into a scannable brief.
-            </p>
-          </div>
-          <Button asChild size="sm">
-            <Link href="/meetings/new">New meeting</Link>
-          </Button>
-        </div>
+    <AppShell email={session.user.email}>
+      <main className="mx-auto w-full max-w-4xl px-6 py-8">
+        <PageHeader
+          title="Meetings"
+          subtitle="Paste a transcript — the AI structures it into a scannable brief."
+          actions={
+            <Button asChild size="sm">
+              <Link href="/meetings/new">New meeting</Link>
+            </Button>
+          }
+        />
 
         {meetings.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+          <div className="surface border-dashed p-14 text-center text-sm text-muted-foreground">
             No meetings yet.{" "}
             <Link href="/meetings/new" className="text-foreground underline">
               Add your first one →
@@ -56,7 +54,7 @@ export default async function MeetingsPage() {
               <li key={m.id}>
                 <Link
                   href={`/meetings/${m.id}`}
-                  className="block rounded-lg border bg-card p-4 transition-colors hover:border-foreground/30"
+                  className="block surface-interactive p-4"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <h2 className="font-medium">{m.title}</h2>
@@ -83,6 +81,6 @@ export default async function MeetingsPage() {
           </ul>
         )}
       </main>
-    </div>
+    </AppShell>
   );
 }

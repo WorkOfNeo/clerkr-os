@@ -71,7 +71,7 @@ the card renders text-only. Never inline image bytes or base64 into any field.
 
 Meetings structure into briefs (\`create_meeting\` + \`structure_meeting\`), and a
 meeting action item can be raised as a ticket with
-\`send_action_item_to_ticket\`. The Feature Library, clusters and roadmap are the
+\`send_action_item_to_ticket\`. The Feature Library, clusters and kanban board are the
 product-planning side; the wiki holds longer-form knowledge. Authorship on
 everything you create is set automatically from the owner of the API token you
 are calling with.`;

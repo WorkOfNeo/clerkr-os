@@ -36,6 +36,7 @@ model User {
   meetings       Meeting[]
   tickets        Ticket[]
   ticketComments TicketComment[]
+  documents      Document[]
 
   @@map("user")
 }
@@ -151,6 +152,8 @@ model WikiNote {
   createdAt  DateTime                     @default(now())
   updatedAt  DateTime                     @default(now()) @updatedAt
 
+  attachments Attachment[]
+
   @@index([authorId])
   @@map("wiki_note")
 }
@@ -188,8 +191,76 @@ model ChatMessage {
   citedNoteIds String[]    @default([])
   createdAt    DateTime    @default(now())
 
+  attachments Attachment[]
+  proposals   IntakeProposal[]
+
   @@index([sessionId, createdAt])
   @@map("chat_message")
+}
+
+// ─── Chat intake ─────────────────────────────────────────────────────────────
+// The chat is the front door: you paste raw notes and the model works out what
+// they ARE — a meeting to structure, three bugs, a wiki note, a card for the
+// board — and proposes each one as a card you confirm before anything is
+// written. Nothing is created behind your back; a proposal is a draft until
+// somebody accepts it.
+//
+// Proposals are rows rather than JSON on the message because they have a
+// lifecycle: they get accepted one at a time, edited before accepting, or
+// dismissed, and after a reload the chat has to show which is which.
+
+enum IntakeKind {
+  TICKET
+  MEETING
+  WIKI_NOTE
+  KANBAN_CARD
+  FEATURE
+  // Not a new record — a comment on something that already exists, which is
+  // what a near-duplicate should become.
+  COMMENT
+}
+
+enum IntakeStatus {
+  PROPOSED
+  ACCEPTED
+  DISMISSED
+}
+
+model IntakeProposal {
+  id        String      @id @default(uuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  kind   IntakeKind
+  status IntakeStatus @default(PROPOSED)
+  order  Int          @default(0) // order the cards were proposed in
+
+  title String
+  body  String?
+
+  // Kind-specific extras the classifier filled in — ticket category, meeting
+  // attendees, kanban column, tags, due date. Shape varies by `kind`, which is
+  // exactly why it is Json and not columns.
+  payload Json @default("{}")
+
+  // The "check it against what we already have" half. A high score means this
+  // is probably not new, and the UI offers commenting on `matchId` instead of
+  // filing a duplicate.
+  matchType  String? // "ticket" | "feature" | "meeting" | "wiki_note" | "kanban_card"
+  matchId    String?
+  matchTitle String?
+  matchScore Float? // cosine similarity, 0-1
+
+  // Filled in once accepted, so the card can link to what it became.
+  createdType String?
+  createdId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([messageId, order])
+  @@index([status])
+  @@map("intake_proposal")
 }
 
 // ─── Meetings → Briefs ───────────────────────────────────────────────────────
@@ -228,6 +299,7 @@ model Meeting {
   createdAt    DateTime                     @default(now())
   updatedAt    DateTime                     @default(now()) @updatedAt
 
+  attachments    Attachment[]
   decisions      Decision[]
   featureSignals FeatureSignal[]
   actionItems    ActionItem[]
@@ -301,7 +373,7 @@ model OpenQuestion {
 // ─── Feature Library + Knowledge ─────────────────────────────────────────────
 // Features are the self-growing catalog. They group into Clusters (the "living
 // wiki" hubs) and can cross-link via FeatureLink (the knowledge-graph edges).
-// Meeting FeatureSignals promote into Features; RoadmapItems point at Features.
+// Meeting FeatureSignals promote into Features; KanbanCards point at Features.
 
 enum FeatureStatus {
   IDEA
@@ -346,10 +418,11 @@ model Feature {
   createdAt   DateTime                     @default(now())
   updatedAt   DateTime                     @default(now()) @updatedAt
 
-  signals      FeatureSignal[] // meeting signals promoted/linked to this feature
-  roadmapItems RoadmapItem[]
-  linksFrom    FeatureLink[]   @relation("FeatureLinkFrom")
-  linksTo      FeatureLink[]   @relation("FeatureLinkTo")
+  signals     FeatureSignal[] // meeting signals promoted/linked to this feature
+  kanbanCards KanbanCard[]
+  attachments Attachment[]
+  linksFrom   FeatureLink[]   @relation("FeatureLinkFrom")
+  linksTo     FeatureLink[]   @relation("FeatureLinkTo")
 
   @@index([clusterId])
   @@index([status])
@@ -370,16 +443,6 @@ model FeatureLink {
   @@map("feature_link")
 }
 
-// ─── Roadmap ─────────────────────────────────────────────────────────────────
-// Now / Next / Later lanes with sparse `order` for drag autosave (mirror the
-// kanban ordering pattern). Items optionally point at a Feature.
-
-enum RoadmapLane {
-  NOW
-  NEXT
-  LATER
-}
-
 // ─── App settings ────────────────────────────────────────────────────────────
 // Key/value store for editable config the AI reads before firing — e.g. the
 // meeting-extraction system prompt and the Copilot system prompt. Falls back to
@@ -393,24 +456,89 @@ model AppSetting {
   @@map("app_setting")
 }
 
-model RoadmapItem {
-  id          String      @id @default(uuid())
-  slug        String      @unique
+// ─── Kanban ──────────────────────────────────────────────────────────────────
+// Replaces the fixed Now / Next / Later roadmap. The board's columns are
+// EDITABLE ROWS (KanbanColumn), not an enum, so the team can invent whatever
+// workflow they actually run — "Blocked on legal", "Waiting on client" — from
+// the UI with no deploy. Same call as TicketCategory.
+//
+// The one piece of meaning the code needs is "does landing here mean it's
+// done", and that is what `isDone` carries: a card entering an isDone column
+// gets `completedAt` stamped, and cleared again on the way out. So "done" is a
+// property the user assigns to a column of their choosing rather than a status
+// the code owns.
+//
+// Contrast with TicketStatus, which stays an enum on purpose — ticket code
+// branches on resolved-ness and must not have that changed underneath it. Here
+// the board IS the workflow, so the workflow has to be editable.
+
+model KanbanColumn {
+  id          String  @id @default(uuid())
+  slug        String  @unique
+  name        String  @unique
+  description String?
+  color       String // hex, drives the header dot and the card accent
+  icon        String? // lucide icon name rendered in the column header
+
+  sortOrder Int @default(0) // sparse (10, 20, 30…) so a column can slot between two others
+
+  // Landing here means the work is finished. Any number of columns may be
+  // terminal — "Shipped" and "Won't do" both are.
+  isDone Boolean @default(false)
+
+  // Where a card lands when no column is named (MCP calls, chat intake, quick
+  // add). Exactly one column holds this; `setDefaultColumn` enforces it.
+  isDefault Boolean @default(false)
+
+  // Soft ceiling — the header flags amber past it. Null means no limit.
+  wipLimit Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  cards KanbanCard[]
+
+  @@index([sortOrder])
+  @@map("kanban_column")
+}
+
+model KanbanCard {
+  id     String @id @default(uuid())
+  slug   String @unique
+  number Int    @unique @default(autoincrement()) // human handle: #14
+
   title       String
   description String?
-  lane        RoadmapLane @default(LATER)
-  order       Int         @default(0) // sparse ordering within a lane
-  confidence  Int         @default(0) // 0-5, shown as the confidence meter
-  themeTag    String?
-  blocked     Boolean     @default(false)
-  blockerNote String?
-  featureId   String?
-  feature     Feature?    @relation(fields: [featureId], references: [id])
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @default(now()) @updatedAt
 
-  @@index([lane, order])
-  @@map("roadmap_item")
+  // Required — a card with no column has nowhere to render. Hence
+  // `onDelete: Restrict` rather than SetNull: deleting a column that still
+  // holds cards is refused and the UI makes you say where they should go
+  // instead. Deleting a column must never delete the work in it.
+  columnId String
+  column   KanbanColumn @relation(fields: [columnId], references: [id], onDelete: Restrict)
+
+  order Int @default(0) // sparse ordering within a column, for drag autosave
+
+  confidence  Int       @default(0) // 0-5, shown as the confidence meter
+  themeTag    String?
+  blocked     Boolean   @default(false)
+  blockerNote String?
+  dueDate     DateTime?
+
+  // Stamped when the card enters an isDone column, cleared when it leaves.
+  completedAt DateTime?
+
+  featureId String?
+  feature   Feature? @relation(fields: [featureId], references: [id])
+
+  attachments Attachment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([columnId, order])
+  @@index([featureId])
+  @@map("kanban_card")
 }
 
 // ─── Tickets ─────────────────────────────────────────────────────────────────
@@ -492,7 +620,7 @@ model Ticket {
   updatedAt  DateTime  @default(now()) @updatedAt
 
   comments     TicketComment[]
-  attachments  TicketAttachment[]
+  attachments  Attachment[]
   chatSessions ChatSession[]
   actionItem   ActionItem?
 
@@ -512,7 +640,7 @@ model TicketComment {
   author   User         @relation(fields: [authorId], references: [id])
   source   TicketSource @default(MANUAL)
 
-  attachments TicketAttachment[]
+  attachments Attachment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -525,15 +653,40 @@ model TicketComment {
 // attachments (wiki cmquudjcd001ypf159yd5frw8) — no S3, no new dependency.
 // Images are downscaled client-side before upload so rows stay small, and are
 // served back behind auth from /api/attachments/[id].
-model TicketAttachment {
+//
+// ONE attachment table for the whole app, not one per feature: a screenshot is
+// a screenshot whether it is pinned to a ticket, a kanban card, a meeting or a
+// chat message. Parents are separate nullable FKs rather than an
+// (entityType, entityId) pair, so the database still enforces that an
+// attachment points at something real and still cascades when that parent goes
+// — a polymorphic string pair gives up both.
+//
+// Exactly one parent should be set. `attachmentOwner()` in
+// src/lib/attachments.ts is the only thing that builds these, which is what
+// keeps that true.
+model Attachment {
   id String @id @default(uuid())
 
-  // Attached either to the ticket itself or to one of its comments.
   ticketId String?
   ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   commentId String?
   comment   TicketComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  kanbanCardId String?
+  kanbanCard   KanbanCard? @relation(fields: [kanbanCardId], references: [id], onDelete: Cascade)
+
+  meetingId String?
+  meeting   Meeting? @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  wikiNoteId String?
+  wikiNote   WikiNote? @relation(fields: [wikiNoteId], references: [id], onDelete: Cascade)
+
+  featureId String?
+  feature   Feature? @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  chatMessageId String?
+  chatMessage   ChatMessage? @relation(fields: [chatMessageId], references: [id], onDelete: Cascade)
 
   data     Bytes
   mimeType String
@@ -547,5 +700,80 @@ model TicketAttachment {
 
   @@index([ticketId])
   @@index([commentId])
-  @@map("ticket_attachment")
+  @@index([kanbanCardId])
+  @@index([meetingId])
+  @@index([wikiNoteId])
+  @@index([featureId])
+  @@index([chatMessageId])
+  @@map("attachment")
+}
+
+// ─── Documents ───────────────────────────────────────────────────────────────
+// A general file store: PDFs, images, spreadsheets, decks — anything. Distinct
+// from an Attachment, which is specifically a screenshot pinned to something and
+// one ticket and is downscaled to stay tiny. A Document is the original file,
+// byte for byte, kept because someone will need it again.
+//
+// WHERE THE BYTES LIVE is a per-row fact, not a global one, so the backend can
+// change without a migration and old rows keep resolving:
+//   POSTGRES — `data` holds the bytes. The default: zero infrastructure, and
+//              the files ride along in the normal database backup.
+//   VOLUME   — `storageKey` is a path inside DOCUMENTS_DIR (a Railway volume).
+//              Streams instead of buffering, so it is the one to use once the
+//              files get big.
+// See src/lib/documents/storage.ts.
+
+enum DocumentStorage {
+  POSTGRES
+  VOLUME
+}
+
+// Editable taxonomy, exactly like TicketCategory: a folder is a row, so one can
+// be added or renamed without a deploy. `Document.folderId` is nullable with
+// onDelete: SetNull — deleting a folder must never delete the files in it.
+model DocumentFolder {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String   @unique
+  description String?
+  color       String? // hex, drives the badge
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  documents Document[]
+
+  @@map("document_folder")
+}
+
+model Document {
+  id String @id @default(uuid())
+
+  // `title` is the editable display name; `fileName` is what was uploaded and
+  // what a download is named. Renaming a document must not break its extension.
+  title       String
+  description String?
+  fileName    String
+  mimeType    String
+  byteSize    Int
+  checksum    String // sha256 hex, computed while streaming the upload
+  tags        String[] @default([])
+
+  folderId String?
+  folder   DocumentFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  storage    DocumentStorage
+  storageKey String? // path within DOCUMENTS_DIR when storage = VOLUME
+  data       Bytes? // the bytes themselves when storage = POSTGRES
+
+  uploadedById String?
+  uploadedBy   User?    @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  @@index([folderId])
+  @@index([createdAt])
+  @@index([checksum])
+  @@index([uploadedById])
+  @@map("document")
 }

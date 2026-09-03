@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { AppNav } from "@/components/AppNav";
+import { AppShell } from "@/components/AppShell";
 import { STATUS_META, type FeatureStatus } from "@/components/feature/status";
 import { KnowledgeGraph, type KnowledgeEntry } from "@/components/knowledge/KnowledgeGraph";
 import { Badge } from "@/components/ui/badge";
@@ -46,12 +46,11 @@ export default async function KnowledgePage({
 
   const tab = "rounded px-3 py-1";
   return (
-    <div className="min-h-screen">
-      <AppNav email={session.user.email} />
-      <main className="container py-6">
+    <AppShell email={session.user.email}>
+      <main className="mx-auto w-full max-w-6xl px-6 py-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h1 className="text-xl font-semibold">Knowledge</h1>
+            <h1 className="text-display text-[28px] font-semibold leading-tight">Knowledge</h1>
             <p className="text-sm text-muted-foreground">
               Your living wiki — every entry, clustered. See and control single records.
             </p>
@@ -73,7 +72,7 @@ export default async function KnowledgePage({
         </div>
 
         {list ? (
-          <div className="overflow-hidden rounded-lg border bg-card">
+          <div className="overflow-hidden surface">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -131,6 +130,6 @@ export default async function KnowledgePage({
           />
         )}
       </main>
-    </div>
+    </AppShell>
   );
 }

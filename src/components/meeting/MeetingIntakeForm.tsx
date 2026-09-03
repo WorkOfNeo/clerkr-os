@@ -37,7 +37,7 @@ export function MeetingIntakeForm() {
             id="kind"
             name="kind"
             defaultValue="CUSTOMER"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-10 w-full rounded-md bg-card px-3 text-[14px] shadow-xs ring-1 ring-inset ring-input focus:outline-none focus:ring-2 focus:ring-primary/70"
           >
             <option value="INTERNAL">Internal</option>
             <option value="CUSTOMER">Customer</option>

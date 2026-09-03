@@ -23,7 +23,7 @@ export function ChatSidebar({
         <Link
           href="/chat"
           className={cn(
-            "flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-medium transition hover:border-foreground/30",
+            "flex items-center gap-2 surface px-3 py-2 text-sm font-medium transition hover:border-foreground/30",
             activeId === null && "border-foreground/30",
           )}
         >

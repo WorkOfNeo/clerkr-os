@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 
-import { AppNav } from "@/components/AppNav";
+import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MarkdownView } from "@/components/wiki/MarkdownView";
@@ -29,9 +29,8 @@ export default async function WikiNotePage({
 
   if (edit) {
     return (
-      <div className="min-h-screen">
-        <AppNav email={session.user.email} />
-        <main className="container max-w-2xl space-y-6 py-6">
+      <AppShell email={session.user.email}>
+        <main className="mx-auto w-full max-w-2xl px-6 space-y-6 py-6">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Link href="/wiki" className="hover:underline">
               Wiki
@@ -45,14 +44,13 @@ export default async function WikiNotePage({
           </div>
           <WikiNoteEditor note={note} />
         </main>
-      </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className="min-h-screen">
-      <AppNav email={session.user.email} />
-      <main className="container max-w-2xl space-y-6 py-6">
+    <AppShell email={session.user.email}>
+      <main className="mx-auto w-full max-w-2xl px-6 space-y-6 py-6">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Link href="/wiki" className="hover:underline">
             Wiki
@@ -90,6 +88,6 @@ export default async function WikiNotePage({
 
         <MarkdownView body={note.body} />
       </main>
-    </div>
+    </AppShell>
   );
 }

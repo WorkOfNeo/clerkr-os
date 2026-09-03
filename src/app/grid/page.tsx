@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 
-import { AppNav } from "@/components/AppNav";
+import { AppShell } from "@/components/AppShell";
 import { MasonryGrid } from "@/components/grid/MasonryGrid";
 import { SortMenu, type SortValue } from "@/components/grid/SortMenu";
 
@@ -61,12 +61,11 @@ export default async function GridPage({
   });
 
   return (
-    <div className="min-h-screen">
-      <AppNav email={session.user.email} />
-      <main className="container py-6">
+    <AppShell email={session.user.email}>
+      <main className="mx-auto w-full max-w-6xl px-6 py-6">
         <div className="mb-5 flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold">Ideas</h1>
+            <h1 className="text-display text-[28px] font-semibold leading-tight">Ideas</h1>
             <p className="text-xs text-muted-foreground">
               {posts.length} {posts.length === 1 ? "post" : "posts"}
             </p>
@@ -75,6 +74,6 @@ export default async function GridPage({
         </div>
         <MasonryGrid posts={posts} />
       </main>
-    </div>
+    </AppShell>
   );
 }

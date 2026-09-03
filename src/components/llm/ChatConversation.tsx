@@ -12,8 +12,8 @@ import type { ChatMessageItem, CitedNote } from "./ChatMessageList";
 import { SaveToWikiButton } from "./SaveToWikiButton";
 
 const SUGGESTIONS = [
-  "What's currently on the roadmap?",
-  "Which feature requests have no roadmap item?",
+  "What's in progress on the board?",
+  "Which feature requests have no card on the board?",
   "Summarise our most recent meeting brief",
   "Do we already have a feature for bulk redaction?",
 ];
@@ -87,7 +87,7 @@ export function ChatConversation({
               <div>
                 <h2 className="text-lg font-semibold">Ask your Product OS anything</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Copilot searches your meetings, features, roadmap and wiki — and cites what it finds.
+                  Copilot searches your meetings, features, board and wiki — and cites what it finds.
                 </p>
               </div>
               <div className="grid w-full max-w-xl gap-2 sm:grid-cols-2">
@@ -96,7 +96,7 @@ export function ChatConversation({
                     key={s}
                     type="button"
                     onClick={() => send(s)}
-                    className="rounded-xl border bg-card px-3 py-2.5 text-left text-sm text-muted-foreground transition hover:border-foreground/30 hover:text-foreground"
+                    className="surface-interactive px-3 py-2.5 text-left text-sm text-muted-foreground hover:text-foreground"
                   >
                     {s}
                   </button>
@@ -171,11 +171,11 @@ export function ChatConversation({
       <div className="border-t bg-background/80 backdrop-blur">
         <div className="mx-auto w-full max-w-3xl px-4 py-3">
           {error && (
-            <div className="mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <div className="mb-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive ring-1 ring-inset ring-destructive/25">
               {error}
             </div>
           )}
-          <div className="flex items-end gap-2 rounded-2xl border bg-card px-3 py-2 shadow-sm focus-within:border-foreground/30">
+          <div className="flex items-end gap-2 rounded-xl bg-card px-3 py-2 shadow-sm ring-1 ring-hairline transition-shadow focus-within:ring-2 focus-within:ring-primary/60">
             <textarea
               ref={taRef}
               value={text}

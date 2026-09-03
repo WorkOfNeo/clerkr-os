@@ -3,7 +3,8 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 
-import { AppNav } from "@/components/AppNav";
+import { AppShell } from "@/components/AppShell";
+import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { WikiSearchBox } from "@/components/wiki/WikiSearchBox";
@@ -25,20 +26,17 @@ export default async function WikiPage() {
   });
 
   return (
-    <div className="min-h-screen">
-      <AppNav email={session.user.email} />
-      <main className="container max-w-4xl space-y-6 py-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold">Wiki</h1>
-            <p className="text-sm text-muted-foreground">
-              Living knowledge — decisions, retros, conventions. The LLM searches this semantically.
-            </p>
-          </div>
-          <Button asChild size="sm">
-            <Link href="/wiki/new">New note</Link>
-          </Button>
-        </div>
+    <AppShell email={session.user.email}>
+      <main className="mx-auto w-full max-w-4xl px-6 space-y-6 py-6">
+        <PageHeader
+          title="Wiki"
+          subtitle="Living knowledge — decisions, retros, conventions. The LLM searches this semantically."
+          actions={
+            <Button asChild size="sm">
+              <Link href="/wiki/new">New note</Link>
+            </Button>
+          }
+        />
 
         <WikiSearchBox />
 
@@ -85,6 +83,6 @@ export default async function WikiPage() {
           </ul>
         </div>
       </main>
-    </div>
+    </AppShell>
   );
 }

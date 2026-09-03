@@ -1,5 +1,5 @@
-import { AppNav } from "@/components/AppNav";
-import { ChatConversation } from "@/components/llm/ChatConversation";
+import { AppShell } from "@/components/AppShell";
+import { IntakeConversation } from "@/components/intake/IntakeConversation";
 import { ChatSidebar } from "@/components/llm/ChatSidebar";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
@@ -14,14 +14,20 @@ export default async function ChatPage() {
   });
 
   return (
-    <div className="flex h-screen flex-col">
-      <AppNav email={session.user.email} />
+    // `flush`: intake owns its whole viewport — the transcript scrolls and the
+    // composer stays pinned, so it can't sit inside the usual padded main.
+    <AppShell email={session.user.email} flush>
       <div className="flex min-h-0 flex-1">
         <ChatSidebar sessions={sessions} activeId={null} />
         <div className="min-w-0 flex-1">
-          <ChatConversation initialSessionId={null} initialMessages={[]} initialCitedNotes={[]} />
+          <IntakeConversation
+            initialSessionId={null}
+            initialMessages={[]}
+            initialCitedNotes={[]}
+            initialProposals={{}}
+          />
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

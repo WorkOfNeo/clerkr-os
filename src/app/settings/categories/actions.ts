@@ -61,3 +61,16 @@ export async function deleteCategory(id: string): Promise<void> {
   revalidatePath("/settings/categories");
   revalidatePath("/tickets");
 }
+
+/** Persist a drag-reorder. Order is the array position, renumbered from 0. */
+export async function reorderCategories(ids: string[]): Promise<void> {
+  await requireSession();
+  const parsed = z.array(z.string().min(1)).parse(ids);
+  await db.$transaction(
+    parsed.map((id, i) =>
+      db.ticketCategory.update({ where: { id }, data: { sortOrder: i } }),
+    ),
+  );
+  revalidatePath("/settings/categories");
+  revalidatePath("/tickets");
+}

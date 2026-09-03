@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { AppNav } from "@/components/AppNav";
+import { AppShell } from "@/components/AppShell";
 import { ClusterAssignControl } from "@/components/feature/ClusterAssignControl";
 import { FeatureDeleteButton } from "@/components/feature/FeatureDeleteButton";
 import { FeatureForm } from "@/components/feature/FeatureForm";
@@ -28,7 +28,7 @@ export default async function FeatureDetailPage({
         include: { meeting: { select: { id: true, title: true, meetingDate: true, kind: true } } },
         orderBy: { createdAt: "desc" },
       },
-      roadmapItems: true,
+      kanbanCards: { include: { column: true } },
       linksFrom: { include: { to: { select: { id: true, slug: true, title: true, status: true } } } },
       linksTo: { include: { from: { select: { id: true, slug: true, title: true, status: true } } } },
     },
@@ -46,9 +46,8 @@ export default async function FeatureDetailPage({
   ];
 
   return (
-    <div className="min-h-screen">
-      <AppNav email={session.user.email} />
-      <main className="container max-w-3xl space-y-6 py-6">
+    <AppShell email={session.user.email}>
+      <main className="mx-auto w-full max-w-3xl px-6 space-y-6 py-6">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Link href="/features" className="hover:underline">
             Features
@@ -84,7 +83,7 @@ export default async function FeatureDetailPage({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-end gap-4 rounded-lg border bg-card p-4">
+        <div className="flex flex-wrap items-end gap-4 surface p-4">
           <div className="space-y-1">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Status
@@ -118,7 +117,7 @@ export default async function FeatureDetailPage({
         </div>
 
         {feature.description && (
-          <section className="rounded-lg border bg-card p-4">
+          <section className="surface p-4">
             <h2 className="mb-2 text-sm font-semibold">Description</h2>
             <p className="whitespace-pre-wrap text-sm text-muted-foreground">
               {feature.description}
@@ -126,7 +125,7 @@ export default async function FeatureDetailPage({
           </section>
         )}
 
-        <section className="rounded-lg border bg-card p-4">
+        <section className="surface p-4">
           <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
             Source signals
             <span className="text-xs font-normal text-muted-foreground">
@@ -158,16 +157,25 @@ export default async function FeatureDetailPage({
           )}
         </section>
 
-        {feature.roadmapItems.length > 0 && (
-          <section className="rounded-lg border bg-card p-4">
-            <h2 className="mb-2 text-sm font-semibold">On the roadmap</h2>
+        {feature.kanbanCards.length > 0 && (
+          <section className="surface p-4">
+            <h2 className="mb-2 text-sm font-semibold">On the board</h2>
             <ul className="space-y-1">
-              {feature.roadmapItems.map((r) => (
-                <li key={r.id} className="text-sm">
-                  {r.title}
-                  <Badge variant="outline" className="ml-1.5 px-1.5 py-0 text-[10px]">
-                    {r.lane}
+              {feature.kanbanCards.map((r) => (
+                <li key={r.id} className="flex items-center gap-1.5 text-sm">
+                  <Link href="/kanban" className="hover:underline">
+                    {r.title}
+                  </Link>
+                  <Badge
+                    variant="outline"
+                    className="px-1.5 py-0 text-[10px]"
+                    style={{ color: r.column.color, borderColor: `${r.column.color}55` }}
+                  >
+                    {r.column.name}
                   </Badge>
+                  {r.completedAt && (
+                    <span className="text-[10px] text-success">done</span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -175,7 +183,7 @@ export default async function FeatureDetailPage({
         )}
 
         {crossLinks.length > 0 && (
-          <section className="rounded-lg border bg-card p-4">
+          <section className="surface p-4">
             <h2 className="mb-2 text-sm font-semibold">Connected features</h2>
             <ul className="space-y-1">
               {crossLinks.map((l) => (
@@ -192,6 +200,6 @@ export default async function FeatureDetailPage({
           </section>
         )}
       </main>
-    </div>
+    </AppShell>
   );
 }

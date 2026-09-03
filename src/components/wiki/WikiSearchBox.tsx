@@ -69,7 +69,7 @@ export function WikiSearchBox() {
       {results.length > 0 && (
         <ul className="space-y-2">
           {results.map((r) => (
-            <li key={r.id} className="rounded-md border bg-card p-3">
+            <li key={r.id} className="surface p-3">
               <Link href={`/wiki/${r.slug}`} className="block hover:underline">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-medium">{r.title}</h3>
