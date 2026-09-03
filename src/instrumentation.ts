@@ -4,6 +4,8 @@
 // with no manual step.
 
 const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+// Local hour the memory pass runs — late enough that the day is done.
+const NIGHTLY_HOUR = 3;
 const FIRST_RUN_DELAY_MS = 30_000;
 
 export async function register(): Promise<void> {
@@ -25,6 +27,7 @@ export async function register(): Promise<void> {
 
   const g = globalThis as typeof globalThis & {
     __embedSweepTimer?: ReturnType<typeof setInterval>;
+    __lastMemoryPass?: string;
   };
   if (g.__embedSweepTimer) return; // dev hot-reload guard
 
@@ -70,9 +73,32 @@ export async function register(): Promise<void> {
     }
   };
 
+  // Once an hour, check whether the nightly memory pass is due. A plain
+  // "every 24h" interval drifts with every restart and would eventually run at
+  // lunchtime; checking the clock keeps it at night whatever happens.
+  const memoryPass = async () => {
+    const hour = new Date().getHours();
+    if (hour !== NIGHTLY_HOUR) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (g.__lastMemoryPass === today) return; // already ran tonight
+    g.__lastMemoryPass = today;
+
+    try {
+      const { runNightlyMemoryPass } = await import("@/lib/memory/nightly");
+      const result = await runNightlyMemoryPass();
+      if (result.proposed > 0 || result.scannedMessages > 0) {
+        console.log("[memory]", JSON.stringify(result));
+      }
+    } catch (err) {
+      console.warn("[memory] nightly pass failed:", err);
+    }
+  };
+
   g.__embedSweepTimer = setInterval(() => {
     void run();
     void notify();
+    void memoryPass();
   }, SWEEP_INTERVAL_MS);
   setTimeout(run, FIRST_RUN_DELAY_MS);
   setTimeout(notify, FIRST_RUN_DELAY_MS + 5_000);

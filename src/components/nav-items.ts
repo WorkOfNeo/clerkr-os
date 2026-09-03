@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Brain,
   FolderOpen,
   LayoutGrid,
   Lightbulb,
@@ -49,6 +50,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Library",
     items: [
       { href: "/wiki", label: "Wiki", icon: BookOpen },
+      { href: "/memory", label: "Memory", icon: Brain },
       { href: "/documents", label: "Documents", icon: FolderOpen },
       { href: "/grid", label: "Ideas", icon: LayoutGrid },
     ],

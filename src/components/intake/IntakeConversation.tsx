@@ -47,7 +47,9 @@ export function IntakeConversation({
   initialProposals: Record<string, ProposalDTO[]>;
 }) {
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>("file");
+  // Opens in Ask: it reasons about what you sent before proposing anything,
+  // and "File it" is one tap away when you already know what you want.
+  const [mode, setMode] = useState<Mode>("ask");
   const [sessionId, setSessionId] = useState(initialSessionId);
   const [messages, setMessages] = useState<ChatMessageItem[]>(initialMessages);
   const [citedNotes, setCitedNotes] = useState<CitedNote[]>(initialCitedNotes);

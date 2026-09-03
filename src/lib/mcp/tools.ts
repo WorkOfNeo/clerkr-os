@@ -8,6 +8,7 @@ import { DOCUMENT_TOOLS } from "./tools/document";
 import { FEATURE_TOOLS } from "./tools/feature";
 import { MEETING_TOOLS } from "./tools/meeting";
 import { KANBAN_TOOLS } from "./tools/kanban";
+import { MEMORY_TOOLS } from "./tools/memory";
 import { SETTINGS_TOOLS } from "./tools/settings";
 import { TICKET_TOOLS } from "./tools/ticket";
 import { WIKI_TOOLS } from "./tools/wiki";
@@ -327,5 +328,6 @@ export const TOOLS: ToolDef[] = [
   ...MEETING_TOOLS,
   ...FEATURE_TOOLS,
   ...KANBAN_TOOLS,
+  ...MEMORY_TOOLS,
   ...SETTINGS_TOOLS,
 ];

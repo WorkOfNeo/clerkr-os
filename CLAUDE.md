@@ -193,6 +193,39 @@ volume in Railway); files already stored the other way keep serving. See
   haven't taken on. Worth doing later; it's why they're absent from
   `embed-sweep.ts`.
 
+## Memory & playbooks (`/memory`)
+
+What the assistant has learned about how this team works, and the written
+procedures it follows.
+
+**A memory is PROPOSED before it is ACTIVE, and only ACTIVE ones reach a
+prompt.** A nightly pass (3am local, from `src/instrumentation.ts`) reads the
+day's conversations and suggests what looks durable; a person confirms at
+`/memory`. That ordering is the safety model — an assistant that silently
+rewrites its own instructions from a sentence it misread is worse than one that
+forgets. `propose_memory` over MCP can only propose, never activate.
+
+- The nightly pass is shown what is already **ACTIVE *and* DISMISSED**, so it
+  stops re-suggesting rejected things every night. Dismiss rather than delete:
+  deleting forgets the decision and invites the same proposal back.
+- `timesApplied` is what makes a bad memory findable — a rule that fires
+  constantly and is always corrected shows up as a number, not a hunch.
+- Categories (`MemoryCategory`) are grouped in the prompt so a preference reads
+  as a preference and a correction as a correction, rather than one flat list
+  where everything has equal weight.
+- A **playbook** is a row, not a file in the repo: the people who know how the
+  work should be done are not the people who deploy, and a procedure needing a
+  PR to change goes stale. `trigger` should read like the SITUATION, since it is
+  matched against what the user actually typed.
+
+**Show, don't interrogate.** The intake prompt is explicit that a proposal card
+is editable, so a reasonable guess costs a click and a question costs a round
+trip. It must not reply with a question and no card when a card was possible —
+going back and forth is the failure mode that surface exists to remove.
+
+Intake opens in **Ask** mode so it reasons before proposing; "File it" is one
+tap away.
+
 ## PWA
 
 Installable from Safari via Share → Add to Home Screen.

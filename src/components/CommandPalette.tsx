@@ -29,6 +29,7 @@ const COMMANDS: Command[] = [
   { label: "Knowledge", hint: "Graph", href: "/knowledge", keywords: "knowledge graph cluster" },
   { label: "Wiki", hint: "Notes", href: "/wiki", keywords: "wiki note documentation knowledge" },
   { label: "New wiki note", href: "/wiki/new", keywords: "new wiki note write" },
+  { label: "Memory", hint: "What it has learned", href: "/memory", keywords: "memory remember learned playbook procedure preference convention correction rule" },
   { label: "Documents", hint: "File store", href: "/documents", keywords: "document file pdf jpg image upload attachment store contract deck spreadsheet" },
   { label: "Intake", hint: "File anything", href: "/chat", keywords: "intake chat copilot ask assistant ai paste notes file capture" },
   { label: "Ideas", hint: "Inspiration board", href: "/grid", keywords: "idea board grid inspiration pinterest" },

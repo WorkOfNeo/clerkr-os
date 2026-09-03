@@ -9,6 +9,8 @@ import {
   type TicketHit,
 } from "./embed-entities";
 import { CHAT_MODEL, getOpenAI } from "./openai";
+import { activeMemories, markApplied, renderMemoryBlock, type MemoryRow } from "@/lib/memory/memory";
+
 import { getChatPrompt } from "./prompts";
 import { semanticSearchWiki } from "./wiki-search";
 
@@ -68,8 +70,12 @@ export async function runChatTurn(params: {
   });
   const prior = recent.reverse().slice(0, -1);
 
-  const [product, basePrompt] = await Promise.all([loadProductContext(), getChatPrompt()]);
-  const systemPrompt = buildSystemPrompt(basePrompt, ticket ?? null, citedNotes, product, {
+  const [product, basePrompt, memories] = await Promise.all([
+    loadProductContext(),
+    getChatPrompt(),
+    activeMemories(),
+  ]);
+  const systemPrompt = buildSystemPrompt(withMemory(basePrompt, memories), ticket ?? null, citedNotes, product, {
     meetings: meetingHits,
     features: featureHits,
     tickets: ticketHits,
@@ -104,7 +110,15 @@ export async function runChatTurn(params: {
     data: { updatedAt: new Date() },
   });
 
+  await markApplied(memories.map((m) => m.id));
+
   return { assistantText, citedNoteIds: citedNotes.map((n) => n.id) };
+}
+
+/** What the team has taught it, ahead of the base persona's own rules. */
+function withMemory(basePrompt: string, memories: MemoryRow[]): string {
+  const block = renderMemoryBlock(memories);
+  return block ? `${basePrompt}\n\n${block}` : basePrompt;
 }
 
 interface ProductContext {

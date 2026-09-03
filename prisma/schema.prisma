@@ -52,6 +52,7 @@ model User {
   notifySubscribedCards Boolean @default(true)
 
   cardSubscriptions CardSubscriber[]
+  memories          Memory[]
 
   @@map("user")
 }
@@ -846,6 +847,7 @@ enum NotificationKind {
   TICKET_STALE
   MEETING_UNSTRUCTURED
   COLUMN_OVER_WIP
+  MEMORY_PROPOSED
 }
 
 model Notification {
@@ -914,4 +916,91 @@ model CardSubscriber {
   @@unique([cardId, userId])
   @@index([userId])
   @@map("card_subscriber")
+}
+
+// ─── Memory ──────────────────────────────────────────────────────────────────
+// What the assistant has learned about how this team works, so the same thing
+// doesn't have to be explained twice.
+//
+// A memory is PROPOSED before it is ACTIVE. A nightly pass reads the day's
+// conversations and suggests what looks worth keeping; nothing reaches a prompt
+// until a person confirms it. That ordering is the whole safety model — an
+// assistant that silently rewrites its own instructions from a misread sentence
+// is worse than one that forgets.
+//
+// `timesApplied` is what makes a wrong memory findable: a rule that fires
+// constantly and is always corrected shows up as a number, not a hunch.
+
+enum MemoryCategory {
+  PREFERENCE // how Neo likes things done — tone, format, defaults
+  CONVENTION // house rules: naming, structure, what goes where
+  FACT // durable facts about the product, clients or stack
+  CORRECTION // "not that, this" — learned from being told off
+  ROUTING // which surface a kind of note belongs on
+}
+
+enum MemoryStatus {
+  PROPOSED // suggested by the nightly pass, waiting on a human
+  ACTIVE // confirmed; injected into prompts
+  DISMISSED // rejected — kept so the same thing isn't proposed again
+}
+
+model Memory {
+  id String @id @default(uuid())
+
+  category MemoryCategory
+  status   MemoryStatus   @default(PROPOSED)
+
+  title   String // one line, how it appears in a list
+  content String // the instruction itself, as the model will read it
+
+  // The evidence. Without it a memory is folklore and nobody can judge it.
+  sourceNote      String?
+  sourceMessageId String?
+
+  timesApplied  Int       @default(0)
+  lastAppliedAt DateTime?
+
+  // Null means the nightly pass learned it rather than a person writing it.
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([status, category])
+  @@index([createdAt])
+  @@map("memory")
+}
+
+// ─── Playbooks ───────────────────────────────────────────────────────────────
+// A written procedure the assistant follows for a kind of task, instead of
+// working it out again from scratch each time — and instead of asking three
+// questions it could have answered from the playbook.
+//
+// Deliberately a row, not a file in the repo: the people who know how the work
+// should be done are not the people who deploy, and a procedure that needs a
+// pull request to change will go stale.
+
+model Playbook {
+  id   String @id @default(uuid())
+  slug String @unique
+  name String
+
+  // When this applies, in plain English. Matched against what the user typed,
+  // so it should read like the situation, not like a title.
+  trigger String
+
+  // The procedure itself, markdown. Steps, defaults, what to fill in without
+  // asking, and what genuinely needs a question.
+  body String
+
+  enabled   Boolean @default(true)
+  timesUsed Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([enabled])
+  @@map("playbook")
 }

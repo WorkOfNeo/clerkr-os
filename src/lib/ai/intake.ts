@@ -4,6 +4,14 @@ import { db } from "@/lib/db";
 
 import { embedText, toVectorLiteral } from "./embed";
 import { CHAT_MODEL, getOpenAI } from "./openai";
+import {
+  activeMemories,
+  activePlaybooks,
+  markApplied,
+  renderMemoryBlock,
+  renderPlaybookBlock,
+} from "@/lib/memory/memory";
+
 import { getIntakePrompt } from "./prompts";
 
 /**
@@ -149,7 +157,18 @@ export async function classifyIntake(params: {
   const { sessionId, rawText } = params;
   const client = getOpenAI();
 
-  const [systemPrompt, vocabulary] = await Promise.all([getIntakePrompt(), loadVocabulary()]);
+  const [systemPrompt, vocabulary, memories, playbooks] = await Promise.all([
+    getIntakePrompt(),
+    loadVocabulary(),
+    activeMemories(),
+    activePlaybooks(),
+  ]);
+
+  // Memory and playbooks go in ahead of the vocabulary: they change HOW the
+  // model decides, where the vocabulary only constrains what it may name.
+  const learned = [renderMemoryBlock(memories), renderPlaybookBlock(playbooks)]
+    .filter(Boolean)
+    .join("\n\n");
 
   const resp = await client.chat.completions.create({
     model: CHAT_MODEL,
@@ -158,7 +177,12 @@ export async function classifyIntake(params: {
     response_format: { type: "json_object" },
     temperature: 0.2,
     messages: [
-      { role: "system", content: `${systemPrompt}\n\n${vocabularyBlock(vocabulary)}` },
+      {
+        role: "system",
+        content: [systemPrompt, learned, vocabularyBlock(vocabulary)]
+          .filter(Boolean)
+          .join("\n\n"),
+      },
       { role: "user", content: rawText },
     ],
   });
@@ -205,6 +229,10 @@ export async function classifyIntake(params: {
   }
 
   await db.chatSession.update({ where: { id: sessionId }, data: { updatedAt: new Date() } });
+
+  // Count the memories that were in force for this turn, so a rule that fires
+  // constantly and is always wrong shows up as a number rather than a hunch.
+  await markApplied(memories.map((m) => m.id));
 
   return { messageId: message.id, reply, proposalCount: order };
 }

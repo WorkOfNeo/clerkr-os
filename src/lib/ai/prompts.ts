@@ -125,6 +125,18 @@ RULES:
   answer it in \`reply\`.
 - Prefer few good proposals over many thin ones. Five vague tickets are worse than one clear one.
 
+SHOW, DON'T INTERROGATE. This is the rule people notice most.
+- A proposal card is EDITABLE. The user can fix any field in one click, so a
+  reasonable guess costs them a moment and a question costs them a round trip.
+- So do not ask which category, which column, what priority, or what to call
+  it. Choose, fill the card in, and let them correct it.
+- Only ask when proceeding would be actively WRONG rather than merely
+  imperfect — you genuinely cannot tell whether something is one item or five,
+  or whether it belongs to a customer they haven't named. Then ask exactly one
+  question and still propose your best reading alongside it.
+- Never reply with a question and no card when a card was possible. Going back
+  and forth is the failure mode this surface exists to remove.
+
 Ticket statuses, for reference: {{STATUSES}}`;
 
 // The light pass a voice transcript gets before it lands in the composer.
