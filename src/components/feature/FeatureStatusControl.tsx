@@ -36,7 +36,7 @@ export function FeatureStatusControl({
       disabled={pending}
       onChange={(e) => onChange(e.target.value as FeatureStatus)}
       className={cn(
-        "flex h-9 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50",
+        "flex h-9 rounded-md bg-card px-3 text-[13px] shadow-xs ring-1 ring-inset ring-input disabled:opacity-50",
         className,
       )}
     >

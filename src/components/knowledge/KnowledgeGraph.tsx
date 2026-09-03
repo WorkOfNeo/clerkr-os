@@ -54,7 +54,7 @@ export function KnowledgeGraph({
 
   if (entries.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+      <div className="surface border-dashed p-14 text-center text-sm text-muted-foreground">
         No entries yet. Promote a meeting signal or add a feature to populate the graph.
       </div>
     );
@@ -82,7 +82,7 @@ export function KnowledgeGraph({
         )}
       </div>
 
-      <aside className="h-fit rounded-lg border bg-card p-4 lg:sticky lg:top-6">
+      <aside className="h-fit surface p-4 lg:sticky lg:top-6">
         {!selected ? (
           <p className="text-sm text-muted-foreground">Select an entry to inspect it.</p>
         ) : (
@@ -156,7 +156,7 @@ function ClusterGroup({
   onSelect: (id: string) => void;
 }) {
   return (
-    <div className="min-w-[220px] flex-1 rounded-lg border bg-muted/20 p-3">
+    <div className="min-w-[220px] flex-1 rounded-lg bg-muted/40 p-3 ring-1 ring-inset ring-hairline">
       <div className="mb-2 flex items-center gap-2">
         <h3 className="text-sm font-semibold">{label}</h3>
         <span className="ml-auto text-[10px] text-muted-foreground">{items.length}</span>
@@ -171,7 +171,7 @@ function ClusterGroup({
               type="button"
               onClick={() => onSelect(e.id)}
               className={cn(
-                "flex w-full items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-left text-xs transition hover:border-foreground/40",
+                "surface-interactive flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs",
                 selectedId === e.id && "border-foreground/60 ring-1 ring-foreground/20",
                 e.status === "SMALL_UNIQUE" && "border-dashed",
               )}

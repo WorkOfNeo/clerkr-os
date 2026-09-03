@@ -4,7 +4,7 @@ import { listApiTokens } from "@/lib/api-tokens";
 import { ensureProtocol } from "@/lib/base-url";
 import { requireSession } from "@/lib/session";
 
-import { AppNav } from "@/components/AppNav";
+import { AppShell } from "@/components/AppShell";
 
 import { ConnectGuide } from "./ConnectGuide";
 import { CreateTokenForm } from "./CreateTokenForm";
@@ -28,11 +28,10 @@ export default async function SettingsPage() {
   ]);
 
   return (
-    <div className="min-h-screen">
-      <AppNav email={session.user.email} />
-      <main className="container max-w-3xl space-y-10 py-8">
+    <AppShell email={session.user.email}>
+      <main className="mx-auto w-full max-w-3xl px-6 space-y-10 py-8">
         <div>
-          <h1 className="text-xl font-semibold">Settings</h1>
+          <h1 className="text-display text-[28px] font-semibold leading-tight">Settings</h1>
           <p className="text-sm text-muted-foreground">
             Personal API tokens for the MCP server, plus the setup guide for
             connecting Claude to Clerkr OS.
@@ -103,6 +102,6 @@ export default async function SettingsPage() {
           </a>
         </section>
       </main>
-    </div>
+    </AppShell>
   );
 }

@@ -51,7 +51,7 @@ export function ChatMessageList({ messages, citedNotes, ticketNumber, loading, e
         <div
           key={m.id}
           className={cn(
-            "rounded-md border bg-card p-2.5 text-sm",
+            "surface p-2.5 text-sm",
             m.role === "USER" && "ml-6 bg-accent/40",
             m.role === "ASSISTANT" && "mr-6",
           )}
@@ -92,7 +92,7 @@ export function ChatMessageList({ messages, citedNotes, ticketNumber, loading, e
         </div>
       ))}
       {loading && (
-        <div className="mr-6 rounded-md border bg-card p-2.5 text-sm text-muted-foreground">
+        <div className="surface mr-6 p-2.5 text-sm text-muted-foreground">
           Thinking…
         </div>
       )}

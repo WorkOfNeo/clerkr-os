@@ -1,12 +1,13 @@
 import { marked } from "marked";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
 
-import { AppNav } from "@/components/AppNav";
+import { AppShell } from "@/components/AppShell";
 import { AttachmentGrid } from "@/components/ticket/AttachmentGrid";
 import { CommentComposer } from "@/components/ticket/CommentComposer";
-import { TicketControls } from "@/components/ticket/TicketControls";
 import { CategoryBadge, PriorityLabel } from "@/components/ticket/TicketBadges";
+import { TicketControls } from "@/components/ticket/TicketControls";
 import { db } from "@/lib/db";
 import { formatShortDate } from "@/lib/format";
 import { TICKET_SOURCES } from "@/lib/ticket-meta";
@@ -27,86 +28,94 @@ export default async function TicketPage({
   ]);
   if (!ticket) notFound();
 
+  const who = (u: { name: string; email: string }) => u.name || u.email;
+
   return (
-    <div className="min-h-screen">
-      <AppNav email={session.user.email} />
-      <main className="container max-w-3xl py-6">
-        <Link href="/tickets" className="text-xs text-muted-foreground hover:underline">
-          ← Tickets
+    <AppShell email={session.user.email}>
+      <main className="mx-auto w-full max-w-3xl px-6 py-8">
+        <Link
+          href="/tickets"
+          className="inline-flex items-center gap-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+          Tickets
         </Link>
 
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold">
-              <span className="mr-2 font-mono text-sm text-muted-foreground">
-                #{ticket.number}
-              </span>
-              {ticket.title}
-            </h1>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <span>Raised {formatShortDate(ticket.createdAt)}</span>
-              <span>
-                by {ticket.reportedBy ?? (ticket.author.name || ticket.author.email)}
-                {ticket.source !== "MANUAL" && ` · ${TICKET_SOURCES[ticket.source]}`}
-              </span>
-              {ticket.resolvedAt && <span>closed {formatShortDate(ticket.resolvedAt)}</span>}
-              <PriorityLabel priority={ticket.priority} />
-              <CategoryBadge category={ticket.category} />
-            </div>
+        <header className="mt-3">
+          <h1 className="text-display text-[26px] font-semibold leading-snug">
+            <span className="mr-2.5 font-mono text-[17px] font-normal text-muted-foreground">
+              #{ticket.number}
+            </span>
+            {ticket.title}
+          </h1>
+
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-muted-foreground">
+            <span>
+              Raised by{" "}
+              <span className="text-foreground">
+                {ticket.reportedBy ?? who(ticket.author)}
+              </span>{" "}
+              on {formatShortDate(ticket.createdAt)}
+            </span>
+            {ticket.source !== "MANUAL" && <span>· {TICKET_SOURCES[ticket.source]}</span>}
+            {ticket.resolvedAt && <span>· closed {formatShortDate(ticket.resolvedAt)}</span>}
+            <PriorityLabel priority={ticket.priority} />
+            <CategoryBadge category={ticket.category} />
           </div>
-        </div>
 
-        <div className="mt-3">
-          <TicketControls
-            ticketId={ticket.id}
-            status={ticket.status}
-            priority={ticket.priority}
-            categoryId={ticket.category?.id ?? null}
-            categories={categories}
-          />
-        </div>
+          <div className="mt-3.5">
+            <TicketControls
+              ticketId={ticket.id}
+              status={ticket.status}
+              priority={ticket.priority}
+              categoryId={ticket.category?.id ?? null}
+              categories={categories}
+            />
+          </div>
+        </header>
 
-        <section className="mt-4 rounded-lg border bg-card p-4">
+        <section className="surface mt-5 p-5">
           {ticket.body ? (
             <div
-              className="prose prose-sm prose-invert max-w-none"
+              className="md"
               dangerouslySetInnerHTML={{ __html: marked.parse(ticket.body) as string }}
             />
           ) : (
-            <p className="text-sm text-muted-foreground">No detail given.</p>
+            <p className="text-[14px] text-muted-foreground">No detail given.</p>
           )}
           <AttachmentGrid attachments={ticket.attachments} />
         </section>
 
-        <h2 className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {ticket.comments.length === 0
-            ? "No comments yet"
-            : `${ticket.comments.length} ${ticket.comments.length === 1 ? "comment" : "comments"}`}
-        </h2>
-
         {ticket.comments.length > 0 && (
-          <ul className="mb-4 space-y-2">
+          <ol className="mt-6 space-y-3">
             {ticket.comments.map((c) => (
-              <li key={c.id} className="rounded-lg border bg-card p-3">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {c.author.name || c.author.email}
+              <li key={c.id} className="surface p-4">
+                <div className="flex flex-wrap items-center gap-2 text-[13px]">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold uppercase text-muted-foreground">
+                    {who(c.author).slice(0, 1)}
                   </span>
-                  <span>{formatShortDate(c.createdAt)}</span>
-                  {c.source !== "MANUAL" && <span>· {TICKET_SOURCES[c.source]}</span>}
+                  <span className="font-medium">{who(c.author)}</span>
+                  <span className="text-muted-foreground">
+                    {formatShortDate(c.createdAt)}
+                  </span>
+                  {c.source !== "MANUAL" && (
+                    <span className="text-muted-foreground">· {TICKET_SOURCES[c.source]}</span>
+                  )}
                 </div>
                 <div
-                  className="prose prose-sm prose-invert mt-1.5 max-w-none"
+                  className="md mt-2"
                   dangerouslySetInnerHTML={{ __html: marked.parse(c.body) as string }}
                 />
                 <AttachmentGrid attachments={c.attachments} />
               </li>
             ))}
-          </ul>
+          </ol>
         )}
 
-        <CommentComposer ticketId={ticket.id} status={ticket.status} />
+        <div className="mt-6">
+          <CommentComposer ticketId={ticket.id} status={ticket.status} />
+        </div>
       </main>
-    </div>
+    </AppShell>
   );
 }

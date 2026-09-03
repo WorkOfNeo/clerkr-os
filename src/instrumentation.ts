@@ -9,6 +9,20 @@ const FIRST_RUN_DELAY_MS = 30_000;
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
+  // Shout if the document volume isn't actually there. Getting this wrong loses
+  // files silently, so it's checked once at boot rather than discovered later.
+  try {
+    const { checkStorageReady } = await import("@/lib/documents/storage");
+    const status = await checkStorageReady();
+    if (!status.ok) {
+      console.error(`[documents] STORAGE MISCONFIGURED — ${status.problem}`);
+    } else if (status.backend === "VOLUME") {
+      console.log("[documents] storing files on the mounted volume");
+    }
+  } catch (err) {
+    console.warn("[documents] storage check failed:", err);
+  }
+
   const g = globalThis as typeof globalThis & {
     __embedSweepTimer?: ReturnType<typeof setInterval>;
   };

@@ -1,8 +1,9 @@
 import Link from "next/link";
 
-import { AppNav } from "@/components/AppNav";
+import { AppShell } from "@/components/AppShell";
 import {
   DEFAULT_CHAT_PROMPT,
+  DEFAULT_INTAKE_PROMPT,
   DEFAULT_MEETING_PROMPT,
   DEFAULT_TRIAGE_PROMPT,
   PROMPT_KEYS,
@@ -23,11 +24,11 @@ export default async function PromptsSettingsPage() {
   const meetingValue = byKey.get(PROMPT_KEYS.meeting) ?? DEFAULT_MEETING_PROMPT;
   const chatValue = byKey.get(PROMPT_KEYS.chat) ?? DEFAULT_CHAT_PROMPT;
   const triageValue = byKey.get(PROMPT_KEYS.triage) ?? DEFAULT_TRIAGE_PROMPT;
+  const intakeValue = byKey.get(PROMPT_KEYS.intake) ?? DEFAULT_INTAKE_PROMPT;
 
   return (
-    <div className="min-h-screen">
-      <AppNav email={session.user.email} />
-      <main className="container max-w-3xl space-y-6 py-8">
+    <AppShell email={session.user.email}>
+      <main className="mx-auto w-full max-w-3xl px-6 space-y-6 py-8">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Link href="/settings" className="hover:underline">
             Settings
@@ -36,13 +37,22 @@ export default async function PromptsSettingsPage() {
           <span>AI prompts</span>
         </div>
         <div>
-          <h1 className="text-xl font-semibold">AI prompts</h1>
+          <h1 className="text-display text-[28px] font-semibold leading-tight">AI prompts</h1>
           <p className="text-sm text-muted-foreground">
-            The system prompts the AI reads before firing. Edit them to tune how meetings get
-            structured and how Copilot answers. Blank saves nothing; use “Reset to default” to fall
-            back to the built-in prompt.
+            The system prompts the AI reads before firing. These are{" "}
+            <strong className="font-medium text-foreground">shared by everyone</strong> — this is an
+            internal tool, so tuning a prompt here tunes it for the whole team. Use “Reset to
+            default” to fall back to the built-in prompt.
           </p>
         </div>
+
+        <PromptEditor
+          settingKey={PROMPT_KEYS.intake}
+          title="Intake — what is this?"
+          description="The one that reads a raw paste and decides what it is: a meeting, three bugs, a board card, a note. Governs how the proposal cards on /chat get built, and how hard it pushes back on near-duplicates. {{STATUSES}} is replaced with the live status list."
+          value={intakeValue}
+          isCustom={byKey.has(PROMPT_KEYS.intake)}
+        />
 
         <PromptEditor
           settingKey={PROMPT_KEYS.meeting}
@@ -68,6 +78,6 @@ export default async function PromptsSettingsPage() {
           isCustom={byKey.has(PROMPT_KEYS.triage)}
         />
       </main>
-    </div>
+    </AppShell>
   );
 }

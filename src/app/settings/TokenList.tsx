@@ -49,7 +49,7 @@ export function TokenList({ tokens }: { tokens: Token[] }) {
 function TokenRow({ token }: { token: Token }) {
   const [pending, setPending] = useState(false);
   return (
-    <tr className="border-t border-border">
+    <tr className="border-t border-hairline">
       <td className="px-4 py-2 font-medium">{token.name}</td>
       <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
         {token.tokenPrefix}…

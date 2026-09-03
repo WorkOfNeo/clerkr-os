@@ -67,7 +67,15 @@ const featureFullSelect = {
       meeting: { select: { id: true, slug: true, title: true, meetingDate: true } },
     },
   },
-  roadmapItems: { select: { id: true, slug: true, title: true, lane: true } },
+  kanbanCards: {
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      completedAt: true,
+      column: { select: { name: true, isDone: true } },
+    },
+  },
   linksFrom: {
     select: { id: true, kind: true, to: { select: { id: true, slug: true, title: true } } },
   },
@@ -207,7 +215,7 @@ export const FEATURE_TOOLS: ToolDef[] = [
     name: "delete_feature",
     description:
       "Delete a feature from the library. Meeting signals that pointed at it are kept but " +
-      "unlinked; roadmap items lose their feature reference.",
+      "unlinked; kanban cards lose their feature reference.",
     inputSchema: {
       type: "object",
       properties: { id: { type: "string" } },
@@ -218,7 +226,7 @@ export const FEATURE_TOOLS: ToolDef[] = [
       // Nullable FKs don't cascade — detach dependents first.
       await db.$transaction([
         db.featureSignal.updateMany({ where: { featureId: id }, data: { featureId: null } }),
-        db.roadmapItem.updateMany({ where: { featureId: id }, data: { featureId: null } }),
+        db.kanbanCard.updateMany({ where: { featureId: id }, data: { featureId: null } }),
         db.feature.delete({ where: { id } }),
       ]);
       return { ok: true, id };
@@ -229,7 +237,7 @@ export const FEATURE_TOOLS: ToolDef[] = [
     name: "get_feature",
     description:
       "Fetch one feature by id or slug, including its meeting signals (provenance — which " +
-      "meetings asked for it), roadmap items, and knowledge-graph links.",
+      "meetings asked for it), kanban cards, and knowledge-graph links.",
     inputSchema: {
       type: "object",
       properties: { id: { type: "string", description: "Feature id (uuid) or slug." } },

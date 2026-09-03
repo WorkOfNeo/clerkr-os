@@ -1,8 +1,9 @@
 import type { Prisma, TicketSource } from "@prisma/client";
 
 import { embedTicket } from "@/lib/ai/embed-entities";
+import { attachImages, attachmentSelect } from "@/lib/attachments";
 import { db } from "@/lib/db";
-import { decodeImageAttachments, type ImageAttachmentInput } from "@/lib/images/decode-data-url";
+import type { ImageAttachmentInput } from "@/lib/images/decode-data-url";
 import { slugify, uniqueSlug } from "@/lib/slug";
 
 // The single write path for tickets. Server actions and MCP tools both funnel
@@ -46,7 +47,7 @@ export async function createTicket(input: CreateTicketInput) {
     },
   });
 
-  await attachImages(input.attachments, { ticketId: ticket.id, uploadedById: input.authorId });
+  await attachImages(input.attachments, { kind: "ticket", id: ticket.id }, input.authorId);
   await tryEmbedTicket(ticket.id, ticket.title, ticket.body);
   return ticket;
 }
@@ -81,46 +82,11 @@ export async function addComment(input: AddCommentInput) {
     },
   });
 
-  await attachImages(input.attachments, {
-    commentId: comment.id,
-    uploadedById: input.authorId,
-  });
+  await attachImages(input.attachments, { kind: "comment", id: comment.id }, input.authorId);
 
   // Touch the ticket so the list sorts by real activity.
   await db.ticket.update({ where: { id: input.ticketId }, data: { updatedAt: new Date() } });
   return comment;
-}
-
-/**
- * Persist decoded images. Best-effort by design: a screenshot that fails to
- * decode must not lose the bug report it was attached to — the text is the
- * part you can't reconstruct.
- */
-export async function attachImages(
-  attachments: ImageAttachmentInput[] | undefined,
-  owner: { ticketId?: string; commentId?: string; uploadedById?: string },
-): Promise<number> {
-  if (!attachments?.length) return 0;
-  try {
-    const decoded = decodeImageAttachments(attachments);
-    await db.ticketAttachment.createMany({
-      data: decoded.map((d) => ({
-        ticketId: owner.ticketId ?? null,
-        commentId: owner.commentId ?? null,
-        data: d.data,
-        mimeType: d.mimeType,
-        fileName: d.fileName,
-        byteSize: d.byteSize,
-        width: d.width,
-        height: d.height,
-        uploadedById: owner.uploadedById ?? null,
-      })),
-    });
-    return decoded.length;
-  } catch (err) {
-    console.warn("[tickets] attachment save failed:", err);
-    return 0;
-  }
 }
 
 /** Resolve a category by slug or label — MCP callers pass whichever they have. */
@@ -158,16 +124,9 @@ export async function resolveTicket(ref: string) {
   return ticket;
 }
 
-// Attachment bytes are deliberately excluded — a list query must never pull
-// megabytes of screenshots out of Postgres. The id is enough to build the URL.
-export const attachmentSelect = {
-  id: true,
-  fileName: true,
-  mimeType: true,
-  byteSize: true,
-  width: true,
-  height: true,
-} satisfies Prisma.TicketAttachmentSelect;
+// `attachmentSelect` lives in lib/attachments.ts now that every surface uses
+// it; re-exported here so existing ticket imports keep working.
+export { attachmentSelect };
 
 export const ticketListSelect = {
   id: true,

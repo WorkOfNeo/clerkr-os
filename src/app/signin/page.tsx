@@ -7,23 +7,43 @@ import { SignInForm } from "./signin-form";
 
 export default function SignInPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="flex flex-col items-start gap-3">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+      {/* A single soft wash behind the card — enough to stop the page reading as
+          a blank sheet, subtle enough not to compete with the form. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10"
+        style={{
+          background:
+            "radial-gradient(60rem 40rem at 50% -10%, hsl(var(--primary) / 0.07), transparent 70%)",
+        }}
+      />
+
+      <div className="w-full max-w-[22rem] animate-slide-up">
+        <div className="mb-7 flex flex-col items-center gap-3 text-center">
           <ClerkrLogo className="h-7 w-auto" />
           <div>
-            <h1 className="text-2xl font-semibold">Sign in</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Internal Clerkr idea board. Allowlisted emails only.
+            <h1 className="text-display text-[26px] font-semibold leading-tight">
+              Sign in to Clerkr OS
+            </h1>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Internal tool. Allowlisted emails only.
             </p>
           </div>
         </div>
-        <Suspense fallback={null}>
-          <SignInForm />
-        </Suspense>
-        <p className="text-center text-sm text-muted-foreground">
+
+        <div className="surface p-6 shadow-lg">
+          <Suspense fallback={null}>
+            <SignInForm />
+          </Suspense>
+        </div>
+
+        <p className="mt-5 text-center text-[13px] text-muted-foreground">
           New here?{" "}
-          <Link href="/signup" className="font-medium text-foreground underline">
+          <Link
+            href="/signup"
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
             Create an account
           </Link>
         </p>

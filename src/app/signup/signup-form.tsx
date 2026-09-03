@@ -24,14 +24,14 @@ export function SignUpForm() {
       email: email.trim().toLowerCase(),
       password,
       name: name.trim() || email.split("@")[0],
-      callbackURL: "/grid",
+      callbackURL: "/tickets",
     });
     setPending(false);
     if (result.error) {
       setError(result.error.message ?? "Sign-up failed.");
       return;
     }
-    router.push("/grid");
+    router.push("/tickets");
     router.refresh();
   }
 

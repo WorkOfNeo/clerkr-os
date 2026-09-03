@@ -2,58 +2,256 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Tokens ────────────────────────────────────────────────────────────────
+ * Light theme, committed to. Backgrounds are warm off-white rather than pure
+ * #fff so raised surfaces have something to sit on; borders are hairlines, not
+ * lines, because weight is carried by elevation instead.
+ * `--hairline` is deliberately separate from `--border`: chrome and dividers
+ * want a lighter rule than inputs do. */
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 4%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 4%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 4%;
-    --primary: 240 6% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 5% 96%;
-    --secondary-foreground: 240 6% 10%;
-    --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 46%;
-    --accent: 240 5% 96%;
-    --accent-foreground: 240 6% 10%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 6% 90%;
-    --input: 240 6% 90%;
-    --ring: 240 6% 10%;
-    --radius: 0.5rem;
-  }
+    --background: 240 20% 99%;      /* #FBFBFD */
+    --foreground: 240 6% 11%;       /* #1D1D1F */
 
-  .dark {
-    --background: 240 10% 4%;
-    --foreground: 0 0% 98%;
-    --card: 240 6% 8%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 6% 8%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 6% 10%;
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 4% 16%;
-    --muted-foreground: 240 5% 65%;
-    --accent: 240 4% 16%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 4% 16%;
-    --input: 240 4% 16%;
-    --ring: 240 5% 84%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 6% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 6% 11%;
+
+    --primary: 211 100% 45%;        /* #0071E3 — Apple system blue */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 240 12% 96%;
+    --secondary-foreground: 240 6% 11%;
+
+    --muted: 240 12% 96%;
+    --muted-foreground: 240 3% 45%; /* #6E6E73 */
+
+    --accent: 211 100% 96%;
+    --accent-foreground: 211 100% 38%;
+
+    --destructive: 3 82% 52%;       /* #E5484D */
+    --destructive-foreground: 0 0% 100%;
+    --success: 145 63% 34%;
+    --success-foreground: 0 0% 100%;
+    --warning: 32 95% 44%;
+    --warning-foreground: 0 0% 100%;
+
+    /* The sidebar is a heavier structural layer than the content it sits
+     * beside — Apple's rule that material weight encodes hierarchy. Tinted
+     * rather than white, so the content area reads as the raised surface. */
+    --sidebar: 240 14% 96.5%;
+    --sidebar-item: 240 6% 11%;
+
+    --border: 240 8% 90%;
+    --hairline: 240 8% 92%;
+    --input: 240 8% 88%;
+    --ring: 211 100% 45%;
+    --radius: 14px;
   }
 
   * {
     @apply border-border;
   }
 
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Large text gets tightened; small text gets left alone. Optical, not linear. */
+  h1, h2, h3 {
+    letter-spacing: -0.021em;
+  }
+  .text-display {
+    letter-spacing: -0.032em;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.16);
+  }
+
+  /* Focus: a soft ring, never the default outline, and only for keyboards. */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3.5px hsl(var(--ring) / 0.28);
+    border-radius: var(--radius);
+  }
+
+  /* Sidebar width is a CSS variable, not React state, so the collapsed
+   * preference can be applied by a blocking script before first paint — no
+   * hydration mismatch and no flash of the wrong width. */
+  :root {
+    --sidebar-w: 248px;
+  }
+  :root[data-sidebar="collapsed"] {
+    --sidebar-w: 64px;
+  }
+
+  /* Thin scrollbars so panes don't get a heavy grey gutter. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--foreground) / 0.16) transparent;
+  }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--foreground) / 0.16);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-thumb:hover { background-color: hsl(var(--foreground) / 0.26); }
+}
+
+/* ─── Materials ─────────────────────────────────────────────────────────────
+ * Translucency is what makes chrome read as a *layer* rather than a bar. The
+ * saturate() is the part people miss — it's what stops blurred colour going
+ * grey underneath. */
+
+@layer components {
+  .material {
+    background-color: hsl(var(--card) / 0.72);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+
+  .material-thick {
+    background-color: hsl(var(--card) / 0.86);
+    backdrop-filter: saturate(180%) blur(30px);
+    -webkit-backdrop-filter: saturate(180%) blur(30px);
+  }
+
+  /* Raised surface: hairline + layered shadow, never a 1px grey box. */
+  .surface {
+    @apply rounded-lg bg-card shadow-sm;
+    box-shadow:
+      0 0 0 1px hsl(var(--hairline)),
+      0 1px 3px rgb(0 0 0 / 0.04),
+      0 1px 2px -1px rgb(0 0 0 / 0.03);
+  }
+
+  .surface-interactive {
+    @apply surface transition-all duration-200 ease-apple;
+  }
+  .surface-interactive:hover {
+    box-shadow:
+      0 0 0 1px hsl(var(--foreground) / 0.1),
+      0 4px 14px -4px rgb(0 0 0 / 0.1),
+      0 2px 5px -2px rgb(0 0 0 / 0.05);
+    transform: translateY(-1px);
+  }
+  .surface-interactive:active {
+    transform: translateY(0) scale(0.995);
+    transition-duration: 90ms;
+  }
+
+  /* Press feedback for anything tappable. iOS-ish: shrink, don't flash. */
+  .pressable {
+    @apply transition-transform duration-150 ease-apple;
+  }
+  .pressable:active {
+    transform: scale(0.96);
+  }
+
+  /* Where content scrolls under floating chrome, fade it out rather than
+   * cutting it with a 1px rule — a hard divider reads as a seam, a fade reads
+   * as depth. */
+  .scroll-edge-top {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, black 14px);
+    mask-image: linear-gradient(to bottom, transparent, black 14px);
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-muted;
+  }
+  .skeleton::after {
+    @apply absolute inset-0 animate-shimmer;
+    content: "";
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      hsl(0 0% 100% / 0.65),
+      transparent
+    );
+  }
+}
+
+/* ─── Markdown ──────────────────────────────────────────────────────────────
+ * Hand-rolled rather than @tailwindcss/typography, matching the decision made
+ * for .prose-tiptap below — we use a dozen tags, not the whole plugin.
+ * NOTE: `prose`/`prose-invert` classes do nothing in this app. Use `.md`. */
+
+.md {
+  @apply text-[15px] leading-[1.65] text-foreground;
+}
+.md > *:first-child { margin-top: 0; }
+.md > *:last-child { margin-bottom: 0; }
+.md p { margin: 0.75em 0; }
+.md h1 { @apply text-xl font-semibold; margin: 1.2em 0 0.5em; letter-spacing: -0.021em; }
+.md h2 { @apply text-lg font-semibold; margin: 1.1em 0 0.45em; letter-spacing: -0.018em; }
+.md h3 { @apply text-base font-semibold; margin: 1em 0 0.4em; }
+.md ul, .md ol { padding-left: 1.4em; margin: 0.75em 0; }
+.md ul { list-style: disc; }
+.md ol { list-style: decimal; }
+.md li { margin: 0.25em 0; }
+.md li::marker { color: hsl(var(--muted-foreground)); }
+.md a { @apply font-medium text-primary underline decoration-primary/30 underline-offset-2; }
+.md a:hover { @apply decoration-primary/70; }
+.md strong { @apply font-semibold; }
+.md blockquote {
+  @apply border-l-2 border-border pl-4 text-muted-foreground;
+  margin: 0.9em 0;
+}
+.md code {
+  @apply rounded-xs bg-muted px-1.5 py-0.5 font-mono text-[0.86em];
+}
+.md pre {
+  @apply overflow-x-auto rounded-md bg-muted p-3.5 font-mono text-[13px] leading-relaxed;
+  margin: 0.9em 0;
+}
+.md pre code { @apply bg-transparent p-0 text-[inherit]; }
+.md hr { @apply my-5 border-hairline; }
+.md table { @apply w-full text-left text-sm; margin: 0.9em 0; }
+.md th { @apply border-b border-border pb-1.5 font-semibold; }
+.md td { @apply border-b border-hairline py-1.5; }
+.md img { @apply my-2 rounded-md; max-width: 100%; }
+
+/* Anyone who has asked the OS to calm down gets a calm interface. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .surface-interactive:hover,
+  .pressable:active {
+    transform: none;
+  }
+}
+
+/* Anyone who has asked for less transparency gets solid surfaces instead of
+ * blur — legibility beats the effect every time. */
+@media (prefers-reduced-transparency: reduce) {
+  .material,
+  .material-thick {
+    background-color: hsl(var(--card));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .surface {
+    box-shadow: 0 0 0 1px hsl(var(--foreground) / 0.28);
   }
 }
 

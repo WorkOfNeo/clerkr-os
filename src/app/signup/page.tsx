@@ -6,21 +6,39 @@ import { SignUpForm } from "./signup-form";
 
 export default function SignUpPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="flex flex-col items-start gap-3">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10"
+        style={{
+          background:
+            "radial-gradient(60rem 40rem at 50% -10%, hsl(var(--primary) / 0.07), transparent 70%)",
+        }}
+      />
+
+      <div className="w-full max-w-[22rem] animate-slide-up">
+        <div className="mb-7 flex flex-col items-center gap-3 text-center">
           <ClerkrLogo className="h-7 w-auto" />
           <div>
-            <h1 className="text-2xl font-semibold">Create account</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Only emails on the allowlist can sign up.
+            <h1 className="text-display text-[26px] font-semibold leading-tight">
+              Create your account
+            </h1>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Only allowlisted emails can sign up.
             </p>
           </div>
         </div>
-        <SignUpForm />
-        <p className="text-center text-sm text-muted-foreground">
+
+        <div className="surface p-6 shadow-lg">
+          <SignUpForm />
+        </div>
+
+        <p className="mt-5 text-center text-[13px] text-muted-foreground">
           Already have an account?{" "}
-          <Link href="/signin" className="font-medium text-foreground underline">
+          <Link
+            href="/signin"
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
             Sign in
           </Link>
         </p>

@@ -16,31 +16,31 @@ export const TICKET_STATUSES: Record<TicketStatus, StatusMeta> = {
   OPEN: {
     label: "Open",
     hint: "Raised, nobody's on it yet.",
-    className: "border-sky-500/40 bg-sky-500/10 text-sky-300",
+    className: "bg-sky-50 text-sky-700 ring-sky-600/20",
     resolved: false,
   },
   IN_PROGRESS: {
     label: "In progress",
     hint: "Being worked on right now.",
-    className: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+    className: "bg-amber-50 text-amber-700 ring-amber-600/20",
     resolved: false,
   },
   FIXED: {
     label: "Fixed",
     hint: "Done in code, not released yet.",
-    className: "border-violet-500/40 bg-violet-500/10 text-violet-300",
+    className: "bg-violet-50 text-violet-700 ring-violet-600/20",
     resolved: true,
   },
   SHIPPED: {
     label: "Shipped",
     hint: "Out and live.",
-    className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
+    className: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
     resolved: true,
   },
   WONT_FIX: {
     label: "Won't fix",
     hint: "Closed deliberately without doing it.",
-    className: "border-slate-500/40 bg-slate-500/10 text-slate-300",
+    className: "bg-slate-100 text-slate-600 ring-slate-500/20",
     resolved: true,
   },
 };
@@ -58,8 +58,8 @@ export const OPEN_STATUSES = TICKET_STATUS_ORDER.filter((s) => !TICKET_STATUSES[
 export const TICKET_PRIORITIES: Record<TicketPriority, { label: string; className: string }> = {
   LOW: { label: "Low", className: "text-muted-foreground" },
   MEDIUM: { label: "Medium", className: "text-muted-foreground" },
-  HIGH: { label: "High", className: "text-amber-400" },
-  URGENT: { label: "Urgent", className: "text-rose-400" },
+  HIGH: { label: "High", className: "text-amber-600" },
+  URGENT: { label: "Urgent", className: "text-rose-600" },
 };
 
 export const TICKET_PRIORITY_ORDER: TicketPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];

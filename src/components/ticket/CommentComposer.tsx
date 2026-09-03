@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { commentOnTicket } from "@/app/tickets/actions";
-import { ImageDropzone, type PendingImage } from "@/components/ticket/ImageDropzone";
+import { ImageDropzone, type PendingImage } from "@/components/attachments/ImageDropzone";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/toast";
 import { TICKET_STATUSES } from "@/lib/ticket-meta";
 
 import type { TicketStatus } from "@prisma/client";
@@ -24,6 +25,7 @@ export function CommentComposer({
   status: TicketStatus;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [body, setBody] = useState("");
   const [images, setImages] = useState<PendingImage[]>([]);
@@ -47,6 +49,10 @@ export function CommentComposer({
         });
         setBody("");
         setImages([]);
+        toast(
+          nextStatus ? `Comment added · marked ${TICKET_STATUSES[nextStatus].label.toLowerCase()}` : "Comment added",
+          { tone: "success" },
+        );
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not save that comment.");
@@ -70,7 +76,7 @@ export function CommentComposer({
           }}
           rows={3}
           placeholder="Add a comment — paste a screenshot with ⌘V / Ctrl+V"
-          className="resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
+          className="resize-none border-0 bg-transparent shadow-none ring-0 focus:ring-0"
         />
       </ImageDropzone>
 

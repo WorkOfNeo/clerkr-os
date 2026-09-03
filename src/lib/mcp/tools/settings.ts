@@ -4,6 +4,7 @@ import {
   DEFAULT_CHAT_PROMPT,
   DEFAULT_MEETING_PROMPT,
   DEFAULT_TRIAGE_PROMPT,
+  DEFAULT_INTAKE_PROMPT,
   PROMPT_KEYS,
 } from "@/lib/ai/prompts";
 import { db } from "@/lib/db";
@@ -29,6 +30,11 @@ const KEY_INFO = [
     key: PROMPT_KEYS.triage,
     label: "Rough note → ticket",
     default: DEFAULT_TRIAGE_PROMPT,
+  },
+  {
+    key: PROMPT_KEYS.intake,
+    label: "Intake — classify a raw paste",
+    default: DEFAULT_INTAKE_PROMPT,
   },
 ] as const;
 
