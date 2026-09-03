@@ -37,6 +37,8 @@ model User {
   tickets        Ticket[]
   ticketComments TicketComment[]
   documents      Document[]
+  notifications  Notification[]
+  pushSubs       PushSubscription[]
 
   @@map("user")
 }
@@ -807,4 +809,72 @@ model Document {
   @@index([checksum])
   @@index([uploadedById])
   @@map("document")
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+// Things worth knowing without opening the app: a card due today, a ticket
+// Claude filed while you were away, proposals still waiting to be confirmed.
+//
+// The sweep that generates these runs every few minutes, so the whole design
+// rests on `dedupeKey`: a stable string per real-world fact
+// ("card-due:<id>:2026-09-04"). It is UNIQUE, and the sweep uses
+// createMany({ skipDuplicates: true }) — so re-running is a no-op and nobody
+// gets told the same thing twice. Get that wrong and the bell becomes noise
+// nobody reads, which is worse than no bell.
+
+enum NotificationKind {
+  CARD_DUE
+  CARD_OVERDUE
+  TICKET_FILED
+  PROPOSALS_WAITING
+  TICKET_STALE
+}
+
+model Notification {
+  id String @id @default(uuid())
+
+  // Null means everyone. This is a single-tenant tool — most notifications are
+  // about the workspace, not about one person.
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kind  NotificationKind
+  title String
+  body  String?
+  href  String? // where the notification takes you
+
+  // One row per real-world fact. See the note above — this is what makes a
+  // repeating sweep safe.
+  dedupeKey String @unique
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+  @@map("notification")
+}
+
+// A browser's push endpoint. One row per installed device — the same person
+// with the app on a phone and a laptop has two.
+model PushSubscription {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // The endpoint IS the identity of a subscription, and the browser hands back
+  // the same one on re-subscribe, so upserting on it avoids duplicates.
+  endpoint String @unique
+  p256dh   String
+  auth     String
+
+  userAgent  String?
+  // Bumped on a successful send; a 404/410 from the push service means the
+  // subscription is dead and the row is deleted.
+  lastSentAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@map("push_subscription")
 }

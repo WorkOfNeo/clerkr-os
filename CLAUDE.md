@@ -209,6 +209,38 @@ the `appleWebApp` metadata and apple-touch-icon that iOS actually reads.
   needs one, or it sits under the notch or the home indicator.
 - Icons are generated from `public/icons/icon.svg`. Regenerate the PNGs with
   `qlmanage -t -s 512` + `sips`, or any rasteriser — there is no build step.
+- `public/sw.js` is a **push-only** service worker with **no `fetch` listener**,
+  and it must stay that way. A worker that intercepts fetches and caches RSC
+  payloads breaks the app in ways that persist in the user's browser long after
+  the code is fixed, with no way to clear it remotely.
+- The install guide lives at `/settings/notifications` and detects the device it
+  is being read on. iPadOS reports as Macintosh, so it is told apart by
+  `navigator.maxTouchPoints`.
+
+## Notifications
+
+Two layers: an in-app bell in the sidebar, and optional web push.
+
+**`dedupeKey` is the whole design.** `sweepNotifications` runs every 10 minutes
+from `src/instrumentation.ts`, so a key must be stable for a real-world FACT,
+not for the moment the sweep noticed it — `card-due:<id>:<due-date>`, not a
+timestamp. It is UNIQUE and the sweep uses
+`createMany({ skipDuplicates: true })`, so re-running is free. Overdue cards are
+re-keyed per day and stale tickets per week, so a nag repeats at a human
+interval rather than every pass. Get this wrong and the bell becomes noise
+nobody reads, which is worse than no bell.
+
+What it notices: cards due today, overdue cards, tickets Claude filed via MCP,
+intake proposals unconfirmed after 20h, and tickets untouched for 10+ days.
+
+**Push is optional**, gated on `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` exactly
+like `OPENAI_API_KEY` — absent, the bell still works and the UI says so rather
+than breaking. A 404/410 from a push service means the subscription is dead and
+the row is deleted rather than retried forever.
+
+**iOS only delivers push to an installed PWA**, never to a Safari tab — which is
+why the install guide sits above the toggle on the same page, and why
+`PushToggle` disables itself on an iOS device that isn't running standalone.
 
 ## Layout & design system
 

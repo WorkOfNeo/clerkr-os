@@ -109,11 +109,18 @@ export function MicButton({ voice, disabled }: { voice: VoiceInput; disabled?: b
       aria-label="Dictate"
       title="Dictate (speak, then press stop)"
       className={cn(
-        "pressable flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+        // Solid and larger than the other actions on purpose: dictation is the
+        // primary way notes get in on a phone, and a ghost icon sitting among
+        // other ghost icons is not something you find one-handed. 44px is the
+        // touch target Apple asks for, and it is filled so it reads as the
+        // affordance rather than as decoration.
+        "pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
+        "bg-foreground text-background shadow-sm transition-[opacity,transform]",
+        "sm:h-9 sm:w-9",
         (disabled || busy) && "opacity-40",
       )}
     >
-      <Mic className="h-4 w-4" strokeWidth={1.75} />
+      <Mic className="h-5 w-5 sm:h-4 sm:w-4" strokeWidth={2} />
     </button>
   );
 }

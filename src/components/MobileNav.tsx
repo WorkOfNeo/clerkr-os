@@ -29,13 +29,15 @@ export function MobileNav({ openTickets }: { openTickets: number }) {
 
   return (
     <>
-      <header className="material sticky top-0 z-40 flex h-14 items-center gap-2 px-4 py-2.5 md:hidden">
+      <header className="material pt-safe sticky top-0 z-40 flex h-14 items-center gap-2 px-3 md:hidden">
         <button
           onClick={() => setOpen(true)}
           aria-label="Open navigation"
-          className="pressable -ml-1.5 rounded-md p-1.5 text-muted-foreground hover:text-foreground"
+          // 44px target — the menu is the only way out of a page on a phone,
+          // so it gets a full touch target rather than a padded glyph.
+          className="pressable flex h-11 w-11 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-black/5"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-6 w-6" strokeWidth={2} />
         </button>
         <Link href="/chat" className="pressable flex items-center gap-2 text-[14px] font-semibold">
           <ClerkrLogo className="h-4 w-auto" />
@@ -44,16 +46,16 @@ export function MobileNav({ openTickets }: { openTickets: number }) {
         <button
           onClick={() => setPaletteOpen(true)}
           aria-label="Search"
-          className="pressable ml-auto rounded-md p-1.5 text-muted-foreground hover:text-foreground"
+          className="pressable ml-auto flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground"
         >
-          <Search className="h-4 w-4" />
+          <Search className="h-5 w-5" strokeWidth={2} />
         </button>
       </header>
 
       <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
         <DialogPrimitive.Portal>
           <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-foreground/20 backdrop-blur-[3px] data-[state=closed]:animate-overlay-out data-[state=open]:animate-overlay-in md:hidden" />
-          <DialogPrimitive.Content className="fixed inset-y-0 left-0 z-50 flex w-[264px] flex-col gap-1 bg-sidebar px-3 py-3 shadow-xl outline-none data-[state=closed]:animate-drawer-out data-[state=open]:animate-drawer-in md:hidden">
+          <DialogPrimitive.Content className="pt-safe fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col gap-1 bg-sidebar px-3 py-3 shadow-xl outline-none data-[state=closed]:animate-drawer-out data-[state=open]:animate-drawer-in md:hidden">
             <DialogPrimitive.Title className="sr-only">Navigation</DialogPrimitive.Title>
             <DialogPrimitive.Description className="sr-only">
               Jump to a section of Clerkr OS
@@ -85,13 +87,13 @@ export function MobileNav({ openTickets }: { openTickets: number }) {
                         key={item.href}
                         href={item.href}
                         className={cn(
-                          "flex h-9 items-center gap-2.5 rounded-md px-2 text-[13.5px] font-medium transition-colors",
+                          "flex h-11 items-center gap-3 rounded-lg px-2.5 text-[14.5px] font-medium transition-colors",
                           active
                             ? "bg-card text-foreground shadow-xs ring-1 ring-hairline"
                             : "text-muted-foreground",
                         )}
                       >
-                        <item.icon className="h-4 w-4 shrink-0" strokeWidth={2} />
+                        <item.icon className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
                         <span>{item.label}</span>
                         {item.href === "/tickets" && openTickets > 0 && (
                           <span className="ml-auto rounded-full bg-black/[0.06] px-1.5 py-0.5 text-[11px] tabular-nums">
@@ -107,7 +109,7 @@ export function MobileNav({ openTickets }: { openTickets: number }) {
 
             <Link
               href="/settings"
-              className="flex h-9 items-center gap-2.5 rounded-md px-2 text-[13.5px] font-medium text-muted-foreground"
+              className="pb-safe flex h-11 items-center gap-3 rounded-lg px-2.5 text-[14.5px] font-medium text-muted-foreground"
             >
               <Settings className="h-4 w-4" />
               Settings

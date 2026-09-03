@@ -41,6 +41,39 @@ export async function register(): Promise<void> {
     }
   };
 
-  g.__embedSweepTimer = setInterval(run, SWEEP_INTERVAL_MS);
+  // Notifications ride the same timer. Both are best-effort background work
+  // and neither should ever be able to take the other down, so they are
+  // separately wrapped.
+  const notify = async () => {
+    try {
+      const { sweepNotifications, pruneNotifications } = await import(
+        "@/lib/notifications/sweep"
+      );
+      const result = await sweepNotifications();
+      if (result.created > 0) {
+        console.log("[notifications]", JSON.stringify(result));
+        // Only the rows that were actually new get pushed — skipDuplicates
+        // means an existing fact produced no row and must not re-ping a phone.
+        const { db } = await import("@/lib/db");
+        const fresh = await db.notification.findMany({
+          where: { readAt: null },
+          orderBy: { createdAt: "desc" },
+          take: result.created,
+          select: { id: true },
+        });
+        const { pushUnsent } = await import("@/lib/notifications/push");
+        await pushUnsent(fresh.map((n) => n.id));
+      }
+      await pruneNotifications();
+    } catch (err) {
+      console.warn("[notifications] sweep failed:", err);
+    }
+  };
+
+  g.__embedSweepTimer = setInterval(() => {
+    void run();
+    void notify();
+  }, SWEEP_INTERVAL_MS);
   setTimeout(run, FIRST_RUN_DELAY_MS);
+  setTimeout(notify, FIRST_RUN_DELAY_MS + 5_000);
 }

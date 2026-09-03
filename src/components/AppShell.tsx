@@ -26,13 +26,18 @@ export async function AppShell({
 }) {
   // The one live number in the chrome. Counting here rather than in each page
   // keeps the badge honest wherever you happen to be.
-  const openTickets = await db.ticket
-    .count({ where: { status: { in: OPEN_STATUSES } } })
-    .catch(() => 0);
+  const [openTickets, unreadNotifications] = await Promise.all([
+    db.ticket.count({ where: { status: { in: OPEN_STATUSES } } }).catch(() => 0),
+    db.notification.count({ where: { readAt: null } }).catch(() => 0),
+  ]);
 
   return (
     <div className="flex min-h-screen bg-sidebar">
-      <SidebarNav email={email} openTickets={openTickets} />
+      <SidebarNav
+        email={email}
+        openTickets={openTickets}
+        unreadNotifications={unreadNotifications}
+      />
 
       <div
         className={cn(

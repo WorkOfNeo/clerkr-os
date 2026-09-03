@@ -284,7 +284,7 @@ export function IntakeConversation({
       </div>
 
       <div className="border-t border-hairline bg-background/80 pb-safe backdrop-blur">
-        <div className="mx-auto w-full max-w-3xl space-y-2 px-4 py-3">
+        <div className="mx-auto w-full max-w-3xl space-y-2 px-3 py-3 sm:px-4">
           {(error ?? voice.error) && (
             <div className="rounded-md bg-destructive/10 px-3 py-2 text-[12.5px] text-destructive ring-1 ring-inset ring-destructive/25">
               {error ?? voice.error}
@@ -322,18 +322,18 @@ export function IntakeConversation({
                   submit();
                 }
               }}
-              rows={3}
+              rows={4}
               // Taller on a phone: this is the surface the PWA exists for, and a
               // three-line box makes pasting notes feel like a scratch pad
               // rather than a search field.
-              onFocus={(e) => e.currentTarget.setAttribute("rows", "6")}
-              onBlur={(e) => e.currentTarget.setAttribute("rows", "3")}
+              onFocus={(e) => e.currentTarget.setAttribute("rows", "8")}
+              onBlur={(e) => e.currentTarget.setAttribute("rows", "4")}
               placeholder={
                 mode === "file"
                   ? "Paste your notes… (⌘↵ to send)"
                   : "Ask about tickets, features, meetings or the wiki… (⌘↵ to send)"
               }
-              className="max-h-[45vh] min-h-[64px] w-full resize-none bg-transparent px-3 py-2.5 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/60 sm:min-h-0 sm:text-[13.5px]"
+              className="max-h-[45vh] min-h-[104px] w-full resize-none bg-transparent px-3.5 py-3 text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/60 sm:min-h-[72px] sm:px-3 sm:py-2.5 sm:text-[13.5px]"
             />
           </ImageDropzone>
           )}

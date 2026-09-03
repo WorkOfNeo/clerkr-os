@@ -9,10 +9,19 @@ import { ChevronDown, LogOut, PanelLeft, Search, Settings } from "lucide-react";
 import { ClerkrLogo } from "@/components/ClerkrLogo";
 import { CommandPalette } from "@/components/CommandPalette";
 import { isActive, NAV_SECTIONS } from "@/components/nav-items";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { signOut } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
-export function SidebarNav({ email, openTickets }: { email: string; openTickets: number }) {
+export function SidebarNav({
+  email,
+  openTickets,
+  unreadNotifications,
+}: {
+  email: string;
+  openTickets: number;
+  unreadNotifications: number;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -139,6 +148,7 @@ export function SidebarNav({ email, openTickets }: { email: string; openTickets:
         </nav>
 
         <div className="flex flex-col gap-0.5 pt-2">
+          <NotificationBell initialUnread={unreadNotifications} collapsed={collapsed} />
           <Link
             href="/settings"
             title={collapsed ? "Settings" : undefined}
