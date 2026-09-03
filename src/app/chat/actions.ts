@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { runChatTurn } from "@/lib/ai/chat";
+import { detectIntent } from "@/lib/ai/intent";
 import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { db } from "@/lib/db";
+import type { ProposalDTO } from "@/lib/intake/dto";
 import { requireSession } from "@/lib/session";
 
 export interface ChatMessageDTO {
@@ -20,6 +22,10 @@ export interface ChatTurnResponse {
   sessionId: string;
   messages: ChatMessageDTO[];
   citedNotes: { id: string; slug: string; title: string }[];
+  /** Set when the turn was an instruction to file something rather than a
+   *  question — the proposals it produced, for the client to render as cards. */
+  proposals?: ProposalDTO[];
+  proposalMessageId?: string;
   error?: string;
 }
 
@@ -95,6 +101,33 @@ export async function sendChatMessage(input: {
   }
 
   try {
+    // "Add a card for X" and "yeah add it" are instructions, not questions.
+    // Answering them from the read-only Copilot produces "I can't do that",
+    // which is untrue of the app — so route them to intake instead.
+    const intent = await detectIntent({ sessionId, userMessage });
+    if (intent === "create") {
+      const { classifyIntake } = await import("@/lib/ai/intake");
+      const { toDTO } = await import("@/lib/intake/dto");
+
+      await db.chatMessage.create({
+        data: { sessionId, role: "USER", content: userMessage },
+      });
+      const result = await classifyIntake({ sessionId, rawText: userMessage });
+      const rows = await db.intakeProposal.findMany({
+        where: { messageId: result.messageId },
+        orderBy: { order: "asc" },
+      });
+
+      revalidatePath(`/chat/${sessionId}`);
+      return {
+        sessionId,
+        messages: await getSessionMessages(sessionId),
+        citedNotes: [],
+        proposals: rows.map(toDTO),
+        proposalMessageId: result.messageId,
+      };
+    }
+
     const turn = await runChatTurn({ sessionId, userMessage, ticket });
 
     const messages = await getSessionMessages(sessionId);

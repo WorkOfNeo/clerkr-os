@@ -163,6 +163,11 @@ export function IntakeConversation({
           for (const n of res.citedNotes) byId.set(n.id, n);
           return Array.from(byId.values());
         });
+        // Ask mode routes "add a card for X" to intake rather than answering
+        // "I can't" — so a question turn can come back with cards.
+        if (res.proposalMessageId && res.proposals) {
+          setProposals((prev) => ({ ...prev, [res.proposalMessageId!]: res.proposals! }));
+        }
         if (res.error) setError(res.error);
       }
       router.refresh();
@@ -319,23 +324,33 @@ export function IntakeConversation({
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  submit();
-                }
+                // Enter sends, Shift+Enter breaks the line. ⌘/Ctrl+Enter still
+                // sends too, since that reflex is hard to unlearn.
+                if (e.key !== "Enter") return;
+                if (e.shiftKey) return;
+                e.preventDefault();
+                submit();
               }}
-              rows={4}
+              rows={3}
               // Taller on a phone: this is the surface the PWA exists for, and a
               // three-line box makes pasting notes feel like a scratch pad
               // rather than a search field.
-              onFocus={(e) => e.currentTarget.setAttribute("rows", "8")}
-              onBlur={(e) => e.currentTarget.setAttribute("rows", "4")}
+
               placeholder={
                 mode === "file"
-                  ? "Paste your notes… (⌘↵ to send)"
-                  : "Ask about tickets, features, meetings or the wiki… (⌘↵ to send)"
+                  ? "Paste your notes… (↵ to send, ⇧↵ for a new line)"
+                  : "Ask, or tell it to file something… (↵ to send, ⇧↵ for a new line)"
               }
-              className="max-h-[45vh] min-h-[104px] w-full resize-none bg-transparent px-3.5 py-3 text-[16px] leading-relaxed outline-none placeholder:text-muted-foreground/60 sm:min-h-[72px] sm:px-3 sm:py-2.5 sm:text-[13.5px]"
+              className={cn(
+                "w-full resize-none bg-transparent px-3.5 py-3 text-[16px] leading-relaxed outline-none",
+                "placeholder:text-muted-foreground/60 sm:px-3 sm:py-2.5 sm:text-[13.5px]",
+                // Grows when you reach for it and stays grown while you type.
+                // A height transition, not a rows swap, so it eases rather
+                // than jumping a line at a time.
+                "max-h-[45vh] transition-[min-height] duration-300 ease-apple",
+                "min-h-[104px] hover:min-h-[168px] focus:min-h-[240px]",
+                "sm:min-h-[72px] sm:hover:min-h-[120px] sm:focus:min-h-[180px]",
+              )}
             />
           </ImageDropzone>
           )}
