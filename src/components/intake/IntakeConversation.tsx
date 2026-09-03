@@ -4,13 +4,15 @@ import { motion } from "motion/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { ArrowUp, Sparkles } from "lucide-react";
+import { ArrowUp, Sparkles, Undo2, WandSparkles } from "lucide-react";
 
 import { sendChatMessage } from "@/app/chat/actions";
 import { submitIntake } from "@/app/chat/intake-actions";
+import { improvePromptAction } from "@/app/chat/prompt-actions";
 import type { ProposalDTO } from "@/lib/intake/dto";
 import { ImageDropzone, type PendingImage } from "@/components/attachments/ImageDropzone";
 import { ProposalCard } from "@/components/intake/ProposalCard";
+import { MicButton, VoicePanel, useVoiceInput } from "@/components/intake/VoiceInput";
 import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
@@ -55,17 +57,71 @@ export function IntakeConversation({
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const endRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // "Improve my prompt" keeps the draft it replaced so Discard can put it
+  // back. Cleared on send; a fresh improvement overwrites it, so Discard
+  // always restores what was there before the *first* press.
+  const [previousText, setPreviousText] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [improving, startImprove] = useTransition();
+
+  // Dictation. The transcript is appended to whatever is already in the box
+  // rather than replacing it, so a half-typed note can be finished by voice.
+  const voice = useVoiceInput({
+    onTranscript: (spoken) => {
+      setText((prev) => (prev.trim() ? `${prev.replace(/\s+$/, "")}\n${spoken}` : spoken));
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    },
+  });
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, proposals, pending]);
 
+  useEffect(() => {
+    if (!notice) return;
+    const id = window.setTimeout(() => setNotice(null), 3000);
+    return () => window.clearTimeout(id);
+  }, [notice]);
+
   const citedById = new Map(citedNotes.map((n) => [n.id, n]));
+  const busy = pending || improving || voice.active;
+
+  function improve() {
+    const value = text;
+    if (!value.trim() || busy) return;
+    setError(null);
+    startImprove(async () => {
+      const res = await improvePromptAction({ text: value, mode });
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
+      if (res.text.trim() === value.trim()) {
+        setNotice("Already reads well — nothing changed.");
+        return;
+      }
+      // Keep the oldest draft: pressing Improve twice then Discard should land
+      // on what the person actually typed, not on the first rewrite.
+      setPreviousText((prev) => prev ?? value);
+      setText(res.text);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    });
+  }
+
+  function discardImprovement() {
+    if (previousText === null) return;
+    setText(previousText);
+    setPreviousText(null);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
 
   function submit() {
     const value = text.trim();
-    if ((!value && images.length === 0) || pending) return;
+    if ((!value && images.length === 0) || busy) return;
     setError(null);
+    setPreviousText(null);
     setText("");
     const staged = images;
     setImages([]);
@@ -229,9 +285,9 @@ export function IntakeConversation({
 
       <div className="border-t border-hairline bg-background/80 pb-safe backdrop-blur">
         <div className="mx-auto w-full max-w-3xl space-y-2 px-4 py-3">
-          {error && (
+          {(error ?? voice.error) && (
             <div className="rounded-md bg-destructive/10 px-3 py-2 text-[12.5px] text-destructive ring-1 ring-inset ring-destructive/25">
-              {error}
+              {error ?? voice.error}
             </div>
           )}
 
@@ -246,14 +302,18 @@ export function IntakeConversation({
             ]}
           />
 
+          {voice.active ? (
+            <VoicePanel voice={voice} />
+          ) : (
           <ImageDropzone
             images={images}
             onChange={setImages}
-            disabled={pending}
+            disabled={busy}
             max={20}
             hint="or paste screenshots (⌘V / Ctrl+V), or drag a batch in"
           >
             <textarea
+              ref={textareaRef}
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
@@ -276,21 +336,62 @@ export function IntakeConversation({
               className="max-h-[45vh] min-h-[64px] w-full resize-none bg-transparent px-3 py-2.5 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/60 sm:min-h-0 sm:text-[13.5px]"
             />
           </ImageDropzone>
+          )}
 
-          <div className="flex items-center justify-between">
-            <p className="text-[11.5px] text-muted-foreground">
-              {mode === "file"
-                ? "Proposals only — nothing is created until you confirm each card."
-                : "Answers from your meetings, features, board and wiki."}
-            </p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <MicButton voice={voice} disabled={pending || improving} />
+              {previousText !== null ? (
+                <button
+                  type="button"
+                  onClick={discardImprovement}
+                  disabled={busy}
+                  title="Put the original text back"
+                  className={cn(
+                    "pressable flex h-8 items-center gap-1.5 rounded-lg px-2 text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                    busy && "opacity-40",
+                  )}
+                >
+                  <Undo2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Discard
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={improve}
+                  disabled={busy || !text.trim()}
+                  title={
+                    mode === "file"
+                      ? "Tidy the draft so intake files it well"
+                      : "Sharpen the question for the Copilot"
+                  }
+                  className={cn(
+                    "pressable flex h-8 items-center gap-1.5 rounded-lg px-2 text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                    (busy || !text.trim()) && "opacity-40",
+                  )}
+                >
+                  <WandSparkles
+                    className={cn("h-3.5 w-3.5", improving && "animate-pulse")}
+                    strokeWidth={1.75}
+                  />
+                  {improving ? "Improving…" : "Improve"}
+                </button>
+              )}
+              <p className="hidden min-w-0 truncate text-[11.5px] text-muted-foreground sm:block">
+                {notice ??
+                  (mode === "file"
+                    ? "Proposals only — nothing is created until you confirm each card."
+                    : "Answers from your meetings, features, board and wiki.")}
+              </p>
+            </div>
             <button
               type="button"
               onClick={submit}
-              disabled={pending || (!text.trim() && images.length === 0)}
+              disabled={busy || (!text.trim() && images.length === 0)}
               aria-label="Send"
               className={cn(
-                "pressable flex h-9 w-9 items-center justify-center rounded-lg bg-foreground text-background transition-opacity",
-                (pending || (!text.trim() && images.length === 0)) && "opacity-40",
+                "pressable flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background transition-opacity",
+                (busy || (!text.trim() && images.length === 0)) && "opacity-40",
               )}
             >
               <ArrowUp className="h-4 w-4" />

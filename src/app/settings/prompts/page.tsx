@@ -3,8 +3,10 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import {
   DEFAULT_CHAT_PROMPT,
+  DEFAULT_IMPROVE_PROMPT,
   DEFAULT_INTAKE_PROMPT,
   DEFAULT_MEETING_PROMPT,
+  DEFAULT_TRANSCRIBE_CLEANUP_PROMPT,
   DEFAULT_TRIAGE_PROMPT,
   PROMPT_KEYS,
 } from "@/lib/ai/prompts";
@@ -25,6 +27,9 @@ export default async function PromptsSettingsPage() {
   const chatValue = byKey.get(PROMPT_KEYS.chat) ?? DEFAULT_CHAT_PROMPT;
   const triageValue = byKey.get(PROMPT_KEYS.triage) ?? DEFAULT_TRIAGE_PROMPT;
   const intakeValue = byKey.get(PROMPT_KEYS.intake) ?? DEFAULT_INTAKE_PROMPT;
+  const improveValue = byKey.get(PROMPT_KEYS.improve) ?? DEFAULT_IMPROVE_PROMPT;
+  const transcribeValue =
+    byKey.get(PROMPT_KEYS.transcribe) ?? DEFAULT_TRANSCRIBE_CLEANUP_PROMPT;
 
   return (
     <AppShell email={session.user.email}>
@@ -52,6 +57,22 @@ export default async function PromptsSettingsPage() {
           description="The one that reads a raw paste and decides what it is: a meeting, three bugs, a board card, a note. Governs how the proposal cards on /chat get built, and how hard it pushes back on near-duplicates. {{STATUSES}} is replaced with the live status list."
           value={intakeValue}
           isCustom={byKey.has(PROMPT_KEYS.intake)}
+        />
+
+        <PromptEditor
+          settingKey={PROMPT_KEYS.improve}
+          title="Improve my prompt"
+          description="Rewrites a draft in the /chat composer so it lands well on intake or the Copilot. {{MODE}} is replaced with a description of whichever of the two is selected, and the live categories, columns and open tickets are appended."
+          value={improveValue}
+          isCustom={byKey.has(PROMPT_KEYS.improve)}
+        />
+
+        <PromptEditor
+          settingKey={PROMPT_KEYS.transcribe}
+          title="Voice — transcript cleanup"
+          description="The light pass a dictated message gets before it lands in the composer: mis-heard words, punctuation, filler. Deliberately not allowed to summarise or reason."
+          value={transcribeValue}
+          isCustom={byKey.has(PROMPT_KEYS.transcribe)}
         />
 
         <PromptEditor
