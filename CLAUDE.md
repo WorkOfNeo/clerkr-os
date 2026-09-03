@@ -320,6 +320,35 @@ npm run db:seed        # idempotent — seeds the default ticket categories + a 
 
 Schema changes go through `prisma db push` for now (no migration files yet); the `db:migrate` script is wired to `prisma migrate dev` for when we baseline.
 
+**Prisma's CLI reads `.env`, not `.env.local`** — every `prisma`/`psql` command
+needs the env sourced first, or it dies with
+`Environment variable not found: DIRECT_URL`:
+
+```bash
+set -a && . ./.env.local && set +a && npx prisma db push
+```
+
+## Deploying the database
+
+Railway's pre-deploy command is `npm run db:deploy`
+([scripts/deploy-db.sh](scripts/deploy-db.sh)). Do NOT put a bare
+`npx prisma db push` there again — that is what it replaced, and it was wrong
+in three ways:
+
+1. **It raced Postgres.** A deploy that started while the database was still
+   booting died on `FATAL: the database system is starting up` and took the
+   container with it. The script waits (`DB_WAIT_ATTEMPTS`, `DB_WAIT_SECONDS`).
+2. **It dropped the HNSW indexes on every deploy** and never restored them —
+   silently turning every semantic search into a sequential scan. The script
+   re-applies [scripts/sql/hnsw-indexes.sql](scripts/sql/hnsw-indexes.sql)
+   after each push.
+3. **Nothing checked the result.** The script asserts four HNSW indexes exist
+   and fails the deploy if not.
+
+It deliberately does **not** pass `--accept-data-loss`: a deploy must never
+silently drop a column. If the schema needs a destructive change, the deploy
+fails and a human runs it by hand.
+
 **HNSW indexes are dropped by every `prisma db push`.** They aren't expressible
 in the schema (Prisma can't model index opclasses on `Unsupported` columns), so
 push reconciles them away as unknown objects — this is not just a
