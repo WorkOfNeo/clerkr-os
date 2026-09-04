@@ -53,6 +53,7 @@ model User {
 
   cardSubscriptions CardSubscriber[]
   memories          Memory[]
+  pocketConnections PocketConnection[]
 
   @@map("user")
 }
@@ -324,6 +325,13 @@ model Meeting {
   transcript   String // raw pasted transcript / summary
   tldr         String? // AI-generated brief summary
   structuredAt DateTime? // set when the brief was last extracted
+  // Set when the meeting arrived over the Pocket webhook instead of being
+  // pasted in. UNIQUE because Pocket guarantees AT-LEAST-ONCE delivery and
+  // retries anything that doesn't 2xx inside 30s: without this, three retries
+  // make three meetings and three sets of cards. Same lesson as
+  // Notification.dedupeKey — key on the real-world fact (this recording), not
+  // on the moment we happened to receive it.
+  pocketRecordingId String? @unique
   // How the last read was reasoned: what the reviewer searched, what it found,
   // what it kept and dropped and why. Shown on the meeting page so a proposal
   // never appears without the thinking behind it. Shape: ReasoningTrace in
@@ -346,6 +354,52 @@ model Meeting {
   @@index([meetingDate])
   @@index([authorId])
   @@map("meeting")
+}
+
+/// One Pocket account wired to this workspace. A `summary.completed` webhook
+/// from that account lands as a Meeting filed under `user`, then goes through
+/// the normal proposeBrief → IntakeProposal path — nothing is written to the
+/// feature library or the ticket queue until a person accepts a card.
+///
+/// `secret` is stored RECOVERABLE, not hashed, unlike ApiToken.tokenHash. That
+/// is not an oversight: verifying an HMAC means recomputing it, which needs the
+/// key itself. Pocket shows the secret once at creation, so losing it means
+/// rotating the webhook in Pocket rather than re-reading it here.
+model PocketConnection {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Human label — "Niels' Pocket". Only ever shown in settings.
+  label String
+
+  /// The `user.email` Pocket puts in the payload. Used to pick which
+  /// connection a delivery belongs to before checking its signature.
+  pocketEmail String @unique
+
+  /// Pocket's HMAC-SHA256 signing secret for this webhook.
+  secret String
+
+  /// Off means deliveries are acknowledged and dropped. Preferred over
+  /// deleting, which loses the setup and needs a new secret from Pocket.
+  active Boolean @default(true)
+
+  /// What arriving meetings are filed as.
+  defaultKind MeetingKind @default(INTERNAL)
+
+  /// Last-delivery state, so the settings page can answer "is this working?"
+  /// without a separate log table.
+  lastEventAt     DateTime?
+  lastEvent       String?
+  lastError       String?
+  deliveries      Int       @default(0)
+  meetingsCreated Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([userId])
+  @@map("pocket_connection")
 }
 
 model Decision {

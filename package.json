@@ -14,6 +14,7 @@
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "probe": "tsx scripts/probe-mcp.ts",
+    "probe:pocket": "tsx scripts/probe-pocket.ts",
     "db:sql": "prisma db execute --schema prisma/schema.prisma --file"
   },
   "prisma": {
