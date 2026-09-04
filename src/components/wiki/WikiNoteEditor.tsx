@@ -1,13 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { deleteWikiNote, updateWikiNote } from "@/app/wiki/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/editor/RichTextEditor";
 
 interface Props {
   note: {
@@ -22,6 +22,7 @@ interface Props {
 export function WikiNoteEditor({ note }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [body, setBody] = useState(note.body);
 
   function save(formData: FormData) {
     formData.set("id", note.id);
@@ -50,8 +51,12 @@ export function WikiNoteEditor({ note }: Props) {
         <Input id="tags" name="tags" defaultValue={note.tags.join(", ")} />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="body">Body (markdown)</Label>
-        <Textarea id="body" name="body" rows={16} defaultValue={note.body} required />
+        <Label>Body</Label>
+        {/* Live markdown, same editor as everywhere else — it formats as you
+            type rather than being a textarea you have to imagine rendered.
+            The value rides in a hidden field so the form action is unchanged. */}
+        <RichTextEditor value={body} onChange={setBody} />
+        <input type="hidden" name="body" value={body} />
       </div>
       <div className="flex justify-between gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={remove} disabled={pending}>

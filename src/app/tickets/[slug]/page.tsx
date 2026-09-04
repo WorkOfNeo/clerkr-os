@@ -6,6 +6,7 @@ import { ChevronLeft } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
 import { AttachmentGrid } from "@/components/ticket/AttachmentGrid";
+import { TicketBody } from "@/components/ticket/TicketBody";
 import { CommentComposer } from "@/components/ticket/CommentComposer";
 import { CategoryBadge, PriorityLabel } from "@/components/ticket/TicketBadges";
 import { TicketControls } from "@/components/ticket/TicketControls";
@@ -93,14 +94,7 @@ export default async function TicketPage({
         </header>
 
         <section className="surface mt-5 p-5">
-          {ticket.body ? (
-            <div
-              className="md"
-              dangerouslySetInnerHTML={{ __html: marked.parse(ticket.body) as string }}
-            />
-          ) : (
-            <p className="text-[14px] text-muted-foreground">No detail given.</p>
-          )}
+          <TicketBody ticketId={ticket.id} body={ticket.body} />
           <AttachmentGrid attachments={ticket.attachments} />
         </section>
 

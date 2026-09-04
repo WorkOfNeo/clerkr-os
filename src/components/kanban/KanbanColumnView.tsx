@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip } from "@/components/ui/tooltip";
+import { useIsTouch } from "@/lib/use-is-touch";
 import { cn } from "@/lib/utils";
 
 import type { BoardCard, BoardColumn } from "./types";
@@ -50,6 +51,7 @@ export function KanbanColumnView({
   onDelete: (column: BoardColumn) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col-${column.id}`, data: { columnId: column.id } });
+  const isTouch = useIsTouch();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
 
@@ -165,7 +167,10 @@ export function KanbanColumnView({
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              // Same rule as the composer: on a phone Return is the newline
+              // key, so quick-add commits on blur there rather than firing off
+              // a half-typed card.
+              if (e.key === "Enter" && !e.shiftKey && !isTouch) {
                 e.preventDefault();
                 commit();
               } else if (e.key === "Escape") {

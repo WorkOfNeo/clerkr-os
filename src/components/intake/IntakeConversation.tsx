@@ -12,6 +12,7 @@ import type { ProposalDTO } from "@/lib/intake/dto";
 import { ImageDropzone, type PendingImage } from "@/components/attachments/ImageDropzone";
 import { ProposalCard } from "@/components/intake/ProposalCard";
 import { MicButton, VoicePanel, useVoiceInput } from "@/components/intake/VoiceInput";
+import { useIsTouch } from "@/lib/use-is-touch";
 import { cn } from "@/lib/utils";
 
 import type { ChatMessageItem, CitedNote } from "@/components/llm/ChatMessageList";
@@ -46,6 +47,7 @@ export function IntakeConversation({
   initialProposals: Record<string, ProposalDTO[]>;
 }) {
   const router = useRouter();
+  const isTouch = useIsTouch();
   const [sessionId, setSessionId] = useState(initialSessionId);
   const [messages, setMessages] = useState<ChatMessageItem[]>(initialMessages);
   const [citedNotes, setCitedNotes] = useState<CitedNote[]>(initialCitedNotes);
@@ -298,9 +300,13 @@ export function IntakeConversation({
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
-                // Enter sends, Shift+Enter breaks the line. ⌘/Ctrl+Enter still
-                // sends too, since that reflex is hard to unlearn.
                 if (e.key !== "Enter") return;
+                // On a phone, Return is the newline key — there is a send
+                // button right there, and a keyboard whose Return fires off a
+                // half-written note is hostile. ⌘/Ctrl+Enter still sends
+                // everywhere, including from a tablet keyboard.
+                if (isTouch && !e.metaKey && !e.ctrlKey) return;
+                // On a real keyboard, Enter sends and Shift+Enter breaks.
                 if (e.shiftKey) return;
                 e.preventDefault();
                 submit();
@@ -311,7 +317,9 @@ export function IntakeConversation({
               // rather than a search field.
 
               placeholder={
-                "Type anything — a note to file, or a question. (↵ to send, ⇧↵ for a new line)"
+                isTouch
+                  ? "Type anything — a note to file, or a question."
+                  : "Type anything — a note to file, or a question. (↵ to send, ⇧↵ for a new line)"
               }
               className={cn(
                 "w-full resize-none bg-transparent px-3.5 py-3 text-[16px] leading-relaxed outline-none",
