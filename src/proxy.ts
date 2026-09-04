@@ -48,7 +48,20 @@ export function proxy(req: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico" ||
     pathname === "/signin" ||
-    pathname === "/signup";
+    pathname === "/signup" ||
+    // PWA install assets MUST be reachable without a session. iOS fetches the
+    // manifest and the apple-touch-icon with no credentials, so behind the
+    // cookie they 307 to /signin, Safari receives an HTML page where it wanted
+    // an image, and "Add to Home Screen" falls back to a grey letter — which
+    // is exactly what happened. The manifest never loading also means
+    // `display: standalone` never applies, and a service worker must be
+    // fetchable at its own scope to register at all.
+    //
+    // Safe to expose, unlike /api/attachments and /api/documents: these are
+    // branding files and a push-only worker with no secrets in them.
+    pathname === "/manifest.webmanifest" ||
+    pathname === "/sw.js" ||
+    pathname.startsWith("/icons/");
 
   if (isPublic) return NextResponse.next();
 

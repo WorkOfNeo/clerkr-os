@@ -23,6 +23,29 @@ export const metadata: Metadata = {
     template: "%s · Clerkr OS",
   },
   description: "Internal Product OS — chat intake, tickets, kanban, meetings, features.",
+
+  // `app/manifest.ts` makes Next emit <link rel="manifest"> on its own, but
+  // NOT the Apple tags — iOS reads these and nothing else, which is why "Add
+  // to Home Screen" showed a grey letter without them.
+  appleWebApp: {
+    capable: true,
+    title: "Clerkr OS",
+    // `default` keeps the status bar legible; black-translucent would put its
+    // text under our own header.
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  // Behind auth — there is nothing to index, and a stray crawl of an internal
+  // tool is only ever a liability.
+  robots: { index: false, follow: false, nocache: true },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
