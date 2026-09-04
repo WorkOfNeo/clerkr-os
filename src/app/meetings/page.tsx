@@ -32,7 +32,14 @@ export default async function MeetingsPage() {
       kind: true,
       meetingDate: true,
       structuredAt: true,
-      _count: { select: { decisions: true, featureSignals: true, actionItems: true } },
+      _count: {
+        select: {
+          decisions: true,
+          featureSignals: true,
+          actionItems: true,
+          proposals: { where: { status: "PROPOSED" } },
+        },
+      },
     },
   });
 
@@ -41,7 +48,7 @@ export default async function MeetingsPage() {
       <main className="mx-auto w-full max-w-4xl px-6 py-8">
         <PageHeader
           title="Meetings"
-          subtitle="Paste a transcript — the AI structures it into a scannable brief."
+          subtitle="Paste a transcript — the AI proposes the brief, you accept what's real."
           actions={
             <Button asChild size="sm">
               <Link href="/meetings/new">New meeting</Link>
@@ -66,10 +73,14 @@ export default async function MeetingsPage() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <h2 className="font-medium">{m.title}</h2>
-                    {m.structuredAt ? (
+                    {m._count.proposals > 0 ? (
+                      <Badge>
+                        {m._count.proposals} to review
+                      </Badge>
+                    ) : m.structuredAt ? (
                       <Badge variant="secondary">Brief ready</Badge>
                     ) : (
-                      <Badge variant="outline">Not structured</Badge>
+                      <Badge variant="outline">Not read yet</Badge>
                     )}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">

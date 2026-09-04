@@ -7,7 +7,7 @@ import { classifyIntake } from "@/lib/ai/intake";
 import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { attachImages } from "@/lib/attachments";
 import { db } from "@/lib/db";
-import { acceptProposal, claimAttachments } from "@/lib/intake/accept";
+import { acceptProposal, claimAttachments, linkProposalToExisting } from "@/lib/intake/accept";
 import { toDTO, type ProposalDTO } from "@/lib/intake/dto";
 import { requireSession } from "@/lib/session";
 
@@ -120,26 +120,73 @@ export async function acceptProposalAction(
       data: { status: "ACCEPTED", createdType: result.type, createdId: result.id },
     });
 
-    revalidatePath("/chat");
-    revalidatePath("/tickets");
-    revalidatePath("/kanban");
+    revalidateAfterAccept(proposal.meetingId);
     return { label: result.label, href: result.href };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not create that." };
   }
 }
 
+/** The duplicate path for a feature: attach to the library entry that already
+ *  exists instead of creating a second one. */
+export async function linkProposalAction(
+  id: string,
+): Promise<{ label: string; href: string } | { error: string }> {
+  await requireSession();
+  const proposal = await db.intakeProposal.findUnique({ where: { id } });
+  if (!proposal) return { error: "That proposal is gone." };
+  if (proposal.status === "ACCEPTED") return { error: "That one's already been handled." };
+
+  try {
+    const result = await linkProposalToExisting(proposal);
+    await db.intakeProposal.update({
+      where: { id },
+      data: { status: "ACCEPTED", createdType: result.type, createdId: result.id },
+    });
+    revalidateAfterAccept(proposal.meetingId);
+    return { label: result.label, href: result.href };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not link that." };
+  }
+}
+
+function revalidateAfterAccept(meetingId: string | null) {
+  revalidatePath("/chat");
+  revalidatePath("/tickets");
+  revalidatePath("/kanban");
+  revalidatePath("/features");
+  revalidatePath("/knowledge");
+  if (meetingId) revalidatePath(`/meetings/${meetingId}`);
+}
+
 export async function dismissProposalAction(id: string): Promise<void> {
   await requireSession();
-  await db.intakeProposal.update({ where: { id }, data: { status: "DISMISSED" } });
+  const row = await db.intakeProposal.update({
+    where: { id },
+    data: { status: "DISMISSED" },
+    select: { meetingId: true },
+  });
   revalidatePath("/chat");
+  if (row.meetingId) revalidatePath(`/meetings/${row.meetingId}`);
 }
 
 const editSchema = z.object({
   id: z.string().min(1),
   title: z.string().trim().min(1).max(300).optional(),
   body: z.string().nullable().optional(),
-  kind: z.enum(["TICKET", "MEETING", "WIKI_NOTE", "KANBAN_CARD", "FEATURE", "COMMENT"]).optional(),
+  kind: z
+    .enum([
+      "TICKET",
+      "MEETING",
+      "WIKI_NOTE",
+      "KANBAN_CARD",
+      "FEATURE",
+      "COMMENT",
+      "DECISION",
+      "ACTION_ITEM",
+      "OPEN_QUESTION",
+    ])
+    .optional(),
 });
 
 /** Edit before accepting — the classifier gets the gist right and the wording
@@ -158,6 +205,7 @@ export async function updateProposalAction(
     },
   });
   revalidatePath("/chat");
+  if (updated.meetingId) revalidatePath(`/meetings/${updated.meetingId}`);
   return toDTO(updated);
 }
 
@@ -183,6 +231,37 @@ export async function acceptAllProposals(
   return { created, failed };
 }
 
+/** Accept every card still waiting on a meeting. Per-card errors are counted,
+ *  not thrown, so one bad card never blocks the rest of the brief. */
+export async function acceptAllForMeeting(
+  meetingId: string,
+): Promise<{ created: number; failed: number }> {
+  await requireSession();
+  const rows = await db.intakeProposal.findMany({
+    where: { meetingId, status: "PROPOSED" },
+    orderBy: { order: "asc" },
+    select: { id: true },
+  });
+  let created = 0;
+  let failed = 0;
+  for (const row of rows) {
+    const result = await acceptProposalAction(row.id);
+    if ("error" in result) failed++;
+    else created++;
+  }
+  return { created, failed };
+}
+
+export async function dismissAllForMeeting(meetingId: string): Promise<{ dismissed: number }> {
+  await requireSession();
+  const res = await db.intakeProposal.updateMany({
+    where: { meetingId, status: "PROPOSED" },
+    data: { status: "DISMISSED" },
+  });
+  revalidatePath(`/meetings/${meetingId}`);
+  return { dismissed: res.count };
+}
+
 export async function getProposalsForSession(sessionId: string): Promise<Record<string, ProposalDTO[]>> {
   await requireSession();
   const rows = await db.intakeProposal.findMany({
@@ -191,6 +270,9 @@ export async function getProposalsForSession(sessionId: string): Promise<Record<
   });
   const byMessage: Record<string, ProposalDTO[]> = {};
   for (const row of rows) {
+    // The where clause already limits this to chat proposals; meeting ones
+    // have no message and are shown on the meeting page instead.
+    if (!row.messageId) continue;
     (byMessage[row.messageId] ??= []).push(toDTO(row));
   }
   return byMessage;

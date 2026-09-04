@@ -6,6 +6,7 @@ import { ANALYTICS_TOOLS } from "./tools/analytics";
 import { CHAT_TOOLS } from "./tools/chat";
 import { DOCUMENT_TOOLS } from "./tools/document";
 import { FEATURE_TOOLS } from "./tools/feature";
+import { INTAKE_TOOLS } from "./tools/intake";
 import { MEETING_TOOLS } from "./tools/meeting";
 import { KANBAN_TOOLS } from "./tools/kanban";
 import { MEMORY_TOOLS } from "./tools/memory";
@@ -326,6 +327,7 @@ export const TOOLS: ToolDef[] = [
   ...ANALYTICS_TOOLS,
   // ─── Product OS (meetings → briefs, feature library, kanban) ─────────────
   ...MEETING_TOOLS,
+  ...INTAKE_TOOLS,
   ...FEATURE_TOOLS,
   ...KANBAN_TOOLS,
   ...MEMORY_TOOLS,

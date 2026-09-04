@@ -36,7 +36,7 @@ export function StructureButton({
         variant={hasBrief ? "outline" : "default"}
         size="sm"
       >
-        {isPending ? "Structuring…" : hasBrief ? "Re-run AI" : "✦ Structure with AI"}
+        {isPending ? "Reading…" : hasBrief ? "Propose again" : "✦ Propose with AI"}
       </Button>
       {error && <p className="max-w-xs text-right text-xs text-destructive">{error}</p>}
     </div>

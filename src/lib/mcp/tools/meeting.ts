@@ -4,9 +4,11 @@ import { semanticSearchMeetings } from "@/lib/ai/embed-entities";
 import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { db } from "@/lib/db";
 import { createTicket, ticketListSelect } from "@/lib/tickets";
-import { runStructurePipeline } from "@/lib/meetings/structure";
+import { deleteMeetingCascade } from "@/lib/meetings/delete";
+import { proposeBrief } from "@/lib/meetings/structure";
 import { slugify, uniqueSlug } from "@/lib/slug";
 
+import { proposalSelect } from "./intake";
 import type { ToolDef } from "./types";
 
 const MEETING_KINDS = ["INTERNAL", "CUSTOMER", "PROSPECT"] as const;
@@ -79,19 +81,23 @@ const meetingFullSelect = {
       assignee: true,
       dueDate: true,
       done: true,
-      taskId: true,
+      ticketId: true,
     },
   },
   openQuestions: { select: { id: true, content: true, resolved: true } },
+  // The cards still waiting on the meeting page. Accept with accept_proposal.
+  proposals: { where: { status: "PROPOSED" as const }, orderBy: { order: "asc" as const }, select: proposalSelect },
 } as const;
 
-async function tryStructure(meetingId: string): Promise<{ structured: boolean; error?: string }> {
+async function tryStructure(
+  meetingId: string,
+): Promise<{ structured: boolean; proposed?: number; error?: string }> {
   if (!isOpenAIAvailable()) {
     return { structured: false, error: "OPENAI_API_KEY not set — brief extraction skipped." };
   }
   try {
-    await runStructurePipeline(meetingId);
-    return { structured: true };
+    const result = await proposeBrief(meetingId);
+    return { structured: true, proposed: result.proposed };
   } catch (err) {
     return { structured: false, error: err instanceof Error ? err.message : String(err) };
   }
@@ -101,13 +107,13 @@ export const MEETING_TOOLS: ToolDef[] = [
   {
     name: "create_meeting",
     description:
-      "Ingest meeting notes / a transcript as a new Meeting. By default it is immediately " +
-      "structured with AI: tldr + decisions + feature signals + action items + open questions " +
-      "are extracted, the meeting is embedded for semantic recall, and every feature signal is " +
-      "auto-clustered and deduped against the Feature Library (matching signals link to the " +
-      "existing feature; new ones are auto-promoted). This is the main entry point for " +
-      "'here are my notes from a meeting — categorize them'. Pass structure=false to just " +
-      "store the raw notes.",
+      "Ingest meeting notes / a transcript as a new Meeting. By default it is immediately read " +
+      "by the AI: the tldr is stored on the meeting and everything else — decisions, feature " +
+      "ideas, action items, open questions — comes back as PROPOSALS (see `proposals` in the " +
+      "result) that a person accepts or dismisses on the meeting page, or via accept_proposal. " +
+      "Nothing lands in the Feature Library or the ticket queue until a card is accepted. This " +
+      "is the main entry point for 'here are my notes from a meeting'. Pass structure=false to " +
+      "just store the raw notes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -122,7 +128,7 @@ export const MEETING_TOOLS: ToolDef[] = [
         attendees: { type: "array", items: { type: "string" } },
         structure: {
           type: "boolean",
-          description: "Run AI brief extraction + enrichment immediately. Default true.",
+          description: "Read the transcript into proposals immediately. Default true.",
         },
       },
       required: ["title", "transcript"],
@@ -161,8 +167,9 @@ export const MEETING_TOOLS: ToolDef[] = [
   {
     name: "structure_meeting",
     description:
-      "(Re-)run AI brief extraction + enrichment on an existing meeting. Replaces the previous " +
-      "extraction (decisions, signals, action items, open questions) with a fresh one.",
+      "(Re-)read an existing meeting's transcript into proposals. Cards still waiting are " +
+      "replaced with a fresh set; anything already accepted or dismissed is left alone and not " +
+      "proposed again. Returns the meeting with its outstanding proposals.",
     inputSchema: {
       type: "object",
       properties: { id: { type: "string" } },
@@ -173,7 +180,7 @@ export const MEETING_TOOLS: ToolDef[] = [
       if (!isOpenAIAvailable()) {
         throw new Error("OPENAI_API_KEY is not set. Brief extraction is disabled.");
       }
-      const result = await runStructurePipeline(id);
+      const result = await proposeBrief(id);
       const full = await db.meeting.findUnique({ where: { id }, select: meetingFullSelect });
       return { ...full, extraction: result };
     },
@@ -206,8 +213,9 @@ export const MEETING_TOOLS: ToolDef[] = [
   {
     name: "get_meeting",
     description:
-      "Fetch one meeting by id or slug, including the full transcript and the extracted brief " +
-      "(decisions, feature signals with their linked features, action items, open questions).",
+      "Fetch one meeting by id or slug, including the full transcript, the accepted brief " +
+      "(decisions, feature signals with their linked features, action items, open questions) " +
+      "and the proposals still waiting to be accepted.",
     inputSchema: {
       type: "object",
       properties: {
@@ -299,8 +307,11 @@ export const MEETING_TOOLS: ToolDef[] = [
   {
     name: "delete_meeting",
     description:
-      "Delete a meeting and its extracted brief (decisions, signals, action items, open " +
-      "questions cascade). Features promoted from its signals stay in the library.",
+      "Delete a meeting together with everything it produced: its brief (decisions, signals, " +
+      "action items, open questions, proposals), the features it added to the library, and the " +
+      "tickets raised from its action items. A feature another meeting also points at, that has " +
+      "kanban cards, or that this meeting only linked to is kept. Destructive — confirm with the " +
+      "user first.",
     inputSchema: {
       type: "object",
       properties: { id: { type: "string" } },
@@ -308,8 +319,8 @@ export const MEETING_TOOLS: ToolDef[] = [
     },
     handler: async (args) => {
       const { id } = idSchema.parse(args);
-      await db.meeting.delete({ where: { id } });
-      return { ok: true, id };
+      const removed = await deleteMeetingCascade(id);
+      return { ok: true, id, ...removed };
     },
   },
 

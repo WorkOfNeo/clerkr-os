@@ -85,7 +85,7 @@ const featureFullSelect = {
 } as const;
 
 // Find-or-create a cluster by name (mirrors the enrichment pass in
-// src/lib/ai/enrich-meeting.ts).
+// src/lib/features.ts upsertFeatureFromIdea).
 async function ensureCluster(name: string): Promise<string> {
   const trimmed = name.trim();
   const slug = slugify(trimmed);

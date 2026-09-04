@@ -77,7 +77,7 @@ export function MeetingIntakeForm() {
 
       <div className="flex justify-end">
         <Button type="submit" disabled={isPending}>
-          {isPending ? "Saving…" : "Save meeting"}
+          {isPending ? "Reading the notes…" : "Save & propose"}
         </Button>
       </div>
     </form>

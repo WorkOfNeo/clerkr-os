@@ -6,12 +6,16 @@ import type { ReactNode } from "react";
 import { AppShell } from "@/components/AppShell";
 import { ActionItemTicketButton } from "@/components/meeting/ActionItemTicketButton";
 import { ActionItemToggle } from "@/components/meeting/ActionItemToggle";
+import { DeleteMeetingButton } from "@/components/meeting/DeleteMeetingButton";
+import { MeetingProposals } from "@/components/meeting/MeetingProposals";
 import { PromoteSignalButton } from "@/components/meeting/PromoteSignalButton";
 import { StructureButton } from "@/components/meeting/StructureButton";
 import { Badge } from "@/components/ui/badge";
 import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { db } from "@/lib/db";
 import { formatShortDate } from "@/lib/format";
+import { toDTO } from "@/lib/intake/dto";
+import { meetingFootprint } from "@/lib/meetings/delete";
 import { requireSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +55,7 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
   const meeting = await db.meeting.findUnique({
     where: { id },
     include: {
+      proposals: { where: { status: "PROPOSED" }, orderBy: { order: "asc" } },
       decisions: { orderBy: { createdAt: "asc" } },
       featureSignals: {
         orderBy: { createdAt: "asc" },
@@ -66,6 +71,13 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
   if (!meeting) notFound();
 
   const aiReady = isOpenAIAvailable();
+  const footprint = await meetingFootprint(meeting.id);
+  const proposals = meeting.proposals.map(toDTO);
+  const accepted =
+    meeting.decisions.length +
+    meeting.featureSignals.length +
+    meeting.actionItems.length +
+    meeting.openQuestions.length;
 
   return (
     <AppShell email={session.user.email}>
@@ -88,30 +100,48 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
               {meeting.attendees.length > 0 && <> · {meeting.attendees.join(", ")}</>}
             </p>
           </div>
-          <StructureButton
-            meetingId={meeting.id}
-            hasBrief={Boolean(meeting.structuredAt)}
-            disabled={!aiReady}
-          />
+          <div className="flex items-center gap-1.5">
+            <DeleteMeetingButton meetingId={meeting.id} footprint={footprint} />
+            <StructureButton
+              meetingId={meeting.id}
+              hasBrief={Boolean(meeting.structuredAt)}
+              disabled={!aiReady}
+            />
+          </div>
         </div>
 
         {!aiReady && (
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-muted-foreground">
             OpenAI is not configured — set <code className="text-foreground">OPENAI_API_KEY</code> to
-            enable brief extraction. The transcript is still saved.
+            read the transcript into proposals. The transcript is still saved.
           </div>
         )}
 
-        {meeting.structuredAt ? (
-          <>
-            {meeting.tldr && (
-              <section className="surface p-4">
-                <h2 className="mb-2 text-sm font-semibold">TL;DR</h2>
-                <p className="text-sm text-muted-foreground">{meeting.tldr}</p>
-              </section>
-            )}
+        {meeting.tldr && (
+          <section className="surface p-4">
+            <h2 className="mb-2 text-sm font-semibold">TL;DR</h2>
+            <p className="text-sm text-muted-foreground">{meeting.tldr}</p>
+          </section>
+        )}
 
-            <BriefSection title="Decisions made" count={meeting.decisions.length}>
+        {/* What the AI found, waiting to be accepted. */}
+        <MeetingProposals meetingId={meeting.id} proposals={proposals} />
+
+        {!meeting.structuredAt ? (
+          <div className="surface border-dashed p-10 text-center text-sm text-muted-foreground">
+            The notes haven&rsquo;t been read yet.{" "}
+            {aiReady
+              ? "Click “Propose with AI” and the decisions, feature ideas, action items and open questions come back as cards you accept."
+              : "Configure OpenAI to propose a brief."}
+          </div>
+        ) : accepted === 0 && proposals.length === 0 ? (
+          <div className="surface border-dashed p-10 text-center text-sm text-muted-foreground">
+            Nothing accepted from this meeting yet. Everything proposed was dismissed — click
+            “Propose again” to read the notes afresh.
+          </div>
+        ) : (
+          <>
+            <BriefSection title="Decisions" count={meeting.decisions.length}>
               {meeting.decisions.map((d) => (
                 <li key={d.id} className="flex gap-3 border-b py-2 last:border-0">
                   <Badge variant="secondary" className="h-fit whitespace-nowrap">
@@ -127,7 +157,7 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
               ))}
             </BriefSection>
 
-            <BriefSection title="Feature signals" count={meeting.featureSignals.length}>
+            <BriefSection title="Features from this meeting" count={meeting.featureSignals.length}>
               {meeting.featureSignals.map((f) => {
                 const meta = SIGNAL_META[f.status];
                 return (
@@ -196,13 +226,6 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
               ))}
             </BriefSection>
           </>
-        ) : (
-          <div className="surface border-dashed p-10 text-center text-sm text-muted-foreground">
-            This meeting hasn’t been structured yet.{" "}
-            {aiReady
-              ? "Click “Structure with AI” to extract the brief."
-              : "Configure OpenAI to extract a brief."}
-          </div>
         )}
 
         {/* transcript */}

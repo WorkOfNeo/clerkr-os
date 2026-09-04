@@ -1,104 +1,158 @@
-import { enrichMeeting, type EnrichSignal } from "@/lib/ai/enrich-meeting";
-import { extractBrief } from "@/lib/ai/extract-brief";
+import type { IntakeKind, Prisma } from "@prisma/client";
+
+import { embedMeeting } from "@/lib/ai/embed-entities";
+import { extractBrief, type ExtractedBrief } from "@/lib/ai/extract-brief";
+import { findNearest } from "@/lib/ai/intake";
 import { db } from "@/lib/db";
 
-// Shared brief-extraction pipeline: extract → replace child rows → create
-// signals → enrich (embed + cluster + dedupe + promote). Called from both the
-// /meetings server action and the MCP meeting tools so the two entry points
-// can never drift.
+// Meeting → proposals.
+//
+// The transcript is read once and everything the model finds — decisions,
+// feature ideas, action items, open questions — lands as IntakeProposal rows
+// hanging off the meeting. Nothing else is written: no Feature in the library,
+// no ActionItem on the meeting, until a person accepts the card. That is the
+// same safety model as the /chat intake desk, reusing the same rows, the same
+// card and the same accept path (src/lib/intake/accept.ts).
+//
+// The TL;DR is the one exception — it is a summary of the meeting itself, not
+// a record elsewhere, so it is stored straight on the row.
+//
+// Called from the /meetings server actions and the MCP meeting tools so the
+// two entry points can never drift.
 
-function parseDate(s: string | null | undefined): Date | null {
-  if (!s) return null;
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
+const SIGNAL_TO_FEATURE_STATUS = {
+  NEW: "IDEA",
+  ALREADY_TRACKED: "VALIDATED",
+  SMALL_UNIQUE: "SMALL_UNIQUE",
+} as const;
 
-export interface StructureResult {
+export interface ProposeResult {
   tldr: string;
-  decisions: number;
-  featureSignals: number;
-  actionItems: number;
-  openQuestions: number;
+  /** Cards now waiting on the meeting page. */
+  proposed: number;
+  /** Items the model found again that had already been accepted or dismissed. */
+  skipped: number;
 }
 
-export async function runStructurePipeline(meetingId: string): Promise<StructureResult> {
+interface Draft {
+  kind: IntakeKind;
+  title: string;
+  body: string | null;
+  payload: Record<string, unknown>;
+}
+
+function key(kind: string, title: string): string {
+  return `${kind}:${title.trim().toLowerCase()}`;
+}
+
+export async function proposeBrief(meetingId: string): Promise<ProposeResult> {
   const meeting = await db.meeting.findUnique({
     where: { id: meetingId },
-    select: { id: true, transcript: true },
+    select: { id: true, title: true, transcript: true },
   });
   if (!meeting) throw new Error("Meeting not found.");
 
   const brief = await extractBrief(meeting.transcript);
+  return applyBrief(meeting, brief);
+}
 
-  // Re-runnable: clear the prior extraction (our own child rows — safe to
-  // delete) and re-create everything except signals in one transaction.
-  await db.$transaction([
-    db.decision.deleteMany({ where: { meetingId } }),
-    db.featureSignal.deleteMany({ where: { meetingId } }),
-    db.actionItem.deleteMany({ where: { meetingId } }),
-    db.openQuestion.deleteMany({ where: { meetingId } }),
-    db.meeting.update({
-      where: { id: meetingId },
-      data: {
-        tldr: brief.tldr,
-        structuredAt: new Date(),
-        decisions: {
-          create: brief.decisions.map((d) => ({
-            content: d.content,
-            owner: d.owner ?? null,
-          })),
-        },
-        actionItems: {
-          create: brief.actionItems.map((a) => ({
-            content: a.content,
-            assignee: a.assignee ?? null,
-            dueDate: parseDate(a.dueDate),
-          })),
-        },
-        openQuestions: {
-          create: brief.openQuestions.map((q) => ({ content: q.content })),
-        },
-      },
-    }),
-  ]);
+/**
+ * The write half, split from the model call so it can be exercised without
+ * OpenAI: given an extracted brief, replace the meeting's outstanding
+ * proposals and store the TL;DR.
+ */
+export async function applyBrief(
+  meeting: { id: string; title: string; transcript: string },
+  brief: ExtractedBrief,
+): Promise<ProposeResult> {
+  const meetingId = meeting.id;
 
-  // Feature signals are created individually so we can capture their ids and
-  // cluster hints for the enrichment pass (embed + cluster + dedupe + promote).
-  const enrichSignals: EnrichSignal[] = [];
-  for (const f of brief.featureSignals) {
-    const sig = await db.featureSignal.create({
-      data: {
-        meetingId,
-        title: f.title,
-        detail: f.detail ?? null,
-        status: f.status,
-        tags: f.tags,
-      },
-      select: { id: true },
-    });
-    enrichSignals.push({
-      id: sig.id,
+  const drafts: Draft[] = [
+    ...brief.decisions.map<Draft>((d) => ({
+      kind: "DECISION",
+      title: d.content,
+      body: null,
+      payload: { owner: d.owner ?? null },
+    })),
+    ...brief.featureSignals.map<Draft>((f) => ({
+      kind: "FEATURE",
       title: f.title,
-      detail: f.detail ?? null,
-      status: f.status,
-      tags: f.tags,
-      cluster: f.cluster ?? null,
-    });
+      body: f.detail ?? null,
+      payload: {
+        signalStatus: f.status,
+        status: SIGNAL_TO_FEATURE_STATUS[f.status],
+        tags: f.tags,
+        cluster: f.cluster ?? null,
+      },
+    })),
+    ...brief.actionItems.map<Draft>((a) => ({
+      kind: "ACTION_ITEM",
+      title: a.content,
+      body: null,
+      payload: { assignee: a.assignee ?? null, dueDate: a.dueDate ?? null },
+    })),
+    ...brief.openQuestions.map<Draft>((q) => ({
+      kind: "OPEN_QUESTION",
+      title: q.content,
+      body: null,
+      payload: {},
+    })),
+  ];
+
+  // A re-run must not re-surface something a person already decided on. The
+  // model tends to phrase the same item the same way twice, so an exact
+  // (case-insensitive) title match per kind is enough to recognise it.
+  const decided = await db.intakeProposal.findMany({
+    where: { meetingId, status: { not: "PROPOSED" } },
+    select: { kind: true, title: true },
+  });
+  const seen = new Set(decided.map((p) => key(p.kind, p.title)));
+  const fresh = drafts.filter((d) => !seen.has(key(d.kind, d.title)));
+
+  // Match against what exists BEFORE the transaction so a slow embedding call
+  // never holds a write lock. Matching is best-effort inside findNearest.
+  const matched = [];
+  for (const draft of fresh) {
+    const match = await findNearest(draft.kind, `${draft.title}\n\n${draft.body ?? ""}`);
+    matched.push({ draft, match });
   }
 
-  // Embed the meeting and auto-cluster / categorize / dedupe / promote signals.
-  // Best-effort — never fail the structuring if enrichment hiccups.
+  await db.$transaction([
+    // Outstanding cards are replaced wholesale; accepted and dismissed ones stay.
+    db.intakeProposal.deleteMany({ where: { meetingId, status: "PROPOSED" } }),
+    db.meeting.update({
+      where: { id: meetingId },
+      data: { tldr: brief.tldr, structuredAt: new Date() },
+    }),
+    ...matched.map(({ draft, match }, order) =>
+      db.intakeProposal.create({
+        data: {
+          meetingId,
+          kind: draft.kind,
+          order,
+          title: draft.title.slice(0, 300),
+          body: draft.body,
+          payload: draft.payload as Prisma.InputJsonValue,
+          matchType: match?.type ?? null,
+          matchId: match?.id ?? null,
+          matchTitle: match?.title ?? null,
+          matchScore: match?.score ?? null,
+        },
+      }),
+    ),
+  ]);
+
+  // Semantic recall of the meeting itself is harmless and useful, so it is
+  // not gated on acceptance. Best-effort: the embed sweep catches a miss.
   try {
-    await enrichMeeting(meetingId, enrichSignals);
+    await embedMeeting(meetingId, meeting.title, brief.tldr, meeting.transcript);
   } catch (err) {
-    console.warn("[runStructurePipeline] enrichment failed:", err);
+    console.warn("[proposeBrief] embedMeeting failed:", err);
   }
 
   return {
     tldr: brief.tldr,
-    decisions: brief.decisions.length,
-    featureSignals: brief.featureSignals.length,
-    actionItems: brief.actionItems.length,
-    openQuestions: brief.openQuestions.length,
+    proposed: matched.length,
+    skipped: drafts.length - fresh.length,
   };
 }

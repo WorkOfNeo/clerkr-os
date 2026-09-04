@@ -1,5 +1,6 @@
 import type { IntakeProposal } from "@prisma/client";
 
+import { embedFeature } from "@/lib/ai/embed-entities";
 import { reassignAttachments } from "@/lib/attachments";
 import { db } from "@/lib/db";
 import { createCard, resolveColumnId } from "@/lib/kanban";
@@ -47,7 +48,7 @@ export async function acceptProposal(
   proposal: IntakeProposal,
   userId: string,
 ): Promise<AcceptResult> {
-  const { kind, title, body, payload } = proposal;
+  const { kind, title, body, payload, meetingId } = proposal;
 
   switch (kind) {
     case "TICKET": {
@@ -132,12 +133,66 @@ export async function acceptProposal(
         },
         select: { id: true, slug: true, title: true },
       });
+      try {
+        await embedFeature(feature.id, title, body ?? "");
+      } catch (err) {
+        // The embed sweep picks it up within 10 minutes.
+        console.warn("[accept] embedFeature failed:", err);
+      }
+      // A feature out of a meeting keeps its provenance: the signal row is what
+      // the feature page lists under "Source signals" and what the meeting's
+      // one-click delete follows back.
+      if (meetingId) {
+        await db.featureSignal.create({
+          data: {
+            meetingId,
+            featureId: feature.id,
+            title,
+            detail: body,
+            status: (str(payload, "signalStatus") ?? "NEW") as never,
+            tags: strArray(payload, "tags"),
+          },
+        });
+      }
       return {
         type: "feature",
         id: feature.id,
         label: feature.title,
         href: `/features/${feature.slug}`,
       };
+    }
+
+    // ── Meeting-brief kinds: rows on the meeting itself ─────────────────────
+    // These only exist as a consequence of a meeting, so they refuse to be
+    // accepted without one rather than inventing an orphan.
+
+    case "DECISION": {
+      const decision = await db.decision.create({
+        data: { meetingId: requireMeeting(meetingId), content: title, owner: str(payload, "owner") },
+        select: { id: true },
+      });
+      return { type: "decision", id: decision.id, label: title, href: `/meetings/${meetingId}` };
+    }
+
+    case "ACTION_ITEM": {
+      const item = await db.actionItem.create({
+        data: {
+          meetingId: requireMeeting(meetingId),
+          content: title,
+          assignee: str(payload, "assignee"),
+          dueDate: date(payload, "dueDate"),
+        },
+        select: { id: true },
+      });
+      return { type: "action_item", id: item.id, label: title, href: `/meetings/${meetingId}` };
+    }
+
+    case "OPEN_QUESTION": {
+      const q = await db.openQuestion.create({
+        data: { meetingId: requireMeeting(meetingId), content: title },
+        select: { id: true },
+      });
+      return { type: "open_question", id: q.id, label: title, href: `/meetings/${meetingId}` };
     }
 
     case "COMMENT": {
@@ -173,11 +228,53 @@ export async function acceptProposal(
   }
 }
 
+/**
+ * The near-duplicate path for a feature: instead of a second row in the
+ * library, point this meeting at the one that already exists. The proposal is
+ * marked accepted with `createdType: "feature_link"`, which is how the
+ * meeting's delete knows the feature is not its own to remove.
+ */
+export async function linkProposalToExisting(proposal: IntakeProposal): Promise<AcceptResult> {
+  if (proposal.kind !== "FEATURE" || proposal.matchType !== "feature" || !proposal.matchId) {
+    throw new Error("Only a feature with a library match can be linked.");
+  }
+  const feature = await db.feature.findUnique({
+    where: { id: proposal.matchId },
+    select: { id: true, slug: true, title: true },
+  });
+  if (!feature) throw new Error("That feature no longer exists — create it instead.");
+
+  if (proposal.meetingId) {
+    await db.featureSignal.create({
+      data: {
+        meetingId: proposal.meetingId,
+        featureId: feature.id,
+        title: proposal.title,
+        detail: proposal.body,
+        status: "ALREADY_TRACKED",
+        tags: strArray(proposal.payload, "tags"),
+      },
+    });
+  }
+  return {
+    type: "feature_link",
+    id: feature.id,
+    label: feature.title,
+    href: `/features/${feature.slug}`,
+  };
+}
+
+function requireMeeting(meetingId: string | null): string {
+  if (!meetingId) throw new Error("This kind of proposal only makes sense on a meeting.");
+  return meetingId;
+}
+
 /** Screenshots pasted with the note follow whatever the note became. */
 export async function claimAttachments(
-  messageId: string,
+  messageId: string | null,
   result: AcceptResult,
 ): Promise<void> {
+  if (!messageId) return;
   const owner = ATTACHABLE[result.type];
   if (!owner) return;
   const attachments = await db.attachment.findMany({
