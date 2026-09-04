@@ -72,10 +72,15 @@ export async function acceptProposal(
     }
 
     case "KANBAN_CARD": {
+      // The board scopes the column lookup: two boards may each have a "To Do",
+      // so resolving a column without one lands the card on whichever matched
+      // first.
+      const board = str(payload, "board");
       const card = await createCard({
         title,
         description: body,
-        columnId: await safeColumnId(str(payload, "column")),
+        board,
+        column: str(payload, "column"),
         themeTag: str(payload, "themeTag"),
         dueDate: date(payload, "dueDate"),
       });
