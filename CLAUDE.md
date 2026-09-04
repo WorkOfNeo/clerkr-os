@@ -84,10 +84,21 @@ to was the failure mode.
   `FeatureSignal` pointing back, so the feature page's "Source signals" and the
   meeting's delete both still work.
 - `proposeBrief` in [src/lib/meetings/structure.ts](src/lib/meetings/structure.ts)
-  is the only pipeline, shared by the server action and the MCP tools. It
-  stores the TL;DR, embeds the meeting, and replaces the meeting's PROPOSED
-  cards. **Accepted and dismissed cards are never re-proposed** (matched by
-  kind + title), so "Propose again" is safe to click.
+  is the only pipeline, shared by the server action and the MCP tools:
+  extract (structured JSON, the editable meeting prompt) → **review** →
+  persist. It stores the TL;DR, embeds the meeting, and replaces the
+  meeting's PROPOSED cards. **Accepted and dismissed cards are never
+  re-proposed** (matched by kind + title), so "Propose again" is safe.
+- **The reviewer is an agent and its reasoning is shown.**
+  [src/lib/meetings/review.ts](src/lib/meetings/review.ts) runs a tool loop
+  (same pattern as the chat agent): it can `search_workspace` and must
+  `finalize` with a one-line `why` per kept item and per dropped item, and
+  may point a kept item at an existing record by id (validated against the
+  DB — it can't invent one). The trace (`Meeting.reasoning`, shape
+  `ReasoningTrace`) renders on the meeting page above the cards, and each
+  card shows its `why`. The reviewer is best-effort: if it throws or never
+  finalizes, the raw extraction is shown with a trace that says so. It keeps
+  anything it forgot to mention rather than dropping it silently.
 - `createMeeting` runs `proposeBrief` immediately when OpenAI is configured —
   nothing but the meeting row and its TL;DR is written, so it costs nothing to
   be eager. A failure leaves the meeting unread with the button to try again.

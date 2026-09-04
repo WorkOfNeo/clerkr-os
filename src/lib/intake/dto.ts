@@ -47,7 +47,11 @@ export function toDTO(p: {
     matchId: p.matchId,
     matchTitle: p.matchTitle,
     matchScore: p.matchScore,
-    likelyDuplicate: (p.matchScore ?? 0) >= DUPLICATE_THRESHOLD,
+    // Either the nearest-neighbour score says so, or the meeting reviewer
+    // pointed at a specific existing record (no score — it looked, not guessed).
+    likelyDuplicate:
+      (p.matchScore ?? 0) >= DUPLICATE_THRESHOLD ||
+      Boolean((p.payload as Record<string, unknown> | null)?.agentMatch),
     createdType: p.createdType,
     createdId: p.createdId,
   };

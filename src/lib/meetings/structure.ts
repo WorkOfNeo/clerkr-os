@@ -1,21 +1,25 @@
-import type { IntakeKind, Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import { embedMeeting } from "@/lib/ai/embed-entities";
 import { extractBrief, type ExtractedBrief } from "@/lib/ai/extract-brief";
 import { findNearest } from "@/lib/ai/intake";
 import { db } from "@/lib/db";
 
+import { reviewDrafts, unreviewedTrace, type Draft, type ReasoningTrace } from "./review";
+
 // Meeting → proposals.
 //
-// The transcript is read once and everything the model finds — decisions,
-// feature ideas, action items, open questions — lands as IntakeProposal rows
-// hanging off the meeting. Nothing else is written: no Feature in the library,
-// no ActionItem on the meeting, until a person accepts the card. That is the
-// same safety model as the /chat intake desk, reusing the same rows, the same
-// card and the same accept path (src/lib/intake/accept.ts).
+// Three steps: extract a brief from the transcript (structured JSON, using the
+// editable meeting prompt), have the reviewer agent check it against what
+// exists and explain each item (src/lib/meetings/review.ts), then persist the
+// result as IntakeProposal rows hanging off the meeting. Nothing else is
+// written: no Feature in the library, no ActionItem on the meeting, until a
+// person accepts the card. That is the same safety model as the /chat intake
+// desk, reusing the same rows, the same card and the same accept path
+// (src/lib/intake/accept.ts).
 //
-// The TL;DR is the one exception — it is a summary of the meeting itself, not
-// a record elsewhere, so it is stored straight on the row.
+// The TL;DR and the reasoning trace are the exceptions — they describe the
+// meeting and the read itself, not records elsewhere, so they live on the row.
 //
 // Called from the /meetings server actions and the MCP meeting tools so the
 // two entry points can never drift.
@@ -32,42 +36,20 @@ export interface ProposeResult {
   proposed: number;
   /** Items the model found again that had already been accepted or dismissed. */
   skipped: number;
+  /** Items the reviewer dropped as noise or duplicates. */
+  dropped: number;
+  /** Whether the reviewer agent ran to completion. */
+  reviewed: boolean;
 }
 
-interface Draft {
-  kind: IntakeKind;
-  title: string;
-  body: string | null;
-  payload: Record<string, unknown>;
-}
+type MeetingRow = { id: string; title: string; transcript: string };
 
 function key(kind: string, title: string): string {
   return `${kind}:${title.trim().toLowerCase()}`;
 }
 
-export async function proposeBrief(meetingId: string): Promise<ProposeResult> {
-  const meeting = await db.meeting.findUnique({
-    where: { id: meetingId },
-    select: { id: true, title: true, transcript: true },
-  });
-  if (!meeting) throw new Error("Meeting not found.");
-
-  const brief = await extractBrief(meeting.transcript);
-  return applyBrief(meeting, brief);
-}
-
-/**
- * The write half, split from the model call so it can be exercised without
- * OpenAI: given an extracted brief, replace the meeting's outstanding
- * proposals and store the TL;DR.
- */
-export async function applyBrief(
-  meeting: { id: string; title: string; transcript: string },
-  brief: ExtractedBrief,
-): Promise<ProposeResult> {
-  const meetingId = meeting.id;
-
-  const drafts: Draft[] = [
+export function draftsFromBrief(brief: ExtractedBrief): Draft[] {
+  return [
     ...brief.decisions.map<Draft>((d) => ({
       kind: "DECISION",
       title: d.content,
@@ -98,6 +80,57 @@ export async function applyBrief(
       payload: {},
     })),
   ];
+}
+
+export async function proposeBrief(meetingId: string): Promise<ProposeResult> {
+  const meeting = await db.meeting.findUnique({
+    where: { id: meetingId },
+    select: { id: true, title: true, transcript: true },
+  });
+  if (!meeting) throw new Error("Meeting not found.");
+
+  const brief = await extractBrief(meeting.transcript);
+  const raw = draftsFromBrief(brief);
+
+  // The reviewer is best-effort: a failure shows the raw extraction with a
+  // trace that says so, rather than losing the brief.
+  let drafts = raw;
+  let trace: ReasoningTrace;
+  try {
+    const reviewed = await reviewDrafts(meeting, raw);
+    drafts = reviewed.drafts;
+    trace = reviewed.trace;
+  } catch (err) {
+    console.warn("[proposeBrief] review failed:", err);
+    trace = unreviewedTrace(
+      `The reviewer failed (${err instanceof Error ? err.message : String(err)}), so these are the raw extraction.`,
+    );
+  }
+
+  return persistDrafts(meeting, brief.tldr, drafts, trace, raw.length - drafts.length);
+}
+
+/**
+ * The write half without the model calls, so it can be exercised without
+ * OpenAI: given an extracted brief, replace the meeting's outstanding
+ * proposals and store the TL;DR.
+ */
+export async function applyBrief(
+  meeting: MeetingRow,
+  brief: ExtractedBrief,
+  trace: ReasoningTrace = unreviewedTrace("Applied without the reviewer."),
+): Promise<ProposeResult> {
+  return persistDrafts(meeting, brief.tldr, draftsFromBrief(brief), trace, 0);
+}
+
+async function persistDrafts(
+  meeting: MeetingRow,
+  tldr: string,
+  drafts: Draft[],
+  trace: ReasoningTrace,
+  dropped: number,
+): Promise<ProposeResult> {
+  const meetingId = meeting.id;
 
   // A re-run must not re-surface something a person already decided on. The
   // model tends to phrase the same item the same way twice, so an exact
@@ -110,11 +143,14 @@ export async function applyBrief(
   const fresh = drafts.filter((d) => !seen.has(key(d.kind, d.title)));
 
   // Match against what exists BEFORE the transaction so a slow embedding call
-  // never holds a write lock. Matching is best-effort inside findNearest.
+  // never holds a write lock. Matching is best-effort inside findNearest, and
+  // a record the reviewer pointed at wins over the nearest-neighbour guess.
   const matched = [];
   for (const draft of fresh) {
-    const match = await findNearest(draft.kind, `${draft.title}\n\n${draft.body ?? ""}`);
-    matched.push({ draft, match });
+    const nearest = draft.existing
+      ? null
+      : await findNearest(draft.kind, `${draft.title}\n\n${draft.body ?? ""}`);
+    matched.push({ draft, nearest });
   }
 
   await db.$transaction([
@@ -122,9 +158,13 @@ export async function applyBrief(
     db.intakeProposal.deleteMany({ where: { meetingId, status: "PROPOSED" } }),
     db.meeting.update({
       where: { id: meetingId },
-      data: { tldr: brief.tldr, structuredAt: new Date() },
+      data: {
+        tldr,
+        structuredAt: new Date(),
+        reasoning: trace as unknown as Prisma.InputJsonValue,
+      },
     }),
-    ...matched.map(({ draft, match }, order) =>
+    ...matched.map(({ draft, nearest }, order) =>
       db.intakeProposal.create({
         data: {
           meetingId,
@@ -133,10 +173,10 @@ export async function applyBrief(
           title: draft.title.slice(0, 300),
           body: draft.body,
           payload: draft.payload as Prisma.InputJsonValue,
-          matchType: match?.type ?? null,
-          matchId: match?.id ?? null,
-          matchTitle: match?.title ?? null,
-          matchScore: match?.score ?? null,
+          matchType: draft.existing?.type ?? nearest?.type ?? null,
+          matchId: draft.existing?.id ?? nearest?.id ?? null,
+          matchTitle: draft.existing?.title ?? nearest?.title ?? null,
+          matchScore: draft.existing ? null : (nearest?.score ?? null),
         },
       }),
     ),
@@ -145,14 +185,16 @@ export async function applyBrief(
   // Semantic recall of the meeting itself is harmless and useful, so it is
   // not gated on acceptance. Best-effort: the embed sweep catches a miss.
   try {
-    await embedMeeting(meetingId, meeting.title, brief.tldr, meeting.transcript);
+    await embedMeeting(meetingId, meeting.title, tldr, meeting.transcript);
   } catch (err) {
     console.warn("[proposeBrief] embedMeeting failed:", err);
   }
 
   return {
-    tldr: brief.tldr,
+    tldr,
     proposed: matched.length,
     skipped: drafts.length - fresh.length,
+    dropped,
+    reviewed: trace.completed,
   };
 }

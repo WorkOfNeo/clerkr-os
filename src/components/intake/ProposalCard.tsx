@@ -216,6 +216,12 @@ export function ProposalCard({
                   {state.body}
                 </p>
               )}
+              {/* The reviewer's one line of reasoning — why this card exists. */}
+              {typeof state.payload.why === "string" && state.payload.why ? (
+                <p className="mt-1 text-[12px] italic leading-relaxed text-muted-foreground/80">
+                  {state.payload.why}
+                </p>
+              ) : null}
             </>
           )}
 
@@ -225,8 +231,16 @@ export function ProposalCard({
             <div className="mt-2 flex items-start gap-1.5 rounded-md bg-warning/10 px-2 py-1.5 text-[12px] text-warning">
               <CircleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
               <span>
-                Looks like <strong className="font-medium">{state.matchTitle}</strong> (
-                {Math.round((state.matchScore ?? 0) * 100)}% match).{" "}
+                {state.matchScore == null ? (
+                  <>
+                    Already tracked as <strong className="font-medium">{state.matchTitle}</strong>.
+                  </>
+                ) : (
+                  <>
+                    Looks like <strong className="font-medium">{state.matchTitle}</strong> (
+                    {Math.round(state.matchScore * 100)}% match).
+                  </>
+                )}{" "}
                 {canLink
                   ? "Link to that instead of adding a second one."
                   : "Consider commenting on that instead."}

@@ -324,6 +324,11 @@ model Meeting {
   transcript   String // raw pasted transcript / summary
   tldr         String? // AI-generated brief summary
   structuredAt DateTime? // set when the brief was last extracted
+  // How the last read was reasoned: what the reviewer searched, what it found,
+  // what it kept and dropped and why. Shown on the meeting page so a proposal
+  // never appears without the thinking behind it. Shape: ReasoningTrace in
+  // src/lib/meetings/review.ts.
+  reasoning    Json?
   embedding    Unsupported("vector(1536)")? // semantic-search vector (raw SQL writes)
   embeddedAt   DateTime?
   authorId     String

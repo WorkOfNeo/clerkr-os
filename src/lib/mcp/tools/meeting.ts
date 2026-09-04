@@ -62,6 +62,8 @@ const meetingListSelect = {
 const meetingFullSelect = {
   ...meetingListSelect,
   transcript: true,
+  // How the last read was reasoned (searches, kept/dropped, summary).
+  reasoning: true,
   decisions: { select: { id: true, content: true, owner: true } },
   featureSignals: {
     select: {
@@ -215,7 +217,8 @@ export const MEETING_TOOLS: ToolDef[] = [
     description:
       "Fetch one meeting by id or slug, including the full transcript, the accepted brief " +
       "(decisions, feature signals with their linked features, action items, open questions) " +
-      "and the proposals still waiting to be accepted.",
+      "and the proposals still waiting to be accepted, plus `reasoning` — how the reviewer read " +
+      "the transcript (what it searched, what it kept and dropped, and why).",
     inputSchema: {
       type: "object",
       properties: {

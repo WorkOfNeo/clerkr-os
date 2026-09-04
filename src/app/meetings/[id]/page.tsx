@@ -8,6 +8,7 @@ import { ActionItemTicketButton } from "@/components/meeting/ActionItemTicketBut
 import { ActionItemToggle } from "@/components/meeting/ActionItemToggle";
 import { DeleteMeetingButton } from "@/components/meeting/DeleteMeetingButton";
 import { MeetingProposals } from "@/components/meeting/MeetingProposals";
+import { MeetingReasoning } from "@/components/meeting/MeetingReasoning";
 import { PromoteSignalButton } from "@/components/meeting/PromoteSignalButton";
 import { StructureButton } from "@/components/meeting/StructureButton";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ import { db } from "@/lib/db";
 import { formatShortDate } from "@/lib/format";
 import { toDTO } from "@/lib/intake/dto";
 import { meetingFootprint } from "@/lib/meetings/delete";
+import { parseTrace } from "@/lib/meetings/review";
 import { requireSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
@@ -73,6 +75,7 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
   const aiReady = isOpenAIAvailable();
   const footprint = await meetingFootprint(meeting.id);
   const proposals = meeting.proposals.map(toDTO);
+  const trace = parseTrace(meeting.reasoning);
   const accepted =
     meeting.decisions.length +
     meeting.featureSignals.length +
@@ -123,6 +126,9 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
             <p className="text-sm text-muted-foreground">{meeting.tldr}</p>
           </section>
         )}
+
+        {/* Why the cards below look the way they do — always before the cards. */}
+        {trace && <MeetingReasoning trace={trace} />}
 
         {/* What the AI found, waiting to be accepted. */}
         <MeetingProposals meetingId={meeting.id} proposals={proposals} />
