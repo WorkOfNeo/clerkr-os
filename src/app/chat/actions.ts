@@ -3,11 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { runChatTurn } from "@/lib/ai/chat";
-import { detectIntent } from "@/lib/ai/intent";
+import { runAgentTurn } from "@/lib/ai/agent";
 import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { db } from "@/lib/db";
-import type { ProposalDTO } from "@/lib/intake/dto";
+import { toDTO, type ProposalDTO } from "@/lib/intake/dto";
 import { requireSession } from "@/lib/session";
 
 export interface ChatMessageDTO {
@@ -65,6 +64,9 @@ export async function sendChatMessage(input: {
   sessionId: string | null;
   userMessage: string;
   ticketId?: string | null;
+  /** Screenshots pasted with the message. They pin to the user's message and
+   *  follow whatever a proposal becomes, the same as the old File path. */
+  attachments?: { dataUrl: string; fileName?: string; width?: number; height?: number }[];
 }): Promise<ChatTurnResponse> {
   const session = await requireSession();
   const userMessage = input.userMessage.trim();
@@ -100,35 +102,27 @@ export async function sendChatMessage(input: {
     if (t) ticket = t;
   }
 
+  const userRow = await db.chatMessage.create({
+    data: { sessionId, role: "USER", content: userMessage },
+    select: { id: true },
+  });
+  if (input.attachments?.length) {
+    const { attachImages } = await import("@/lib/attachments");
+    await attachImages(input.attachments, { kind: "chatMessage", id: userRow.id }, session.user.id);
+  }
+
   try {
-    // "Add a card for X" and "yeah add it" are instructions, not questions.
-    // Answering them from the read-only Copilot produces "I can't do that",
-    // which is untrue of the app — so route them to intake instead.
-    const intent = await detectIntent({ sessionId, userMessage });
-    if (intent === "create") {
-      const { classifyIntake } = await import("@/lib/ai/intake");
-      const { toDTO } = await import("@/lib/intake/dto");
+    // One agent for every turn. It decides whether to search, whether to ask,
+    // and whether to propose — rather than the surface deciding in advance and
+    // being wrong, which is what the old Ask/File split did.
+    const turn = await runAgentTurn({ sessionId });
 
-      await db.chatMessage.create({
-        data: { sessionId, role: "USER", content: userMessage },
-      });
-      const result = await classifyIntake({ sessionId, rawText: userMessage });
-      const rows = await db.intakeProposal.findMany({
-        where: { messageId: result.messageId },
-        orderBy: { order: "asc" },
-      });
-
-      revalidatePath(`/chat/${sessionId}`);
-      return {
-        sessionId,
-        messages: await getSessionMessages(sessionId),
-        citedNotes: [],
-        proposals: rows.map(toDTO),
-        proposalMessageId: result.messageId,
-      };
-    }
-
-    const turn = await runChatTurn({ sessionId, userMessage, ticket });
+    const proposals = turn.proposalMessageId
+      ? await db.intakeProposal.findMany({
+          where: { messageId: turn.proposalMessageId },
+          orderBy: { order: "asc" },
+        })
+      : [];
 
     const messages = await getSessionMessages(sessionId);
     const citedNotes = turn.citedNoteIds.length
@@ -139,7 +133,13 @@ export async function sendChatMessage(input: {
       : [];
 
     revalidatePath(`/chat/${sessionId}`);
-    return { sessionId, messages, citedNotes };
+    return {
+      sessionId,
+      messages,
+      citedNotes,
+      proposals: proposals.map(toDTO),
+      proposalMessageId: turn.proposalMessageId ?? undefined,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return {

@@ -234,6 +234,13 @@ enum IntakeKind {
   // Not a new record — a comment on something that already exists, which is
   // what a near-duplicate should become.
   COMMENT
+  // Meeting-brief kinds. A structured meeting proposes these instead of writing
+  // them; accepting one creates the Decision / ActionItem / OpenQuestion row on
+  // the meeting (a FEATURE proposal from a meeting creates the Feature AND the
+  // FeatureSignal that links it back).
+  DECISION
+  ACTION_ITEM
+  OPEN_QUESTION
 }
 
 enum IntakeStatus {
@@ -243,9 +250,15 @@ enum IntakeStatus {
 }
 
 model IntakeProposal {
-  id        String      @id @default(uuid())
-  messageId String
-  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  id String @id @default(uuid())
+
+  // Exactly one parent: the chat message that proposed it, or the meeting whose
+  // brief it came out of. Both cascade, so deleting the parent takes its
+  // outstanding cards with it.
+  messageId String?
+  message   ChatMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  meetingId String?
+  meeting   Meeting?     @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   kind   IntakeKind
   status IntakeStatus @default(PROPOSED)
@@ -275,16 +288,19 @@ model IntakeProposal {
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([messageId, order])
+  @@index([meetingId, order])
   @@index([status])
   @@map("intake_proposal")
 }
 
 // ─── Meetings → Briefs ───────────────────────────────────────────────────────
 // A Meeting holds the raw transcript/summary. `extractBrief` (src/lib/ai) turns
-// it into a structured brief: the TL;DR lives on the Meeting; decisions,
-// feature signals, action items and open questions are normalised child rows so
-// they can later link into the Feature Library / Knowledge graph. Re-running the
-// extraction clears and re-creates the children (our own data — safe to delete).
+// it into a brief: the TL;DR lives on the Meeting, and everything else —
+// decisions, feature ideas, action items, open questions — is PROPOSED as
+// IntakeProposal rows the user accepts one by one. Only an accepted proposal
+// becomes a child row here; nothing lands in the Feature Library or the ticket
+// queue behind the user's back. Re-running the extraction replaces the
+// outstanding proposals and leaves accepted rows alone.
 
 enum MeetingKind {
   INTERNAL
@@ -308,6 +324,11 @@ model Meeting {
   transcript   String // raw pasted transcript / summary
   tldr         String? // AI-generated brief summary
   structuredAt DateTime? // set when the brief was last extracted
+  // How the last read was reasoned: what the reviewer searched, what it found,
+  // what it kept and dropped and why. Shown on the meeting page so a proposal
+  // never appears without the thinking behind it. Shape: ReasoningTrace in
+  // src/lib/meetings/review.ts.
+  reasoning    Json?
   embedding    Unsupported("vector(1536)")? // semantic-search vector (raw SQL writes)
   embeddedAt   DateTime?
   authorId     String
@@ -320,6 +341,7 @@ model Meeting {
   featureSignals FeatureSignal[]
   actionItems    ActionItem[]
   openQuestions  OpenQuestion[]
+  proposals      IntakeProposal[]
 
   @@index([meetingDate])
   @@index([authorId])

@@ -7,9 +7,13 @@ import {
   ArrowRight,
   Check,
   CircleAlert,
+  CircleHelp,
   FileText,
+  Gavel,
   KanbanSquare,
   Lightbulb,
+  Link2,
+  ListTodo,
   MessageSquarePlus,
   Pencil,
   Ticket,
@@ -21,6 +25,7 @@ import {
 import {
   acceptProposalAction,
   dismissProposalAction,
+  linkProposalAction,
   updateProposalAction,
 } from "@/app/chat/intake-actions";
 import type { ProposalDTO } from "@/lib/intake/dto";
@@ -38,16 +43,33 @@ import { cn } from "@/lib/utils";
  * is kept for the one thing that genuinely needs attention — the duplicate
  * warning below — so that when something IS coloured, it means something.
  */
-const KIND_META: Record<string, { label: string; Icon: LucideIcon }> = {
+const KIND_META: Record<string, { label: string; Icon: LucideIcon; accept?: string }> = {
   TICKET: { label: "Ticket", Icon: Ticket },
   KANBAN_CARD: { label: "Board card", Icon: KanbanSquare },
   WIKI_NOTE: { label: "Wiki note", Icon: FileText },
   MEETING: { label: "Meeting", Icon: Users },
   FEATURE: { label: "Feature", Icon: Lightbulb },
   COMMENT: { label: "Comment", Icon: MessageSquarePlus },
+  // Meeting-brief kinds. They become rows on the meeting rather than records
+  // elsewhere, so the verb is "accept", not "create".
+  DECISION: { label: "Decision", Icon: Gavel, accept: "Accept" },
+  ACTION_ITEM: { label: "Action item", Icon: ListTodo, accept: "Accept" },
+  OPEN_QUESTION: { label: "Open question", Icon: CircleHelp, accept: "Accept" },
 };
 
-export function ProposalCard({ proposal }: { proposal: ProposalDTO }) {
+/** Which kinds live on the meeting page — for those, accepting moves the item
+ *  into the brief below, so the parent re-renders instead of the card. */
+const MEETING_LOCAL = new Set(["DECISION", "ACTION_ITEM", "OPEN_QUESTION"]);
+
+export function ProposalCard({
+  proposal,
+  onChange,
+}: {
+  proposal: ProposalDTO;
+  /** Called after an accept, link or dismiss lands, so a parent that owns the
+   *  surrounding list (the meeting brief) can refresh what it shows. */
+  onChange?: () => void;
+}) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [state, setState] = useState(proposal);
@@ -61,6 +83,9 @@ export function ProposalCard({ proposal }: { proposal: ProposalDTO }) {
   const meta = KIND_META[state.kind] ?? KIND_META.TICKET;
   const dismissed = state.status === "DISMISSED";
 
+  const meetingLocal = MEETING_LOCAL.has(state.kind);
+  const canLink = state.kind === "FEATURE" && state.matchType === "feature" && Boolean(state.matchId);
+
   function accept() {
     startTransition(async () => {
       const res = await acceptProposalAction(state.id);
@@ -70,7 +95,22 @@ export function ProposalCard({ proposal }: { proposal: ProposalDTO }) {
       }
       setCreated(res);
       setState((s) => ({ ...s, status: "ACCEPTED" }));
-      toast(`Created ${res.label}`, { tone: "success" });
+      toast(meetingLocal ? "Accepted" : `Created ${res.label}`, { tone: "success" });
+      onChange?.();
+    });
+  }
+
+  function linkExisting() {
+    startTransition(async () => {
+      const res = await linkProposalAction(state.id);
+      if ("error" in res) {
+        toast(res.error, { tone: "error" });
+        return;
+      }
+      setCreated(res);
+      setState((s) => ({ ...s, status: "ACCEPTED" }));
+      toast(`Linked to ${res.label}`, { tone: "success" });
+      onChange?.();
     });
   }
 
@@ -78,6 +118,7 @@ export function ProposalCard({ proposal }: { proposal: ProposalDTO }) {
     startTransition(async () => {
       await dismissProposalAction(state.id);
       setState((s) => ({ ...s, status: "DISMISSED" }));
+      onChange?.();
     });
   }
 
@@ -129,6 +170,24 @@ export function ProposalCard({ proposal }: { proposal: ProposalDTO }) {
                 → {String(state.payload.column)}
               </span>
             ) : null}
+            {typeof state.payload.owner === "string" && state.payload.owner ? (
+              <span className="text-[11px] text-muted-foreground">
+                owner: {state.payload.owner}
+              </span>
+            ) : null}
+            {typeof state.payload.assignee === "string" && state.payload.assignee ? (
+              <span className="text-[11px] text-muted-foreground">
+                {state.payload.assignee}
+                {typeof state.payload.dueDate === "string" && state.payload.dueDate
+                  ? ` · due ${state.payload.dueDate}`
+                  : ""}
+              </span>
+            ) : null}
+            {typeof state.payload.cluster === "string" && state.payload.cluster ? (
+              <span className="text-[11px] text-muted-foreground">
+                → {state.payload.cluster}
+              </span>
+            ) : null}
           </div>
 
           {editing ? (
@@ -157,6 +216,12 @@ export function ProposalCard({ proposal }: { proposal: ProposalDTO }) {
                   {state.body}
                 </p>
               )}
+              {/* The reviewer's one line of reasoning — why this card exists. */}
+              {typeof state.payload.why === "string" && state.payload.why ? (
+                <p className="mt-1 text-[12px] italic leading-relaxed text-muted-foreground/80">
+                  {state.payload.why}
+                </p>
+              ) : null}
             </>
           )}
 
@@ -166,9 +231,19 @@ export function ProposalCard({ proposal }: { proposal: ProposalDTO }) {
             <div className="mt-2 flex items-start gap-1.5 rounded-md bg-warning/10 px-2 py-1.5 text-[12px] text-warning">
               <CircleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
               <span>
-                Looks like <strong className="font-medium">{state.matchTitle}</strong> (
-                {Math.round((state.matchScore ?? 0) * 100)}% match). Consider commenting on that
-                instead.
+                {state.matchScore == null ? (
+                  <>
+                    Already tracked as <strong className="font-medium">{state.matchTitle}</strong>.
+                  </>
+                ) : (
+                  <>
+                    Looks like <strong className="font-medium">{state.matchTitle}</strong> (
+                    {Math.round(state.matchScore * 100)}% match).
+                  </>
+                )}{" "}
+                {canLink
+                  ? "Link to that instead of adding a second one."
+                  : "Consider commenting on that instead."}
               </span>
             </div>
           )}
@@ -186,8 +261,14 @@ export function ProposalCard({ proposal }: { proposal: ProposalDTO }) {
             !editing && (
               <div className="mt-2.5 flex items-center gap-1.5">
                 <Button size="xs" onClick={accept} disabled={isPending}>
-                  {isPending ? "Creating…" : "Create"}
+                  {isPending ? "Working…" : (meta.accept ?? "Create")}
                 </Button>
+                {canLink && (
+                  <Button size="xs" variant="outline" onClick={linkExisting} disabled={isPending}>
+                    <Link2 className="h-3 w-3" />
+                    Link existing
+                  </Button>
+                )}
                 <Button size="xs" variant="ghost" onClick={() => setEditing(true)}>
                   <Pencil className="h-3 w-3" />
                   Edit
@@ -217,6 +298,7 @@ function hrefFor(p: ProposalDTO): string {
     case "meeting":
       return `/meetings/${p.createdId}`;
     case "feature":
+    case "feature_link":
       return "/features";
     default:
       return "/tickets";

@@ -44,7 +44,17 @@ interface RawProposal {
   payload?: Record<string, unknown> | null;
 }
 
-const KINDS: IntakeKind[] = ["TICKET", "MEETING", "WIKI_NOTE", "KANBAN_CARD", "FEATURE", "COMMENT"];
+const KINDS: IntakeKind[] = [
+  "TICKET",
+  "MEETING",
+  "WIKI_NOTE",
+  "KANBAN_CARD",
+  "FEATURE",
+  "COMMENT",
+  "DECISION",
+  "ACTION_ITEM",
+  "OPEN_QUESTION",
+];
 
 function normaliseKind(v: unknown): IntakeKind | null {
   const s = String(v ?? "").toUpperCase().replace(/[\s-]/g, "_");
@@ -57,6 +67,8 @@ const MATCH_TABLE: Partial<Record<IntakeKind, { table: string; type: string }>> 
   FEATURE: { table: "feature", type: "feature" },
   MEETING: { table: "meeting", type: "meeting" },
   WIKI_NOTE: { table: "wiki_note", type: "wiki_note" },
+  // A meeting's action item is often something already sitting in the queue.
+  ACTION_ITEM: { table: "ticket", type: "ticket" },
 };
 
 export interface NearestMatch {

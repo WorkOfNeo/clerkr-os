@@ -6,7 +6,8 @@ import { z } from "zod";
 
 import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { db } from "@/lib/db";
-import { runStructurePipeline } from "@/lib/meetings/structure";
+import { deleteMeetingCascade } from "@/lib/meetings/delete";
+import { proposeBrief } from "@/lib/meetings/structure";
 import { createTicket } from "@/lib/tickets";
 import { requireSession } from "@/lib/session";
 import { slugify, uniqueSlug } from "@/lib/slug";
@@ -25,6 +26,13 @@ function parseDate(s: string | null | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Save the meeting and, when OpenAI is configured, read the transcript straight
+ * away so the page you land on already shows the proposals. Nothing but the
+ * meeting row and its TL;DR is written until a card is accepted, so running
+ * the model here is safe; a failure just leaves the meeting unstructured with
+ * the "Propose with AI" button to try again.
+ */
 export async function createMeeting(formData: FormData): Promise<void> {
   const session = await requireSession();
   const parsed = createInput.parse(Object.fromEntries(formData.entries()));
@@ -51,11 +59,21 @@ export async function createMeeting(formData: FormData): Promise<void> {
     select: { id: true },
   });
 
+  if (isOpenAIAvailable()) {
+    try {
+      await proposeBrief(meeting.id);
+    } catch (err) {
+      console.warn("[createMeeting] proposeBrief failed:", err);
+    }
+  }
+
   revalidatePath("/meetings");
   redirect(`/meetings/${meeting.id}`);
 }
 
-export async function structureMeeting(id: string): Promise<{ error?: string }> {
+/** (Re-)read the transcript into proposals. Accepted and dismissed cards are
+ *  left alone; outstanding ones are replaced. */
+export async function structureMeeting(id: string): Promise<{ error?: string; proposed?: number }> {
   await requireSession();
   if (!id) throw new Error("id required");
 
@@ -64,16 +82,13 @@ export async function structureMeeting(id: string): Promise<{ error?: string }> 
   }
 
   try {
-    await runStructurePipeline(id);
+    const result = await proposeBrief(id);
+    revalidatePath("/meetings");
+    revalidatePath(`/meetings/${id}`);
+    return { proposed: result.proposed };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
-
-  revalidatePath("/meetings");
-  revalidatePath(`/meetings/${id}`);
-  revalidatePath("/features");
-  revalidatePath("/knowledge");
-  return {};
 }
 
 export async function toggleActionItem(input: { id: string; done: boolean }): Promise<void> {
@@ -136,10 +151,15 @@ export async function updateSignalStatus(input: {
   revalidatePath(`/meetings/${signal.meetingId}`);
 }
 
+/** The meeting, its brief, and what it put elsewhere — features it added to
+ *  the library and tickets raised from it — in one go. See lib/meetings/delete. */
 export async function deleteMeeting(id: string): Promise<void> {
   await requireSession();
   if (!id) throw new Error("id required");
-  await db.meeting.delete({ where: { id } });
+  await deleteMeetingCascade(id);
   revalidatePath("/meetings");
+  revalidatePath("/features");
+  revalidatePath("/knowledge");
+  revalidatePath("/tickets");
   redirect("/meetings");
 }

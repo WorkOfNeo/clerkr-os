@@ -7,27 +7,26 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { ArrowUp, Sparkles, Undo2, WandSparkles } from "lucide-react";
 
 import { sendChatMessage } from "@/app/chat/actions";
-import { submitIntake } from "@/app/chat/intake-actions";
 import { improvePromptAction } from "@/app/chat/prompt-actions";
 import type { ProposalDTO } from "@/lib/intake/dto";
 import { ImageDropzone, type PendingImage } from "@/components/attachments/ImageDropzone";
 import { ProposalCard } from "@/components/intake/ProposalCard";
 import { MicButton, VoicePanel, useVoiceInput } from "@/components/intake/VoiceInput";
-import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
 import type { ChatMessageItem, CitedNote } from "@/components/llm/ChatMessageList";
 import { SaveToWikiButton } from "@/components/llm/SaveToWikiButton";
 
 /**
- * The front door.
+ * The front door. One chat, with tools.
  *
- * Two modes on one surface, because they're the same gesture with different
- * intent: FILE turns a paste into records, ASK answers a question about what
- * already exists. Splitting them into two pages would mean choosing before you
- * know which one you need.
+ * There used to be two modes — "File it" classified a paste into records,
+ * "Ask" answered questions — and picking the wrong one was the common case:
+ * asked in Ask mode to add something to a board, the read-only Copilot replied
+ * "I can't do that", which was false about the app. The agent behind this now
+ * decides for itself whether to search, whether to ask, and whether to propose,
+ * so there is nothing left for the user to choose in advance.
  */
-type Mode = "file" | "ask";
 
 const FILE_EXAMPLES = [
   "Paste raw meeting notes — attendees, what was said, what was decided",
@@ -47,9 +46,6 @@ export function IntakeConversation({
   initialProposals: Record<string, ProposalDTO[]>;
 }) {
   const router = useRouter();
-  // Opens in Ask: it reasons about what you sent before proposing anything,
-  // and "File it" is one tap away when you already know what you want.
-  const [mode, setMode] = useState<Mode>("ask");
   const [sessionId, setSessionId] = useState(initialSessionId);
   const [messages, setMessages] = useState<ChatMessageItem[]>(initialMessages);
   const [citedNotes, setCitedNotes] = useState<CitedNote[]>(initialCitedNotes);
@@ -95,7 +91,7 @@ export function IntakeConversation({
     if (!value.trim() || busy) return;
     setError(null);
     startImprove(async () => {
-      const res = await improvePromptAction({ text: value, mode });
+      const res = await improvePromptAction({ text: value, mode: "ask" });
       if (res.error) {
         setError(res.error);
         return;
@@ -134,42 +130,30 @@ export function IntakeConversation({
     ]);
 
     start(async () => {
-      if (mode === "file") {
-        const res = await submitIntake({
-          sessionId,
-          text: value,
-          attachments: staged.map((i) => ({
-            dataUrl: i.dataUrl,
-            fileName: i.fileName,
-            ...(i.width ? { width: i.width } : {}),
-            ...(i.height ? { height: i.height } : {}),
-          })),
-        });
-        if (res.error) setError(res.error);
-        if (res.sessionId && res.sessionId !== sessionId) setSessionId(res.sessionId);
-        if (res.messageId) {
-          setMessages((prev) => [
-            ...prev,
-            { id: res.messageId!, role: "ASSISTANT", content: res.reply, citedNoteIds: [] },
-          ]);
-          setProposals((prev) => ({ ...prev, [res.messageId!]: res.proposals }));
-        }
-      } else {
-        const res = await sendChatMessage({ sessionId, userMessage: value, ticketId: null });
-        if (res.sessionId && res.sessionId !== sessionId) setSessionId(res.sessionId);
-        if (res.messages.length) setMessages(res.messages);
-        setCitedNotes((prev) => {
-          const byId = new Map(prev.map((n) => [n.id, n]));
-          for (const n of res.citedNotes) byId.set(n.id, n);
-          return Array.from(byId.values());
-        });
-        // Ask mode routes "add a card for X" to intake rather than answering
-        // "I can't" — so a question turn can come back with cards.
-        if (res.proposalMessageId && res.proposals) {
-          setProposals((prev) => ({ ...prev, [res.proposalMessageId!]: res.proposals! }));
-        }
-        if (res.error) setError(res.error);
+      const res = await sendChatMessage({
+        sessionId,
+        userMessage: value,
+        ticketId: null,
+        attachments: staged.map((i) => ({
+          dataUrl: i.dataUrl,
+          fileName: i.fileName,
+          ...(i.width ? { width: i.width } : {}),
+          ...(i.height ? { height: i.height } : {}),
+        })),
+      });
+      if (res.sessionId && res.sessionId !== sessionId) setSessionId(res.sessionId);
+      if (res.messages.length) setMessages(res.messages);
+      setCitedNotes((prev) => {
+        const byId = new Map(prev.map((n) => [n.id, n]));
+        for (const n of res.citedNotes) byId.set(n.id, n);
+        return Array.from(byId.values());
+      });
+      // A turn comes back with cards whenever the agent decided to propose —
+      // which is its call to make, not the user's.
+      if (res.proposalMessageId && res.proposals) {
+        setProposals((prev) => ({ ...prev, [res.proposalMessageId!]: res.proposals! }));
       }
+      if (res.error) setError(res.error);
       router.refresh();
     });
   }
@@ -298,16 +282,6 @@ export function IntakeConversation({
             </div>
           )}
 
-          <Segmented
-            layoutId="intake-mode"
-            size="sm"
-            value={mode}
-            onChange={(v) => setMode(v as Mode)}
-            segments={[
-              { value: "file", label: "File it" },
-              { value: "ask", label: "Ask" },
-            ]}
-          />
 
           {voice.active ? (
             <VoicePanel voice={voice} />
@@ -337,9 +311,7 @@ export function IntakeConversation({
               // rather than a search field.
 
               placeholder={
-                mode === "file"
-                  ? "Paste your notes… (↵ to send, ⇧↵ for a new line)"
-                  : "Ask, or tell it to file something… (↵ to send, ⇧↵ for a new line)"
+                "Type anything — a note to file, or a question. (↵ to send, ⇧↵ for a new line)"
               }
               className={cn(
                 "w-full resize-none bg-transparent px-3.5 py-3 text-[16px] leading-relaxed outline-none",
@@ -377,11 +349,7 @@ export function IntakeConversation({
                   type="button"
                   onClick={improve}
                   disabled={busy || !text.trim()}
-                  title={
-                    mode === "file"
-                      ? "Tidy the draft so intake files it well"
-                      : "Sharpen the question for the Copilot"
-                  }
+                  title="Tidy the draft before sending"
                   className={cn(
                     "pressable flex h-8 items-center gap-1.5 rounded-lg px-2 text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
                     (busy || !text.trim()) && "opacity-40",
@@ -395,10 +363,7 @@ export function IntakeConversation({
                 </button>
               )}
               <p className="hidden min-w-0 truncate text-[11.5px] text-muted-foreground sm:block">
-                {notice ??
-                  (mode === "file"
-                    ? "Proposals only — nothing is created until you confirm each card."
-                    : "Answers from your meetings, features, board and wiki.")}
+                {notice ?? "Nothing is created until you confirm the card."}
               </p>
             </div>
             <button

@@ -9,7 +9,7 @@ import { requireSession } from "@/lib/session";
 export const metadata: Metadata = {
   title: "New meeting",
   description:
-    "Paste a transcript or rough notes and have them structured into a brief.",
+    "Paste a transcript or rough notes. The AI proposes decisions, features, action items and open questions; you accept what is real.",
 };
 
 export default async function NewMeetingPage() {
@@ -27,7 +27,8 @@ export default async function NewMeetingPage() {
         </div>
         <h1 className="text-display mb-1 text-[28px] font-semibold leading-tight">New meeting</h1>
         <p className="mb-5 text-sm text-muted-foreground">
-          Save the meeting, then structure it into a brief on the next screen.
+          Paste the notes. On the next screen the AI proposes what it found — decisions,
+          feature ideas, action items, open questions — and nothing is filed until you accept it.
         </p>
         <MeetingIntakeForm />
       </main>

@@ -66,6 +66,58 @@ records that should exist. Two modes on one surface: **File it** classifies,
 store, so tuning `intake.systemPrompt` at `/settings/prompts` tunes it for the
 whole team. That is intended — it's an internal tool with one workflow.
 
+## Meetings (`/meetings`) — proposals, not auto-created records
+
+A meeting is the raw transcript plus a TL;DR. **Everything the AI reads out of
+it — decisions, feature ideas, action items, open questions — is an
+`IntakeProposal` the user accepts**, rendered with the same `ProposalCard` as
+`/chat` and written through the same `acceptProposal` in
+[src/lib/intake/accept.ts](src/lib/intake/accept.ts). This replaced a pipeline
+that structured a meeting straight into child rows and auto-promoted every
+feature signal into the library; landing on a page of things you never agreed
+to was the failure mode.
+
+- `IntakeProposal` has **two nullable parents**, `messageId` (chat) or
+  `meetingId` (meeting), both cascading. `IntakeKind` grew `DECISION`,
+  `ACTION_ITEM` and `OPEN_QUESTION`; accepting one creates the row on the
+  meeting. A `FEATURE` accepted from a meeting creates the `Feature` AND the
+  `FeatureSignal` pointing back, so the feature page's "Source signals" and the
+  meeting's delete both still work.
+- `proposeBrief` in [src/lib/meetings/structure.ts](src/lib/meetings/structure.ts)
+  is the only pipeline, shared by the server action and the MCP tools:
+  extract (structured JSON, the editable meeting prompt) → **review** →
+  persist. It stores the TL;DR, embeds the meeting, and replaces the
+  meeting's PROPOSED cards. **Accepted and dismissed cards are never
+  re-proposed** (matched by kind + title), so "Propose again" is safe.
+- **The reviewer is an agent and its reasoning is shown.**
+  [src/lib/meetings/review.ts](src/lib/meetings/review.ts) runs a tool loop
+  (same pattern as the chat agent): it can `search_workspace` and must
+  `finalize` with a one-line `why` per kept item and per dropped item, and
+  may point a kept item at an existing record by id (validated against the
+  DB — it can't invent one). The trace (`Meeting.reasoning`, shape
+  `ReasoningTrace`) renders on the meeting page above the cards, and each
+  card shows its `why`. The reviewer is best-effort: if it throws or never
+  finalizes, the raw extraction is shown with a trace that says so. It keeps
+  anything it forgot to mention rather than dropping it silently.
+- `createMeeting` runs `proposeBrief` immediately when OpenAI is configured —
+  nothing but the meeting row and its TL;DR is written, so it costs nothing to
+  be eager. A failure leaves the meeting unread with the button to try again.
+- A feature proposal that matches the library above `DUPLICATE_THRESHOLD`
+  offers **Link existing** (`linkProposalToExisting`), which creates the
+  signal against the existing feature and records `createdType: "feature_link"`.
+- **Delete is one action from the meeting page** and removes what the meeting
+  put elsewhere: `deleteMeetingCascade` in
+  [src/lib/meetings/delete.ts](src/lib/meetings/delete.ts) deletes features the
+  meeting created and tickets raised from its action items, then the meeting.
+  A feature another meeting also points at, that has kanban cards, or that
+  this meeting only *linked* to is deliberately kept. `meetingFootprint` is
+  what the confirm dialog shows, so it says exactly what will go.
+- MCP: `create_meeting` / `structure_meeting` return the outstanding
+  proposals; `list_proposals`, `accept_proposal`, `link_proposal_to_existing`
+  and `dismiss_proposal` live in
+  [src/lib/mcp/tools/intake.ts](src/lib/mcp/tools/intake.ts). `accept_proposal`
+  is meant to be called only when the user said to accept.
+
 ## Kanban (`/kanban`)
 
 Replaced the fixed Now/Next/Later roadmap. **Columns are editable rows**
