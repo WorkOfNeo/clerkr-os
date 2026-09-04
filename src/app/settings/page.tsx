@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 
-import { headers } from "next/headers";
-
 import { listApiTokens } from "@/lib/api-tokens";
-import { ensureProtocol } from "@/lib/base-url";
+import { currentOrigin } from "@/lib/base-url";
 import { requireSession } from "@/lib/session";
 
 import { AppShell } from "@/components/AppShell";
@@ -12,15 +10,6 @@ import { ConnectGuide } from "./ConnectGuide";
 import { CreateTokenForm } from "./CreateTokenForm";
 import { SkillSection } from "./SkillSection";
 import { TokenList } from "./TokenList";
-
-async function deriveOrigin() {
-  const fromEnv = ensureProtocol(process.env.BETTER_AUTH_URL);
-  if (fromEnv) return fromEnv;
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  const proto = h.get("x-forwarded-proto") ?? "http";
-  return host ? `${proto}://${host}` : "http://localhost:3000";
-}
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -32,7 +21,7 @@ export default async function SettingsPage() {
   const session = await requireSession();
   const [tokens, origin] = await Promise.all([
     listApiTokens(session.user.id),
-    deriveOrigin(),
+    currentOrigin(),
   ]);
 
   return (
@@ -94,6 +83,20 @@ export default async function SettingsPage() {
             className="inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
           >
             Edit ticket categories →
+          </a>
+        </section>
+
+        <section className="space-y-2 border-t pt-6">
+          <h2 className="text-base font-semibold">Pocket</h2>
+          <p className="text-xs text-muted-foreground">
+            Send recordings straight from a Pocket device — they arrive as
+            meetings with cards waiting to be accepted.
+          </p>
+          <a
+            href="/settings/pocket"
+            className="inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Set up Pocket &rarr;
           </a>
         </section>
 
