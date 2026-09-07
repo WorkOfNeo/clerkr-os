@@ -24,24 +24,27 @@ export const metadata: Metadata = {
 
 export default async function MeetingsPage() {
   const session = await requireSession();
-  const meetings = await db.meeting.findMany({
-    orderBy: { meetingDate: "desc" },
-    select: {
-      id: true,
-      title: true,
-      kind: true,
-      meetingDate: true,
-      structuredAt: true,
-      _count: {
-        select: {
-          decisions: true,
-          featureSignals: true,
-          actionItems: true,
-          proposals: { where: { status: "PROPOSED" } },
+  const [pocketConnections, meetings] = await Promise.all([
+    db.pocketConnection.count(),
+    db.meeting.findMany({
+      orderBy: { meetingDate: "desc" },
+      select: {
+        id: true,
+        title: true,
+        kind: true,
+        meetingDate: true,
+        structuredAt: true,
+        _count: {
+          select: {
+            decisions: true,
+            featureSignals: true,
+            actionItems: true,
+            proposals: { where: { status: "PROPOSED" } },
+          },
         },
       },
-    },
-  });
+    }),
+  ]);
 
   return (
     <AppShell email={session.user.email}>
@@ -62,6 +65,13 @@ export default async function MeetingsPage() {
             <Link href="/meetings/new" className="text-foreground underline">
               Add your first one →
             </Link>
+            <span className="mt-2 block text-xs">
+              Or let them arrive on their own &mdash;{" "}
+              <Link href="/settings/pocket" className="text-foreground underline">
+                connect a Pocket recorder
+              </Link>
+              .
+            </span>
           </div>
         ) : (
           <ul className="space-y-2">
@@ -98,6 +108,21 @@ export default async function MeetingsPage() {
               </li>
             ))}
           </ul>
+        )}
+
+        {/* Only useful to someone who hasn't wired a recorder up yet, so it
+            sits at the bottom out of the way rather than in the header. */}
+        {pocketConnections === 0 && meetings.length > 0 && (
+          <p className="mt-8 border-t pt-4 text-xs text-muted-foreground">
+            Recording these on a Pocket?{" "}
+            <Link
+              href="/settings/pocket"
+              className="text-foreground underline underline-offset-4"
+            >
+              Connect it once
+            </Link>{" "}
+            and the notes file themselves.
+          </p>
         )}
       </main>
     </AppShell>

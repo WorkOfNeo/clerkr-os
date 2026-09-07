@@ -35,6 +35,7 @@ const COMMANDS: Command[] = [
   { label: "Ideas", hint: "Inspiration board", href: "/grid", keywords: "idea board grid inspiration pinterest" },
   { label: "Ticket categories", hint: "Settings", href: "/settings/categories", keywords: "category categories tag type settings edit" },
   { label: "AI prompts", hint: "Settings", href: "/settings/prompts", keywords: "prompt ai system settings edit" },
+  { label: "Pocket", hint: "Settings", href: "/settings/pocket", keywords: "pocket recorder recording device webhook meeting notes transcript integration hardware dictaphone" },
   { label: "Install & notifications", hint: "Settings", href: "/settings/notifications", keywords: "install pwa app home screen notification push alert bell iphone safari" },
   { label: "Settings", hint: "Tokens & MCP", href: "/settings", keywords: "settings token api mcp connect" },
 ];
