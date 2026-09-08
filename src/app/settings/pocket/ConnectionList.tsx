@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { AlertTriangle, CheckCircle2, Trash2 } from "lucide-react";
+import { useState, useTransition } from "react";
+import { AlertTriangle, CheckCircle2, RefreshCw, Tag, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import type { PocketTag } from "@/lib/pocket/client";
 
-import { deleteConnection, setConnectionActive } from "./actions";
+import { deleteConnection, fetchTags, setConnectionActive, setConnectionTags, syncNow } from "./actions";
 
 export interface ConnectionRow {
   id: string;
@@ -14,9 +15,11 @@ export interface ConnectionRow {
   active: boolean;
   defaultKind: string;
   ownerLabel: string;
+  tagIds: string[];
   lastEventAt: Date | null;
   lastEvent: string | null;
   lastError: string | null;
+  lastSeen: number;
   deliveries: number;
   meetingsCreated: number;
 }
@@ -25,7 +28,7 @@ export function ConnectionList({ connections }: { connections: ConnectionRow[] }
   if (connections.length === 0) {
     return (
       <p className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-        No Pocket accounts connected yet. Follow the three steps above.
+        No Pocket accounts connected yet. Follow the steps above.
       </p>
     );
   }
@@ -41,6 +44,8 @@ export function ConnectionList({ connections }: { connections: ConnectionRow[] }
 
 function ConnectionCard({ connection: c }: { connection: ConnectionRow }) {
   const [pending, setPending] = useState(false);
+  const [syncing, startSync] = useTransition();
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
   return (
     <div className="rounded-lg border border-border p-4">
@@ -55,12 +60,31 @@ function ConnectionCard({ connection: c }: { connection: ConnectionRow }) {
             )}
           </div>
           <p className="truncate text-xs text-muted-foreground">
-            {c.pocketEmail} &middot; files under {c.ownerLabel} as{" "}
-            {c.defaultKind.toLowerCase()}
+            {c.pocketEmail} &middot; files under {c.ownerLabel} as {c.defaultKind.toLowerCase()}
           </p>
         </div>
 
         <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={syncing || c.tagIds.length === 0}
+            onClick={() =>
+              startSync(async () => {
+                const r = await syncNow();
+                setSyncMsg(
+                  r.error
+                    ? r.error
+                    : `Checked ${r.seen} tagged recording${r.seen === 1 ? "" : "s"}, imported ${r.imported}.`,
+                );
+              })
+            }
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Checking..." : "Check now"}
+          </Button>
+
           <form
             action={async (fd) => {
               setPending(true);
@@ -82,7 +106,7 @@ function ConnectionCard({ connection: c }: { connection: ConnectionRow }) {
             action={async (fd) => {
               if (
                 !confirm(
-                  `Remove "${c.label}"? Meetings it already filed stay where they are, but new recordings will stop arriving until you add it again with a fresh secret from Pocket.`,
+                  `Remove "${c.label}"? Meetings it already imported stay where they are, but nothing new will arrive until you add it again with a fresh API key.`,
                 )
               )
                 return;
@@ -110,21 +134,124 @@ function ConnectionCard({ connection: c }: { connection: ConnectionRow }) {
       </div>
 
       <div className="mt-3 border-t border-hairline pt-3">
-        <Status connection={c} />
+        <TagPicker connection={c} />
+      </div>
+
+      <div className="mt-3 border-t border-hairline pt-3">
+        <Status connection={c} syncMsg={syncMsg} />
       </div>
     </div>
   );
 }
 
-function Status({ connection: c }: { connection: ConnectionRow }) {
+/**
+ * Which tags mean "file this here". This is the privacy control, not a
+ * convenience — the sync passes these to Pocket, so anything not tagged is
+ * never requested and never reaches this server.
+ */
+function TagPicker({ connection: c }: { connection: ConnectionRow }) {
+  const [tags, setTags] = useState<PocketTag[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>(c.tagIds);
+  const [loading, startLoad] = useTransition();
+  const [saving, startSave] = useTransition();
+
+  function load() {
+    startLoad(async () => {
+      const r = await fetchTags(c.id);
+      if ("error" in r) setError(r.error);
+      else {
+        setTags(r.tags);
+        setError(null);
+      }
+    });
+  }
+
+  function toggle(id: string) {
+    const next = selected.includes(id) ? selected.filter((t) => t !== id) : [...selected, id];
+    setSelected(next);
+    startSave(async () => {
+      await setConnectionTags(c.id, next);
+    });
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-xs font-medium">
+          <Tag className="h-3.5 w-3.5" />
+          Tags that come into Clerkr OS
+        </span>
+        <Button type="button" variant="ghost" size="sm" onClick={load} disabled={loading}>
+          {loading ? "Loading..." : tags ? "Reload" : "Choose tags"}
+        </Button>
+      </div>
+
+      {c.tagIds.length === 0 && (
+        <p className="rounded-md bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
+          <strong className="font-medium text-foreground">Nothing is syncing.</strong> Pick at
+          least one tag — only recordings carrying it are ever fetched, so anything you record
+          for another client stays in Pocket.
+        </p>
+      )}
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+
+      {tags && tags.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          This account has no tags yet. Make one in Pocket &mdash; call it &ldquo;Clerkr&rdquo;
+          &mdash; and tag the recordings that belong here.
+        </p>
+      )}
+
+      {tags && tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((t) => {
+            const on = selected.includes(t.id);
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => toggle(t.id)}
+                disabled={saving}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                  on
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border text-muted-foreground hover:border-foreground/40"
+                }`}
+              >
+                {t.color && (
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: t.color }}
+                    aria-hidden
+                  />
+                )}
+                {t.name ?? t.id}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {!tags && c.tagIds.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {c.tagIds.length} tag{c.tagIds.length === 1 ? "" : "s"} selected. &ldquo;Choose
+          tags&rdquo; to change them.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Status({ connection: c, syncMsg }: { connection: ConnectionRow; syncMsg: string | null }) {
+  if (syncMsg) return <p className="text-xs text-foreground">{syncMsg}</p>;
+
   if (c.lastError) {
     return (
       <div className="flex items-start gap-2 text-xs text-destructive">
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <span>
-          Last delivery failed
-          {c.lastEvent ? ` (${c.lastEvent})` : ""}: {c.lastError}
-        </span>
+        <span>{c.lastError}</span>
       </div>
     );
   }
@@ -132,8 +259,7 @@ function Status({ connection: c }: { connection: ConnectionRow }) {
   if (!c.lastEventAt) {
     return (
       <p className="text-xs text-muted-foreground">
-        Nothing received yet. Send a test from Pocket&rsquo;s webhook settings to
-        check the URL and secret.
+        Hasn&rsquo;t run yet. It checks every 10 minutes, or press &ldquo;Check now&rdquo;.
       </p>
     );
   }
@@ -142,13 +268,12 @@ function Status({ connection: c }: { connection: ConnectionRow }) {
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
       <span className="inline-flex items-center gap-1.5 text-foreground">
         <CheckCircle2 className="h-3.5 w-3.5" />
-        {/* Fixed locale — a card date rendered per-browser mismatches on hydration. */}
-        Last delivery {new Date(c.lastEventAt).toLocaleString("en-US")}
+        {/* Fixed locale — a per-browser date mismatches on hydration. */}
+        Last checked {new Date(c.lastEventAt).toLocaleString("en-US")}
       </span>
-      {c.lastEvent && <span>Event: {c.lastEvent}</span>}
+      {c.lastEvent && <span>{c.lastEvent}</span>}
       <span>
-        {c.deliveries} delivered &middot; {c.meetingsCreated} meeting
-        {c.meetingsCreated === 1 ? "" : "s"} created
+        {c.meetingsCreated} meeting{c.meetingsCreated === 1 ? "" : "s"} imported
       </span>
     </div>
   );

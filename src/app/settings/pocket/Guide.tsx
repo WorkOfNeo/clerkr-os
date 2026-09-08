@@ -1,14 +1,14 @@
 import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react";
 
 // The written guide on /settings/pocket.
 //
-// It is long on purpose. Setting this up means moving a secret between two
-// dashboards, in an order that matters, and picking the right events out of a
-// list of thirteen — every one of which is a place to get stuck with no error
-// message, because a webhook that was never created looks exactly like one
-// that works and has nothing to say yet. The troubleshooting table at the
-// bottom is the important half: it maps what you can actually see on this page
-// onto what to do about it.
+// It is long on purpose. The thing someone most needs to understand here is
+// not the click path — it is WHY it is built as a pull with a tag filter and
+// not as a webhook, because that is the difference between recordings of other
+// clients reaching this server and never leaving Pocket. Someone deciding
+// whether to point a recorder at their working day deserves to see that
+// spelled out rather than inferred.
 
 export function Code({ children }: { children: React.ReactNode }) {
   return (
@@ -45,179 +45,45 @@ export function Step({
   );
 }
 
-type Verdict = "required" | "optional" | "skip";
+/**
+ * The privacy explanation. This is the part worth reading twice, so it gets
+ * its own panel rather than a paragraph in a wall of setup text.
+ */
+export function WhatLeavesPocket() {
+  const rows = [
+    {
+      icon: EyeOff,
+      tone: "muted" as const,
+      title: "An untagged recording",
+      body: "Never requested, never sent, never stored here. We ask Pocket only for recordings carrying your chosen tag, so a client call for someone else is not filtered out at this end — it is never fetched in the first place.",
+    },
+    {
+      icon: Eye,
+      tone: "muted" as const,
+      title: "Browsing your recordings",
+      body: "The browse page lists titles and dates only. Pocket returns no transcript and no summary when listing, so looking through what you have recorded moves no content of any conversation.",
+    },
+    {
+      icon: Eye,
+      tone: "strong" as const,
+      title: "A tagged recording, or one you import by hand",
+      body: "Only here is the full transcript and summary fetched, and only for that one recording. That is the single call in the whole integration that moves the content of a conversation.",
+    },
+  ];
 
-const VERDICT_STYLE: Record<Verdict, string> = {
-  required: "bg-foreground text-background",
-  optional: "bg-secondary text-secondary-foreground",
-  skip: "bg-destructive/10 text-destructive",
-};
-
-const VERDICT_LABEL: Record<Verdict, string> = {
-  required: "Subscribe",
-  optional: "Optional",
-  skip: "Leave off",
-};
-
-const EVENTS: { name: string; verdict: Verdict; note: string }[] = [
-  {
-    name: "summary.completed",
-    verdict: "required",
-    note: "Fires once the transcript, summary and action items all exist. This is the one that files a meeting — with only this ticked, everything works.",
-  },
-  {
-    name: "transcript.edited",
-    verdict: "optional",
-    note: "You corrected the transcript in Pocket. Updates the meeting body here to match.",
-  },
-  {
-    name: "speakers.labeled",
-    verdict: "optional",
-    note: "You put real names to the speakers. Updates the body and the attendee list.",
-  },
-  {
-    name: "summary.regenerated",
-    verdict: "optional",
-    note: "You asked Pocket for a fresh summary. Re-files and re-reads the meeting.",
-  },
-  {
-    name: "summary.updated · action_items.regenerated · translation.completed",
-    verdict: "optional",
-    note: "Smaller re-runs. They refresh the meeting text but deliberately do not re-run the AI — use “Propose again” on the meeting when you want that.",
-  },
-  {
-    name: "transcription.completed",
-    verdict: "skip",
-    note: "Arrives before the summary exists, so it would file a half-empty meeting that the next delivery has to repair.",
-  },
-  {
-    name: "recording.created · recording.merged",
-    verdict: "skip",
-    note: "Fire before there is anything worth reading.",
-  },
-  {
-    name: "recording.deleted",
-    verdict: "skip",
-    note: "Ignored even if you subscribe. Deleting audio in Pocket is not a decision to erase a meeting here that may already have tickets hanging off it.",
-  },
-];
-
-export function EventTable() {
   return (
-    <div className="overflow-hidden rounded-lg border border-border">
-      <table className="w-full text-left text-sm">
-        <tbody>
-          {EVENTS.map((e) => (
-            <tr key={e.name} className="border-b border-hairline last:border-b-0 align-top">
-              <td className="w-[38%] px-3 py-2.5">
-                <span className="font-mono text-[11.5px] leading-5">{e.name}</span>
-              </td>
-              <td className="w-[92px] px-2 py-2.5">
-                <span
-                  className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide ${VERDICT_STYLE[e.verdict]}`}
-                >
-                  {VERDICT_LABEL[e.verdict]}
-                </span>
-              </td>
-              <td className="px-3 py-2.5 text-xs leading-5 text-muted-foreground">
-                {e.note}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-const TROUBLE: { symptom: string; cause: React.ReactNode }[] = [
-  {
-    symptom: "The connection below still says “Nothing received yet”",
-    cause: (
-      <>
-        Pocket never reached us. Check the destination URL in Pocket matches
-        step 1 exactly (no trailing slash, <Code>https</Code> not{" "}
-        <Code>http</Code>), that the webhook is enabled, and that{" "}
-        <Code>summary.completed</Code> is ticked. Pocket&rsquo;s own webhook
-        screen shows its delivery attempts &mdash; if it shows none, the problem
-        is on that side.
-      </>
-    ),
-  },
-  {
-    symptom: "“Last delivery failed: Signature check failed (mismatch)”",
-    cause: (
-      <>
-        Pocket reached us but the secret doesn&rsquo;t match. Rotate the signing
-        secret in Pocket, then paste the new one into step 3 using the same
-        account email &mdash; that replaces it in place.
-      </>
-    ),
-  },
-  {
-    symptom: "“Signature check failed (stale)”",
-    cause: (
-      <>
-        The delivery was more than five minutes old, which is how a replayed
-        request is turned away. A one-off after a retry storm is harmless. If it
-        happens every time, this server&rsquo;s clock is wrong.
-      </>
-    ),
-  },
-  {
-    symptom: "A delivery landed, but no meeting appeared",
-    cause: (
-      <>
-        The recording carried no transcript and no summary yet &mdash; usually a
-        very short clip, or an event other than{" "}
-        <Code>summary.completed</Code>. The connection counts a delivery but
-        files nothing, on purpose. Record thirty seconds of speech and try
-        again.
-      </>
-    ),
-  },
-  {
-    symptom: "The meeting is there, but there are no cards on it",
-    cause: (
-      <>
-        Reading happens a few seconds after the recording lands &mdash; give it a
-        moment and reload. If it stays empty, either{" "}
-        <Code>OPENAI_API_KEY</Code> isn&rsquo;t set, or the reviewer judged
-        everything already covered. Open the meeting: its reasoning is shown
-        above the cards, and &ldquo;Propose again&rdquo; re-reads it.
-      </>
-    ),
-  },
-  {
-    symptom: "The same recording arrived twice",
-    cause: (
-      <>
-        It can&rsquo;t become two meetings &mdash; recordings are matched on
-        their Pocket id, so a repeat delivery updates the one that exists.
-        Seeing the delivery count climb after an edit in Pocket is the system
-        working.
-      </>
-    ),
-  },
-  {
-    symptom: "Everything worked, then stopped after a redeploy",
-    cause: (
-      <>
-        Check the connection isn&rsquo;t paused, and that the URL in Pocket still
-        points at this app. Connections and their secrets live in the database
-        and survive deploys.
-      </>
-    ),
-  },
-];
-
-export function Troubleshooting() {
-  return (
-    <div className="divide-y divide-hairline overflow-hidden rounded-lg border border-border">
-      {TROUBLE.map((t) => (
-        <div key={t.symptom} className="space-y-1 p-4">
-          <p className="text-sm font-medium">{t.symptom}</p>
-          <p className="text-xs leading-5 text-muted-foreground">{t.cause}</p>
+    <div className="space-y-2.5 rounded-lg border border-border p-4">
+      {rows.map((r) => (
+        <div key={r.title} className="flex gap-3">
+          <r.icon
+            className={`mt-0.5 h-4 w-4 shrink-0 ${
+              r.tone === "strong" ? "text-foreground" : "text-muted-foreground"
+            }`}
+          />
+          <div>
+            <p className="text-sm font-medium">{r.title}</p>
+            <p className="text-xs leading-5 text-muted-foreground">{r.body}</p>
+          </div>
         </div>
       ))}
     </div>
@@ -227,20 +93,24 @@ export function Troubleshooting() {
 export function Pipeline() {
   const stages = [
     {
-      title: "Pocket finishes processing",
-      body: "You stop the recording. Pocket transcribes it, writes a summary and pulls out action items, then posts all three here. Nothing happens until it is done — a recording still uploading has not been sent.",
+      title: "You tag the recording in Pocket",
+      body: "Anything without that tag is invisible to this integration. Forgot to tag one? The browse page lets you import it by hand — see step 5.",
     },
     {
-      title: "A meeting is created",
-      body: "It holds Pocket's summary, the action items Pocket spotted, and the full transcript with speakers. It appears under Meetings straight away, before any AI has read it.",
+      title: "Clerkr OS checks every ten minutes",
+      body: "It asks Pocket for recordings carrying your tag since it last looked, and gets back titles and dates only. Anything already imported is skipped.",
+    },
+    {
+      title: "New ones are fetched and filed",
+      body: "The transcript and summary are pulled for those recordings alone, and each becomes a meeting holding Pocket's summary, the action items Pocket spotted, and the full transcript.",
     },
     {
       title: "The reviewer agent reads it",
-      body: "It searches what already exists, then proposes decisions, feature ideas, action items and open questions — each with one line saying why it kept it, and a warning when something looks like a duplicate of a feature or ticket you already have.",
+      body: "It searches what already exists, then proposes decisions, feature ideas, action items and open questions — each with one line saying why, and a warning when something looks like a duplicate.",
     },
     {
       title: "You accept what is real",
-      body: "Cards are editable before you accept them. Accepting an action item can send it straight to the ticket queue. Nothing reaches the feature library or the tickets until you do — a recording can never file work on its own.",
+      body: "Cards are editable before you accept them. Accepting an action item can send it straight to the ticket queue. Nothing reaches the feature library or the tickets until you do.",
     },
   ];
 
@@ -261,15 +131,120 @@ export function Pipeline() {
   );
 }
 
+const TROUBLE: { symptom: React.ReactNode; key: string; cause: React.ReactNode }[] = [
+  {
+    key: "no-tags",
+    symptom: <>&ldquo;Nothing is syncing&rdquo; on the connection</>,
+    cause: (
+      <>
+        No tags are selected, which is the safe default rather than a fault.
+        Press <strong className="font-medium text-foreground">Choose tags</strong> and tick at
+        least one. Until then nothing is fetched at all.
+      </>
+    ),
+  },
+  {
+    key: "bad-key",
+    symptom: <>&ldquo;Pocket rejected the API key&rdquo;</>,
+    cause: (
+      <>
+        The key is wrong, revoked, or from a different account. Make a new one in Pocket under
+        Settings &rarr; API keys and save it here against the same email &mdash; that replaces
+        the old one.
+      </>
+    ),
+  },
+  {
+    key: "none-imported",
+    symptom: <>It checked, saw recordings, but imported none</>,
+    cause: (
+      <>
+        They were already imported &mdash; a recording is matched on its Pocket id, so it can
+        only ever become one meeting. The count reads
+        &ldquo;checked N, imported 0&rdquo; when everything tagged is already here.
+      </>
+    ),
+  },
+  {
+    key: "tagged-missing",
+    symptom: <>A recording is tagged but never arrived</>,
+    cause: (
+      <>
+        Check the tag ticked here is the same one you put on the recording, and that Pocket has
+        finished processing &mdash; a recording still transcribing has no text to import yet.
+        The sync looks back seven days on its first run and from its last check after that.
+      </>
+    ),
+  },
+  {
+    key: "forgot-tag",
+    symptom: <>I forgot to tag one</>,
+    cause: (
+      <>
+        Use{" "}
+        <Link href="/settings/pocket/browse" className="text-primary underline underline-offset-4">
+          Browse recordings
+        </Link>
+        . It lists everything by title with no transcript fetched, and imports only the one you
+        pick.
+      </>
+    ),
+  },
+  {
+    key: "no-cards",
+    symptom: <>The meeting is there but has no cards</>,
+    cause: (
+      <>
+        Reading happens just after the import &mdash; give it a moment and reload. If it stays
+        empty, either <Code>OPENAI_API_KEY</Code> isn&rsquo;t set, or the reviewer judged
+        everything already covered. The meeting page shows its reasoning and has
+        &ldquo;Propose again&rdquo;.
+      </>
+    ),
+  },
+];
+
+export function Troubleshooting() {
+  return (
+    <div className="divide-y divide-hairline overflow-hidden rounded-lg border border-border">
+      {TROUBLE.map((t) => (
+        <div key={t.key} className="space-y-1 p-4">
+          <p className="text-sm font-medium">{t.symptom}</p>
+          <p className="text-xs leading-5 text-muted-foreground">{t.cause}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function GoodToKnow() {
   const items: { q: string; a: React.ReactNode }[] = [
     {
-      q: "I lost the signing secret",
+      q: "Why tags rather than something automatic?",
       a: (
         <>
-          Pocket shows it once and cannot show it again. Rotate it on the webhook
-          in Pocket to get a new one, then paste that into step 3 with the same
-          account email. Nothing here needs deleting first.
+          Because any rule guessing at relevance drops recordings silently, and a dropped
+          meeting is invisible &mdash; you would never know to look for it. A tag is a decision
+          you have already made, in Pocket, where you are looking at the recording anyway.
+        </>
+      ),
+    },
+    {
+      q: "Why not a webhook?",
+      a: (
+        <>
+          A webhook pushes <em>every</em> recording here and lets us sort it out afterwards, so
+          another client&rsquo;s conversation would land on this server before anything decided
+          to drop it. Pulling with a tag filter means it is never requested at all.
+        </>
+      ),
+    },
+    {
+      q: "I lost the API key",
+      a: (
+        <>
+          Make a new one in Pocket and save it here against the same email. Nothing needs
+          deleting first, and the tags you picked are kept.
         </>
       ),
     },
@@ -277,12 +252,10 @@ export function GoodToKnow() {
       q: "Pause or remove?",
       a: (
         <>
-          <strong className="font-medium text-foreground">Pause</strong> keeps the
-          secret and quietly drops deliveries &mdash; right for a holiday, or a
-          run of recordings you don&rsquo;t want filed.{" "}
-          <strong className="font-medium text-foreground">Remove</strong> forgets
-          the secret, so coming back means rotating in Pocket. Meetings already
-          filed are untouched either way.
+          <strong className="font-medium text-foreground">Pause</strong> keeps the key and the
+          tags and just stops checking.{" "}
+          <strong className="font-medium text-foreground">Remove</strong> forgets both. Meetings
+          already imported are untouched either way.
         </>
       ),
     },
@@ -290,9 +263,8 @@ export function GoodToKnow() {
       q: "Several people with a Pocket each",
       a: (
         <>
-          Add one connection per person. Each has its own secret and decides who
-          the meetings are filed under. Everyone paste the same URL from step 1
-          &mdash; deliveries are told apart by their signature.
+          Add one connection per person, each with their own API key and their own tags, filed
+          under whoever should own the meetings.
         </>
       ),
     },
@@ -300,9 +272,8 @@ export function GoodToKnow() {
       q: "Who can see a recording once it lands?",
       a: (
         <>
-          Everyone signed in. This is a single-tenant tool: meetings, tickets and
-          the wiki are shared by the whole team. Keep anything you would not
-          share with colleagues off the device.
+          Everyone signed in. This is a single-tenant tool &mdash; meetings, tickets and the
+          wiki are shared by the whole team. That is exactly why the tag filter matters.
         </>
       ),
     },
@@ -310,21 +281,17 @@ export function GoodToKnow() {
       q: "I deleted the recording in Pocket",
       a: (
         <>
-          The meeting stays. By then it may have decisions, features and tickets
-          attached, and deleting audio is not a decision to erase those. Delete
-          the meeting from its own page &mdash; the dialog there says exactly
-          what will go with it.
+          The meeting stays. By then it may have decisions, features and tickets attached.
+          Delete it from its own page &mdash; the dialog there says what will go with it.
         </>
       ),
     },
     {
-      q: "Can I test without recording anything?",
+      q: "How far back does it look?",
       a: (
         <>
-          Yes. Use Pocket&rsquo;s &ldquo;send test payload&rdquo; button, or from
-          a checkout run{" "}
-          <Code>npm run probe:pocket -- --secret &lt;secret&gt;</Code>, which
-          sends a correctly-signed sample and explains what came back.
+          Seven days on the very first check, then from the last time it ran. Anything older is
+          imported by hand from the browse page.
         </>
       ),
     },

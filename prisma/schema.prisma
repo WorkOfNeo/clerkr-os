@@ -377,8 +377,23 @@ model PocketConnection {
   /// connection a delivery belongs to before checking its signature.
   pocketEmail String @unique
 
-  /// Pocket's HMAC-SHA256 signing secret for this webhook.
-  secret String
+  /// Pocket personal API key (`pk_…`). Stored recoverable because every call
+  /// needs it; there is nothing to compare a hash against.
+  apiKey String
+
+  /// Which Pocket tags mean "this belongs in Clerkr OS". EMPTY MEANS NOTHING
+  /// SYNCS — deliberately, because the default must not be "hoover up every
+  /// recording this person makes". The sync passes these to Pocket as
+  /// `tag_ids`, so an untagged conversation with another client is never
+  /// requested and never reaches this server at all. That is the whole reason
+  /// this is a pull and not a webhook.
+  tagIds String[] @default([])
+
+  /// Watermark for the next poll. Pocket filters on whole UTC days
+  /// (`start_date`), so this is only ever a coarse floor — `pocketRecordingId`
+  /// being unique is what actually stops a re-import.
+  lastSyncAt  DateTime?
+  syncCursor  String?
 
   /// Off means deliveries are acknowledged and dropped. Preferred over
   /// deleting, which loses the setup and needs a new secret from Pocket.
@@ -387,13 +402,15 @@ model PocketConnection {
   /// What arriving meetings are filed as.
   defaultKind MeetingKind @default(INTERNAL)
 
-  /// Last-delivery state, so the settings page can answer "is this working?"
+  /// Last-run state, so the settings page can answer "is this working?"
   /// without a separate log table.
   lastEventAt     DateTime?
   lastEvent       String?
   lastError       String?
   deliveries      Int       @default(0)
   meetingsCreated Int       @default(0)
+  /// Recordings the last poll saw but skipped as already imported.
+  lastSeen        Int       @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt

@@ -45,12 +45,6 @@ export function proxy(req: NextRequest) {
   const isPublic =
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/mcp") ||
-    // Inbound webhooks. Same reasoning as /api/mcp: the sender has no session
-    // cookie, so behind the redirect it receives the sign-in page instead of a
-    // response and the delivery is lost with nothing to show for it. Each
-    // handler under here verifies its own HMAC signature — that is the real
-    // security boundary, and it is checked before anything is written.
-    pathname.startsWith("/api/webhooks/") ||
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico" ||
     pathname === "/signin" ||

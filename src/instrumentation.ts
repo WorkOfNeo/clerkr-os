@@ -95,11 +95,31 @@ export async function register(): Promise<void> {
     }
   };
 
+  // Pocket rides the same timer. It asks Pocket only for recordings carrying
+  // the tags someone picked, so a connection with no tags does nothing and an
+  // untagged conversation is never fetched. Separately wrapped like the
+  // others: a Pocket outage must not stop embeddings or notifications.
+  const pocket = async () => {
+    try {
+      const { syncPocket } = await import("@/lib/pocket/sync");
+      const results = await syncPocket();
+      const imported = results.reduce((n, r) => n + r.imported, 0);
+      const failed = results.filter((r) => r.error);
+      if (imported > 0 || failed.length > 0) {
+        console.log("[pocket]", JSON.stringify({ imported, results }));
+      }
+    } catch (err) {
+      console.warn("[pocket] sync failed:", err);
+    }
+  };
+
   g.__embedSweepTimer = setInterval(() => {
     void run();
     void notify();
     void memoryPass();
+    void pocket();
   }, SWEEP_INTERVAL_MS);
   setTimeout(run, FIRST_RUN_DELAY_MS);
   setTimeout(notify, FIRST_RUN_DELAY_MS + 5_000);
+  setTimeout(pocket, FIRST_RUN_DELAY_MS + 10_000);
 }

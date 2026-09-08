@@ -58,18 +58,20 @@ export function ConnectionForm({
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="pocket-secret">Signing secret</Label>
+        <Label htmlFor="pocket-key">API key</Label>
         <Input
-          id="pocket-secret"
-          name="secret"
+          id="pocket-key"
+          name="apiKey"
           type="password"
           autoComplete="off"
-          placeholder="Pasted from Pocket — shown once, at step 2"
+          placeholder="pk_…"
           required
         />
         <p className="text-xs text-muted-foreground">
-          Pocket shows this once when the webhook is created. Saving the same
-          email again replaces it, which is how you rotate.
+          Created in Pocket under Settings &rarr; API keys. Checked against
+          Pocket when you save, so a bad key is caught here rather than as a
+          silent empty sync later. Saving the same email again replaces the
+          key, which is how you rotate.
         </p>
       </div>
 
@@ -115,8 +117,8 @@ export function ConnectionForm({
         {state.status === "saved" && (
           <p className="text-sm text-muted-foreground">
             {state.rotated
-              ? `Updated “${state.label}”. New secret is live.`
-              : `“${state.label}” connected. Send a test from Pocket to check it.`}
+              ? `Updated “${state.label}”. New key is live.`
+              : `“${state.label}” connected. Now choose its tags below — until you do, nothing syncs.`}
           </p>
         )}
       </div>
