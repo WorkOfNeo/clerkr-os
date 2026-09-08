@@ -91,6 +91,68 @@ export async function structureMeeting(id: string): Promise<{ error?: string; pr
   }
 }
 
+/** Ask a question about this meeting, answered from its own transcript. */
+export async function askAboutMeeting(
+  meetingId: string,
+  question: string,
+): Promise<{ answer?: string; error?: string }> {
+  await requireSession();
+  if (!meetingId) throw new Error("id required");
+
+  const { askMeeting } = await import("@/lib/meetings/ask");
+  const result = await askMeeting({ meetingId, question });
+  if (result.error) return { error: result.error };
+
+  revalidatePath(`/meetings/${meetingId}`);
+  return { answer: result.answer };
+}
+
+export async function clearMeetingChatAction(meetingId: string): Promise<void> {
+  await requireSession();
+  if (!meetingId) throw new Error("id required");
+  const { clearMeetingChat } = await import("@/lib/meetings/ask");
+  await clearMeetingChat(meetingId);
+  revalidatePath(`/meetings/${meetingId}`);
+}
+
+/**
+ * Pull this meeting's summary and transcript from Pocket again.
+ *
+ * Needed for meetings imported before the transcript parser was fixed — those
+ * stored the summary alone — and useful whenever a recording is re-summarised
+ * or its speakers are named in Pocket afterwards.
+ */
+export async function refetchFromPocket(
+  meetingId: string,
+): Promise<{ ok?: string; error?: string }> {
+  await requireSession();
+  if (!meetingId) throw new Error("id required");
+
+  try {
+    const { refetchMeeting } = await import("@/lib/pocket/sync");
+    const result = await refetchMeeting(meetingId);
+
+    if (result.status !== "updated") {
+      const reason = {
+        "not-pocket": "This meeting didn't come from Pocket.",
+        gone: "Pocket no longer has this recording, or no connection is active.",
+        empty: "Pocket returned nothing for this recording yet.",
+      }[result.status];
+      return { error: reason };
+    }
+
+    revalidatePath(`/meetings/${meetingId}`);
+    return {
+      ok:
+        result.transcriptChars > 0
+          ? `Refreshed — ${result.transcriptChars.toLocaleString("en-US")} characters of transcript.`
+          : "Refreshed, but Pocket still has no transcript for this recording.",
+    };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function toggleActionItem(input: { id: string; done: boolean }): Promise<void> {
   await requireSession();
   if (!input.id) throw new Error("id required");

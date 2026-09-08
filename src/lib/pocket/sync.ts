@@ -81,6 +81,7 @@ export async function importRecording(input: {
   const fields = meetingFieldsFromRecording(rec);
   if (!fields.hasContent) return { status: "empty" };
 
+
   const slug = await uniqueSlug(slugify(fields.title), async (candidate) =>
     Boolean(await db.meeting.findUnique({ where: { slug: candidate }, select: { id: true } })),
   );
@@ -93,7 +94,8 @@ export async function importRecording(input: {
         kind: connection.defaultKind,
         meetingDate: fields.meetingDate,
         attendees: fields.attendees,
-        transcript: fields.body,
+        transcript: fields.transcript,
+        summary: fields.summary,
         authorId: connection.userId,
         pocketRecordingId: recordingId,
       },
@@ -112,6 +114,49 @@ export async function importRecording(input: {
     }
     throw err;
   }
+}
+
+/**
+ * Re-fetch a meeting already imported, and overwrite its summary and
+ * transcript with what Pocket holds now.
+ *
+ * This exists because the first version of the parser read the documented
+ * transcript shape rather than the real one and stored no transcript at all.
+ * It is equally the fix for a recording re-summarised or re-labelled in Pocket
+ * afterwards. The slug is left alone — it is in links people have followed.
+ */
+export async function refetchMeeting(meetingId: string): Promise<
+  { status: "updated"; transcriptChars: number } | { status: "not-pocket" | "gone" | "empty" }
+> {
+  const meeting = await db.meeting.findUnique({
+    where: { id: meetingId },
+    select: { id: true, pocketRecordingId: true },
+  });
+  if (!meeting?.pocketRecordingId) return { status: "not-pocket" };
+
+  const connection = await db.pocketConnection.findFirst({
+    where: { active: true },
+    select: { apiKey: true },
+  });
+  if (!connection) return { status: "gone" };
+
+  const rec = await getRecording(connection.apiKey, meeting.pocketRecordingId);
+  if (!rec) return { status: "gone" };
+
+  const fields = meetingFieldsFromRecording(rec);
+  if (!fields.hasContent) return { status: "empty" };
+
+  await db.meeting.update({
+    where: { id: meetingId },
+    data: {
+      title: fields.title,
+      meetingDate: fields.meetingDate,
+      attendees: fields.attendees,
+      transcript: fields.transcript,
+      summary: fields.summary,
+    },
+  });
+  return { status: "updated", transcriptChars: fields.transcript.length };
 }
 
 /** Read a freshly-imported meeting. Best-effort — a failure leaves the button. */

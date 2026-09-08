@@ -8,6 +8,7 @@ import { ActionItemTicketButton } from "@/components/meeting/ActionItemTicketBut
 import { ActionItemToggle } from "@/components/meeting/ActionItemToggle";
 import { DeleteMeetingButton } from "@/components/meeting/DeleteMeetingButton";
 import { MeetingProposals } from "@/components/meeting/MeetingProposals";
+import { MeetingSource } from "@/components/meeting/MeetingSource";
 import { MeetingReasoning } from "@/components/meeting/MeetingReasoning";
 import { PromoteSignalButton } from "@/components/meeting/PromoteSignalButton";
 import { StructureButton } from "@/components/meeting/StructureButton";
@@ -68,6 +69,7 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
         include: { ticket: { select: { slug: true } } },
       },
       openQuestions: { orderBy: { createdAt: "asc" } },
+      messages: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!meeting) notFound();
@@ -234,13 +236,20 @@ export default async function MeetingBriefPage({ params }: { params: Promise<{ i
           </>
         )}
 
-        {/* transcript */}
-        <section className="surface p-4">
-          <h2 className="mb-2 text-sm font-semibold">Transcript</h2>
-          <pre className="max-h-80 overflow-auto whitespace-pre-wrap font-sans text-sm text-muted-foreground">
-            {meeting.transcript}
-          </pre>
-        </section>
+        {/* Summary, transcript and questions. The summary is a lossy read of
+            the conversation; the transcript is the evidence, and "Ask" is
+            where you go when the two disagree. */}
+        <MeetingSource
+          meetingId={meeting.id}
+          summary={meeting.summary}
+          transcript={meeting.transcript}
+          messages={meeting.messages.map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+          }))}
+          fromPocket={Boolean(meeting.pocketRecordingId)}
+        />
       </main>
     </AppShell>
   );

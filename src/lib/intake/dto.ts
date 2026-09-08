@@ -22,6 +22,17 @@ export interface ProposalDTO {
   createdId: string | null;
 }
 
+/** What a batch accept reports back. Lives here, not in the actions file, for
+ *  the same reason ProposalDTO does — see the note at the top. */
+export interface BatchResult {
+  created: number;
+  failed: number;
+  /** The first thing that went wrong, if anything did. */
+  error: string | null;
+  /** The rows as they now stand, so the cards can show what they became. */
+  proposals: ProposalDTO[];
+}
+
 export function toDTO(p: {
   id: string;
   kind: string;

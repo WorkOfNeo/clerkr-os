@@ -8,7 +8,7 @@ import { isOpenAIAvailable } from "@/lib/ai/openai";
 import { attachImages } from "@/lib/attachments";
 import { db } from "@/lib/db";
 import { acceptProposal, claimAttachments, linkProposalToExisting } from "@/lib/intake/accept";
-import { toDTO, type ProposalDTO } from "@/lib/intake/dto";
+import { toDTO, type BatchResult, type ProposalDTO } from "@/lib/intake/dto";
 import { requireSession } from "@/lib/session";
 
 // Intake lives in its own action file rather than chat/actions.ts: the two do
@@ -209,26 +209,51 @@ export async function updateProposalAction(
   return toDTO(updated);
 }
 
-/** Accept everything still outstanding. Returns what happened per card rather
- *  than failing the batch on the first error. */
-export async function acceptAllProposals(
-  messageId: string,
-): Promise<{ created: number; failed: number }> {
+/**
+ * Confirm a batch of cards — what the tick boxes on the intake page approve.
+ *
+ * Sequential, deliberately: accepting writes records, claims the pasted
+ * screenshots and mints slugs, and running that in parallel races on all
+ * three. A per-card failure is counted rather than thrown, so one card that
+ * can no longer be created — a category deleted since it was proposed — never
+ * strands the other four.
+ */
+export async function acceptProposals(ids: string[]): Promise<BatchResult> {
   await requireSession();
-  const rows = await db.intakeProposal.findMany({
-    where: { messageId, status: "PROPOSED" },
-    orderBy: { order: "asc" },
-    select: { id: true },
-  });
+  const parsed = z.array(z.string().min(1)).min(1).max(50).parse(ids);
 
   let created = 0;
   let failed = 0;
-  for (const row of rows) {
-    const result = await acceptProposalAction(row.id);
-    if ("error" in result) failed++;
-    else created++;
+  let error: string | null = null;
+
+  for (const id of parsed) {
+    const result = await acceptProposalAction(id);
+    if ("error" in result) {
+      failed++;
+      error ??= result.error;
+    } else {
+      created++;
+    }
   }
-  return { created, failed };
+
+  const rows = await db.intakeProposal.findMany({ where: { id: { in: parsed } } });
+  return { created, failed, error, proposals: rows.map(toDTO) };
+}
+
+/** Dismiss a batch. One update, since dismissing writes nothing elsewhere. */
+export async function dismissProposals(
+  ids: string[],
+): Promise<{ dismissed: number; proposals: ProposalDTO[] }> {
+  await requireSession();
+  const parsed = z.array(z.string().min(1)).min(1).max(50).parse(ids);
+
+  const res = await db.intakeProposal.updateMany({
+    where: { id: { in: parsed }, status: "PROPOSED" },
+    data: { status: "DISMISSED" },
+  });
+  const rows = await db.intakeProposal.findMany({ where: { id: { in: parsed } } });
+  revalidatePath("/chat");
+  return { dismissed: res.count, proposals: rows.map(toDTO) };
 }
 
 /** Accept every card still waiting on a meeting. Per-card errors are counted,

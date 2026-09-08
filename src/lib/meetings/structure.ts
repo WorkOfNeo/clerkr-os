@@ -42,7 +42,19 @@ export interface ProposeResult {
   reviewed: boolean;
 }
 
-type MeetingRow = { id: string; title: string; transcript: string };
+type MeetingRow = { id: string; title: string; transcript: string; summary?: string | null };
+
+/**
+ * Everything the models should read for one meeting.
+ *
+ * Summary and transcript are stored apart so the page can tab between them,
+ * but every reader — the brief extractor, the reviewer, the embedding — wants
+ * both: the summary carries the source's own conclusions, the transcript is
+ * the evidence for them.
+ */
+export function meetingText(m: { transcript: string; summary?: string | null }): string {
+  return [m.summary?.trim(), m.transcript?.trim()].filter(Boolean).join("\n\n");
+}
 
 function key(kind: string, title: string): string {
   return `${kind}:${title.trim().toLowerCase()}`;
@@ -85,11 +97,11 @@ export function draftsFromBrief(brief: ExtractedBrief): Draft[] {
 export async function proposeBrief(meetingId: string): Promise<ProposeResult> {
   const meeting = await db.meeting.findUnique({
     where: { id: meetingId },
-    select: { id: true, title: true, transcript: true },
+    select: { id: true, title: true, transcript: true, summary: true },
   });
   if (!meeting) throw new Error("Meeting not found.");
 
-  const brief = await extractBrief(meeting.transcript);
+  const brief = await extractBrief(meetingText(meeting));
   const raw = draftsFromBrief(brief);
 
   // The reviewer is best-effort: a failure shows the raw extraction with a
@@ -185,7 +197,7 @@ async function persistDrafts(
   // Semantic recall of the meeting itself is harmless and useful, so it is
   // not gated on acceptance. Best-effort: the embed sweep catches a miss.
   try {
-    await embedMeeting(meetingId, meeting.title, tldr, meeting.transcript);
+    await embedMeeting(meetingId, meeting.title, tldr, meetingText(meeting));
   } catch (err) {
     console.warn("[proposeBrief] embedMeeting failed:", err);
   }

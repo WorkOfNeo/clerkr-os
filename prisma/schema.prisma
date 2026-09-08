@@ -322,7 +322,12 @@ model Meeting {
   kind         MeetingKind                  @default(INTERNAL)
   meetingDate  DateTime
   attendees    String[]                     @default([])
-  transcript   String // raw pasted transcript / summary
+  transcript   String // what was actually said — the raw transcript
+  /// The SOURCE's own summary, kept apart from the transcript so the meeting
+  /// page can show each on its own tab. Pocket writes its summary and action
+  /// items here; a pasted meeting has none. Distinct from `tldr`, which is OUR
+  /// one-line read produced by proposeBrief.
+  summary      String?
   tldr         String? // AI-generated brief summary
   structuredAt DateTime? // set when the brief was last extracted
   // Set when the meeting arrived over the Pocket webhook instead of being
@@ -350,10 +355,31 @@ model Meeting {
   actionItems    ActionItem[]
   openQuestions  OpenQuestion[]
   proposals      IntakeProposal[]
+  messages       MeetingMessage[]
 
   @@index([meetingDate])
   @@index([authorId])
   @@map("meeting")
+}
+
+/// Questions asked about one meeting, and the answers.
+///
+/// Separate from ChatSession on purpose: this conversation is ABOUT one
+/// meeting and is scoped to its transcript, so it belongs to the meeting and
+/// dies with it. The summary is a lossy read of a long conversation — when it
+/// gets something wrong, the transcript is still there to ask.
+model MeetingMessage {
+  id        String   @id @default(uuid())
+  meetingId String
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  /// "user" or "assistant".
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([meetingId, createdAt])
+  @@map("meeting_message")
 }
 
 /// One Pocket account wired to this workspace. A `summary.completed` webhook
