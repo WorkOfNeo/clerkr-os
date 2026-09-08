@@ -27,7 +27,7 @@ export default async function ChatPage() {
     <AppShell email={session.user.email} flush>
       <div className="flex min-h-0 flex-1">
         <ChatSidebar sessions={sessions} activeId={null} />
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
           <IntakeConversation
             initialSessionId={null}
             initialMessages={[]}

@@ -4,14 +4,17 @@ import { motion } from "motion/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { ArrowUp, Sparkles, Undo2, WandSparkles } from "lucide-react";
+import { ArrowUp, CheckCheck, Sparkles, Undo2, WandSparkles } from "lucide-react";
 
 import { sendChatMessage } from "@/app/chat/actions";
+import { acceptProposals, dismissProposals } from "@/app/chat/intake-actions";
 import { improvePromptAction } from "@/app/chat/prompt-actions";
 import type { ProposalDTO } from "@/lib/intake/dto";
 import { ImageDropzone, type PendingImage } from "@/components/attachments/ImageDropzone";
 import { ProposalCard } from "@/components/intake/ProposalCard";
 import { MicButton, VoicePanel, useVoiceInput } from "@/components/intake/VoiceInput";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { useIsTouch } from "@/lib/use-is-touch";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +51,7 @@ export function IntakeConversation({
 }) {
   const router = useRouter();
   const isTouch = useIsTouch();
+  const { toast } = useToast();
   const [sessionId, setSessionId] = useState(initialSessionId);
   const [messages, setMessages] = useState<ChatMessageItem[]>(initialMessages);
   const [citedNotes, setCitedNotes] = useState<CitedNote[]>(initialCitedNotes);
@@ -56,6 +60,10 @@ export function IntakeConversation({
   const [images, setImages] = useState<PendingImage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // Selection spans the whole transcript, not one message: five bugs pasted in
+  // two goes are still one batch of five to approve.
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const [bulkPending, startBulk] = useTransition();
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -117,6 +125,68 @@ export function IntakeConversation({
     requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
+  /** Outstanding across every message — a card already created has nothing
+   *  left to approve, and a dismissed one is gone. */
+  const outstanding = Object.values(proposals)
+    .flat()
+    .filter((p) => p.status === "PROPOSED" && !p.createdId);
+  const selectedIds = outstanding.filter((p) => selected.has(p.id)).map((p) => p.id);
+
+  function toggleSelected(id: string, next: boolean) {
+    setSelected((prev) => {
+      const s = new Set(prev);
+      if (next) s.add(id);
+      else s.delete(id);
+      return s;
+    });
+  }
+
+  /** Fold the rows a batch returned back into the transcript, so the cards show
+   *  what they became without waiting on a server round trip. */
+  function applyBatch(updated: ProposalDTO[]) {
+    const byId = new Map(updated.map((p) => [p.id, p]));
+    setProposals((prev) => {
+      const next: Record<string, ProposalDTO[]> = {};
+      for (const [messageId, list] of Object.entries(prev)) {
+        next[messageId] = list.map((p) => byId.get(p.id) ?? p);
+      }
+      return next;
+    });
+  }
+
+  function approveSelected() {
+    if (!selectedIds.length || bulkPending) return;
+    const ids = selectedIds;
+    startBulk(async () => {
+      const res = await acceptProposals(ids);
+      applyBatch(res.proposals);
+      setSelected(new Set());
+      if (res.created) {
+        toast(`Created ${res.created} ${res.created === 1 ? "record" : "records"}`, {
+          tone: "success",
+        });
+      }
+      // One card that can't be created must not read as if the batch failed —
+      // the rest of them landed.
+      if (res.failed) {
+        toast(res.error ?? `${res.failed} couldn't be created`, { tone: "error" });
+      }
+      router.refresh();
+    });
+  }
+
+  function dismissSelected() {
+    if (!selectedIds.length || bulkPending) return;
+    const ids = selectedIds;
+    startBulk(async () => {
+      const res = await dismissProposals(ids);
+      applyBatch(res.proposals);
+      setSelected(new Set());
+      toast(`Dismissed ${res.dismissed}`);
+      router.refresh();
+    });
+  }
+
   function submit() {
     const value = text.trim();
     if ((!value && images.length === 0) || busy) return;
@@ -163,8 +233,8 @@ export function IntakeConversation({
   const isEmpty = messages.length === 0;
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-y-auto">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-4">
           {isEmpty && !pending ? (
             <div className="flex min-h-[58vh] flex-col items-center justify-center gap-5 text-center">
@@ -210,8 +280,44 @@ export function IntakeConversation({
 
                       {cards.length > 0 && (
                         <div className="space-y-2">
+                          {(() => {
+                            const open = cards.filter(
+                              (p) => p.status === "PROPOSED" && !p.createdId,
+                            );
+                            const allPicked =
+                              open.length > 0 && open.every((p) => selected.has(p.id));
+                            // Only worth offering once there's more than one —
+                            // "select all" over a single card is just a click
+                            // with extra steps.
+                            return open.length > 1 ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSelected((prev) => {
+                                    const next = new Set(prev);
+                                    for (const p of open) {
+                                      if (allPicked) next.delete(p.id);
+                                      else next.add(p.id);
+                                    }
+                                    return next;
+                                  })
+                                }
+                                className="text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+                              >
+                                {allPicked ? "Clear selection" : `Select all ${open.length}`}
+                              </button>
+                            ) : null;
+                          })()}
+
                           {cards.map((p) => (
-                            <ProposalCard key={p.id} proposal={p} />
+                            // Keyed by status too: a card accepted in a batch
+                            // has to remount to pick up what it became.
+                            <ProposalCard
+                              key={`${p.id}:${p.status}`}
+                              proposal={p}
+                              selected={selected.has(p.id)}
+                              onSelectedChange={(next) => toggleSelected(p.id, next)}
+                            />
                           ))}
                         </div>
                       )}
@@ -278,6 +384,46 @@ export function IntakeConversation({
 
       <div className="border-t border-hairline bg-background/80 pb-safe backdrop-blur">
         <div className="mx-auto w-full max-w-3xl space-y-2 px-3 py-3 sm:px-4">
+          {/* Approving sits with the composer rather than with the cards: the
+              selection spans the transcript, and this is the one place on the
+              page that is always in view. */}
+          {selectedIds.length > 0 && (
+            <motion.div
+              layout
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-card px-3 py-2 shadow-[0_0_0_1px_hsl(var(--hairline))]"
+            >
+              <span className="text-[12.5px] text-muted-foreground">
+                <strong className="font-medium text-foreground">{selectedIds.length}</strong>{" "}
+                selected
+              </span>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => setSelected(new Set())}
+                  disabled={bulkPending}
+                >
+                  Clear
+                </Button>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  className="text-muted-foreground"
+                  onClick={dismissSelected}
+                  disabled={bulkPending}
+                >
+                  Dismiss
+                </Button>
+                <Button size="xs" onClick={approveSelected} disabled={bulkPending}>
+                  <CheckCheck className="h-3 w-3" />
+                  {bulkPending ? "Creating…" : `Approve ${selectedIds.length}`}
+                </Button>
+              </div>
+            </motion.div>
+          )}
+
           {(error ?? voice.error) && (
             <div className="rounded-md bg-destructive/10 px-3 py-2 text-[12.5px] text-destructive ring-1 ring-inset ring-destructive/25">
               {error ?? voice.error}
@@ -312,24 +458,21 @@ export function IntakeConversation({
                 submit();
               }}
               rows={3}
-              // Taller on a phone: this is the surface the PWA exists for, and a
-              // three-line box makes pasting notes feel like a scratch pad
-              // rather than a search field.
-
               placeholder={
                 isTouch
                   ? "Type anything — a note to file, or a question."
                   : "Type anything — a note to file, or a question. (↵ to send, ⇧↵ for a new line)"
               }
               className={cn(
-                "w-full resize-none bg-transparent px-3.5 py-3 text-[16px] leading-relaxed outline-none",
+                "w-full resize-none overflow-y-auto bg-transparent px-3.5 py-3 text-[16px] leading-relaxed outline-none",
                 "placeholder:text-muted-foreground/60 sm:px-3 sm:py-2.5 sm:text-[13.5px]",
-                // Grows when you reach for it and stays grown while you type.
-                // A height transition, not a rows swap, so it eases rather
-                // than jumping a line at a time.
-                "max-h-[45vh] transition-[min-height] duration-300 ease-apple",
-                "min-h-[104px] hover:min-h-[168px] focus:min-h-[240px]",
-                "sm:min-h-[72px] sm:hover:min-h-[120px] sm:focus:min-h-[180px]",
+                // One height, always. It used to grow on hover and again on
+                // focus, which moved the send button under the cursor on the
+                // way to clicking it and shoved the transcript up the screen
+                // every time you reached for the box. Long text scrolls inside
+                // instead — taller on a phone, since that's the surface the
+                // PWA exists for.
+                "h-[104px] sm:h-[92px]",
               )}
             />
           </ImageDropzone>

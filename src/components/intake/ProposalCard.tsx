@@ -30,6 +30,7 @@ import {
 } from "@/app/chat/intake-actions";
 import type { ProposalDTO } from "@/lib/intake/dto";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
@@ -64,11 +65,18 @@ const MEETING_LOCAL = new Set(["DECISION", "ACTION_ITEM", "OPEN_QUESTION"]);
 export function ProposalCard({
   proposal,
   onChange,
+  selected,
+  onSelectedChange,
 }: {
   proposal: ProposalDTO;
   /** Called after an accept, link or dismiss lands, so a parent that owns the
    *  surrounding list (the meeting brief) can refresh what it shows. */
   onChange?: () => void;
+  /** Present = the parent runs a selection, so the card grows a tick box and
+   *  can be approved in a batch from the bar at the bottom of the chat.
+   *  Absent (the meeting page) leaves the card exactly as it was. */
+  selected?: boolean;
+  onSelectedChange?: (next: boolean) => void;
 }) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -84,6 +92,9 @@ export function ProposalCard({
   const dismissed = state.status === "DISMISSED";
 
   const meetingLocal = MEETING_LOCAL.has(state.kind);
+  // Only an outstanding card can be batched — one already created has nothing
+  // left to approve.
+  const selectable = Boolean(onSelectedChange) && !created && state.status === "PROPOSED";
   const canLink = state.kind === "FEATURE" && state.matchType === "feature" && Boolean(state.matchId);
 
   function accept() {
@@ -146,11 +157,22 @@ export function ProposalCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", bounce: 0, duration: 0.35 }}
       className={cn(
-        "rounded-xl bg-card p-3 shadow-[0_0_0_1px_hsl(var(--hairline)),0_1px_2px_rgb(0_0_0/0.04)]",
+        "rounded-xl bg-card p-3 transition-shadow",
+        selected
+          ? "shadow-[0_0_0_1.5px_hsl(var(--primary)),0_1px_2px_rgb(0_0_0/0.04)]"
+          : "shadow-[0_0_0_1px_hsl(var(--hairline)),0_1px_2px_rgb(0_0_0/0.04)]",
         created && "opacity-70",
       )}
     >
       <div className="flex items-start gap-2.5">
+        {selectable && (
+          <Checkbox
+            checked={selected}
+            onCheckedChange={(v) => onSelectedChange?.(v === true)}
+            aria-label={`Select ${state.title}`}
+            className="mt-1.5 shrink-0"
+          />
+        )}
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
           <meta.Icon className="h-3.5 w-3.5" strokeWidth={2} />
         </span>

@@ -56,7 +56,7 @@ export default async function ChatSessionPage({
     <AppShell email={session.user.email} flush>
       <div className="flex min-h-0 flex-1">
         <ChatSidebar sessions={sessions} activeId={chat.id} />
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
           <IntakeConversation
             initialSessionId={chat.id}
             initialMessages={chat.messages.map((m) => ({

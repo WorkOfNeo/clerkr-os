@@ -32,7 +32,16 @@ export async function AppShell({
   ]);
 
   return (
-    <div className="flex min-h-screen bg-sidebar">
+    <div
+      className={cn(
+        "flex bg-sidebar",
+        // A flush page pins its own footer, which only works if the shell has a
+        // DEFINITE height — with min-h-screen the column grows with the
+        // transcript and the composer rides down out of view. dvh rather than
+        // vh so Safari's collapsing URL bar doesn't hide it either.
+        flush ? "h-[100dvh] overflow-hidden" : "min-h-screen",
+      )}
+    >
       <SidebarNav
         email={email}
         openTickets={openTickets}
@@ -45,7 +54,7 @@ export async function AppShell({
           // A rounded left edge and a hairline are what make the content read
           // as a surface laid on the sidebar rather than another region of it.
           "md:my-2 md:mr-2 md:rounded-xl md:shadow-[0_0_0_1px_hsl(var(--hairline))]",
-          flush ? "flex flex-col overflow-hidden" : "",
+          flush ? "flex min-h-0 flex-col overflow-hidden" : "",
           className,
         )}
       >
