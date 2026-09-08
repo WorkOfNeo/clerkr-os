@@ -671,6 +671,12 @@ model KanbanCard {
   featureId String?
   feature   Feature? @relation(fields: [featureId], references: [id])
 
+  // Raised from a ticket via "Add to board". Nullable, and SetNull on delete:
+  // the ticket is the report, the card is the work that came out of it —
+  // deleting the report must never delete the work.
+  ticketId String?
+  ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
   attachments Attachment[]
   subscribers CardSubscriber[]
 
@@ -679,6 +685,7 @@ model KanbanCard {
 
   @@index([columnId, order])
   @@index([featureId])
+  @@index([ticketId])
   @@map("kanban_card")
 }
 
@@ -764,6 +771,7 @@ model Ticket {
   attachments  Attachment[]
   chatSessions ChatSession[]
   actionItem   ActionItem?
+  cards        KanbanCard[] // sent to a board — a ticket can be worked on more than one
 
   @@index([status, updatedAt])
   @@index([categoryId])

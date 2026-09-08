@@ -7,14 +7,15 @@ import { attachImages } from "@/lib/attachments";
 import { db } from "@/lib/db";
 import {
   boardSelect,
-  clampConfidence,
   columnSelect,
   completionFor,
   createCard,
   defaultBoardId,
   defaultColumnId,
-  endOfColumnOrder,
+  removeColumn,
   seedColumns,
+  updateCardFields,
+  updateColumnFields,
 } from "@/lib/kanban";
 import { requireSession } from "@/lib/session";
 import { slugify, uniqueSlug } from "@/lib/slug";
@@ -127,24 +128,12 @@ export async function updateCard(input: z.infer<typeof updateInput>): Promise<vo
   await requireSession();
   const { id, ...rest } = updateInput.parse(input);
 
-  await db.kanbanCard.update({
-    where: { id },
-    data: {
-      ...(rest.title !== undefined ? { title: rest.title } : {}),
-      ...(rest.description !== undefined ? { description: rest.description?.trim() || null } : {}),
-      ...(rest.confidence !== undefined ? { confidence: clampConfidence(rest.confidence) } : {}),
-      ...(rest.themeTag !== undefined ? { themeTag: rest.themeTag?.trim() || null } : {}),
-      ...(rest.blocked !== undefined
-        ? { blocked: rest.blocked, ...(rest.blocked ? {} : { blockerNote: null }) }
-        : {}),
-      ...(rest.blockerNote !== undefined && rest.blocked !== false
-        ? { blockerNote: rest.blockerNote?.trim() || null }
-        : {}),
-      ...(rest.dueDate !== undefined
-        ? { dueDate: rest.dueDate ? new Date(rest.dueDate) : null }
-        : {}),
-      ...(rest.featureId !== undefined ? { featureId: rest.featureId || null } : {}),
-    },
+  // The field mapping lives in lib/kanban so the panel, MCP and the assistant
+  // all edit a card the same way.
+  const { dueDate, ...fields } = rest;
+  await updateCardFields(id, {
+    ...fields,
+    ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
   });
   revalidatePath("/kanban");
 }
@@ -226,29 +215,9 @@ const columnUpdateInput = columnInput.partial().extend({ id: z.string().min(1) }
 
 export async function updateColumn(input: z.infer<typeof columnUpdateInput>): Promise<void> {
   await requireSession();
-  const { id, ...rest } = columnUpdateInput.parse(input);
+  const { id, boardId: _boardId, ...rest } = columnUpdateInput.parse(input);
 
-  await db.kanbanColumn.update({
-    where: { id },
-    data: {
-      ...(rest.name !== undefined ? { name: rest.name } : {}),
-      ...(rest.description !== undefined ? { description: rest.description?.trim() || null } : {}),
-      ...(rest.color !== undefined ? { color: rest.color } : {}),
-      ...(rest.icon !== undefined ? { icon: rest.icon } : {}),
-      ...(rest.wipLimit !== undefined ? { wipLimit: rest.wipLimit } : {}),
-      ...(rest.isDone !== undefined ? { isDone: rest.isDone } : {}),
-    },
-  });
-
-  // Flipping the done flag has to catch up every card already sitting there,
-  // otherwise the column says "done" while its cards say otherwise.
-  if (rest.isDone !== undefined) {
-    await db.kanbanCard.updateMany({
-      where: { columnId: id, ...(rest.isDone ? { completedAt: null } : {}) },
-      data: { completedAt: rest.isDone ? new Date() : null },
-    });
-  }
-
+  await updateColumnFields(id, rest);
   revalidatePath("/kanban");
 }
 
@@ -283,72 +252,12 @@ export async function reorderColumns(orderedIds: string[]): Promise<void> {
 }
 
 /**
- * Deleting a column never deletes the work in it. `onDelete: Restrict` means
- * the database refuses outright, so the caller has to say where the cards go —
- * and if they don't, this explains rather than throwing a foreign-key error.
+ * Deleting a column never deletes the work in it — see removeColumn, which is
+ * shared with MCP and the assistant so every surface refuses the same way.
  */
 export async function deleteColumn(id: string, moveCardsTo?: string): Promise<void> {
   await requireSession();
-
-  const column = await db.kanbanColumn.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      name: true,
-      isDefault: true,
-      boardId: true,
-      _count: { select: { cards: true } },
-    },
-  });
-  if (!column) return;
-
-  const remaining = await db.kanbanColumn.count({ where: { boardId: column.boardId } });
-  if (remaining <= 1) throw new Error("A board needs at least one column.");
-
-  if (column._count.cards > 0) {
-    if (!moveCardsTo) {
-      throw new Error(
-        `“${column.name}” still holds ${column._count.cards} card${
-          column._count.cards === 1 ? "" : "s"
-        }. Choose a column to move them to first.`,
-      );
-    }
-    if (moveCardsTo === id) throw new Error("Cards can't be moved into the column being deleted.");
-
-    // Append rather than preserve order: two columns' orderings interleaved by
-    // raw value would shuffle the destination.
-    let next = await endOfColumnOrder(moveCardsTo);
-    const cards = await db.kanbanCard.findMany({
-      where: { columnId: id },
-      orderBy: { order: "asc" },
-      select: { id: true, completedAt: true },
-    });
-    const completedAt = await completionFor(moveCardsTo, new Date());
-    await db.$transaction(
-      cards.map((c) =>
-        db.kanbanCard.update({
-          where: { id: c.id },
-          data: {
-            columnId: moveCardsTo,
-            order: (next += 1000),
-            completedAt: completedAt ? (c.completedAt ?? new Date()) : null,
-          },
-        }),
-      ),
-    );
-  }
-
-  await db.kanbanColumn.delete({ where: { id } });
-
-  // The board must always have somewhere for an unrouted card to land.
-  if (column.isDefault) {
-    const first = await db.kanbanColumn.findFirst({
-      where: { boardId: column.boardId },
-      orderBy: { sortOrder: "asc" },
-    });
-    if (first) await db.kanbanColumn.update({ where: { id: first.id }, data: { isDefault: true } });
-  }
-
+  await removeColumn(id, moveCardsTo);
   revalidatePath("/kanban");
 }
 

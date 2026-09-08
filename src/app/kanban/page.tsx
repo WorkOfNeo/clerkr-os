@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 export default async function KanbanPage({
   searchParams,
 }: {
-  searchParams: Promise<{ board?: string }>;
+  searchParams: Promise<{ board?: string; card?: string }>;
 }) {
   const session = await requireSession();
   const params = await searchParams;
@@ -100,6 +100,9 @@ export default async function KanbanPage({
         />
 
         <KanbanBoard
+          // Remount when the linked card changes, so arriving from a ticket
+          // opens that card even when the board was already on screen.
+          key={`${active.id}:${params.card ?? ""}`}
           boardId={active.id}
           boardName={active.name}
           isMyDefault={me?.defaultBoardId === active.id}
@@ -107,6 +110,7 @@ export default async function KanbanPage({
           subscribedCardIds={prefs.subscribedCardIds}
           columns={columns}
           cards={cards}
+          openCardId={params.card ?? null}
         />
       </main>
     </AppShell>

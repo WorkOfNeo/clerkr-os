@@ -34,6 +34,22 @@ backlog and no planning horizon.
 `createTicket` / `addComment` in [src/lib/tickets.ts](src/lib/tickets.ts).
 Slugging, embedding, attachments and provenance live there.
 
+**A ticket can be sent to a board** — "Add to board" on the ticket page, via
+`cardFromTicket` in [src/lib/kanban.ts](src/lib/kanban.ts). The queue says what
+was RAISED, the board says what is being DONE about it, and `KanbanCard.ticketId`
+keeps them pointing at each other; the ticket page shows which columns its cards
+are sitting in, and the card panel links back.
+
+- **The card takes the ticket's words but is its own record from then on.**
+  Editing one never rewrites the other — the sentence a lawyer used to describe
+  a bug is rarely the sentence you want on the board.
+- **The column is chosen, never defaulted, in the dialog.** Where a ticket lands
+  IS the decision: filing it in Backlog and starting it today are different acts.
+- `ticketId` is nullable with `onDelete: SetNull` — deleting the report must
+  never delete the work. A ticket may have several cards on purpose (a dev board
+  and a release board), so a second send isn't refused; the existing cards are
+  shown instead, to be opened rather than duplicated.
+
 ## Intake (`/chat`) — the front door
 
 `/` redirects here. You paste raw text — meeting notes, a list of bugs, a
@@ -45,6 +61,17 @@ records that should exist. Two modes on one surface: **File it** classifies,
   `IntakeProposal` rows (PROPOSED → ACCEPTED / DISMISSED), rendered as cards you
   can edit in place before accepting. This is the whole safety model — don't add
   a path that creates records straight from a classification.
+- **Changing what already exists is NOT a proposal.** `read_board`,
+  `update_card`, `delete_card`, `manage_column` and `ticket_to_card` in
+  [src/lib/ai/agent.ts](src/lib/ai/agent.ts) write immediately, and that is the
+  line: a card invented out of a paste is a guess and needs confirming, but a
+  card already on the board is something the user can point at — being asked
+  "shall I move #12 to Done?" after saying "move 12 to done" is the round trip
+  this surface exists to remove. They all go through `lib/kanban`, so the
+  assistant edits the board by the same path as the card panel and MCP.
+- The rules draw the boundary explicitly (`AGENT_RULES`): delete is only for a
+  card the user named, "tidy up" means MOVE cards to a done column, and a
+  workflow's shape is never reorganised on the assistant's own initiative.
 - **One paste splits into many proposals.** Five bugs in one message become five
   tickets, not one.
 - **Every proposal is matched against what exists** — `findNearest` in
@@ -150,9 +177,17 @@ pointing at `/api/attachments/[id]`.
 - **Deleting a column never deletes the work in it.** `KanbanCard.columnId` is
   required with `onDelete: Restrict`, so the DB refuses; the UI makes you pick
   where the cards go. A board can't drop below one column.
+- **One mapping per kind of change, in [src/lib/kanban.ts](src/lib/kanban.ts).**
+  `updateCardFields`, `updateColumnFields` and `removeColumn` are shared by the
+  card panel, MCP and the assistant. Three copies of the card mapping drifted
+  the moment one of them learned a new field, and the `completedAt` rule in
+  particular has to hold everywhere — it is derived from the destination
+  column's `isDone`, never set by hand.
 - Sparse ordering (gaps of 1000) — `orderForSlot` in
   [src/lib/kanban-order.ts](src/lib/kanban-order.ts), split out of `kanban.ts`
   so the client drag handler can use it without importing Prisma.
+- `/kanban?card=<id>` opens straight into that card's panel, which is how a
+  ticket's "on the board" chip lands on the work rather than on the board.
 - The board **seeds its own columns on first visit** (`ensureColumns`), so there
   is no setup step on a fresh database.
 

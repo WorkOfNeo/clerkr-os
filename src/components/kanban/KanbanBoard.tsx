@@ -46,6 +46,7 @@ export function KanbanBoard({
   subscribedCardIds,
   columns,
   cards: initialCards,
+  openCardId,
 }: {
   boardId: string;
   boardName: string;
@@ -54,6 +55,9 @@ export function KanbanBoard({
   subscribedCardIds: string[];
   columns: BoardColumn[];
   cards: BoardCard[];
+  /** ?card=<id> — a link can point at one card, so "where is this work?" from
+   *  a ticket lands on the card itself rather than on the board generally. */
+  openCardId?: string | null;
 }) {
   const subscribed = new Set(subscribedCardIds);
   const router = useRouter();
@@ -70,7 +74,9 @@ export function KanbanBoard({
   const [editing, setEditing] = useState<BoardColumn | null>(null);
   const [creatingColumn, setCreatingColumn] = useState(false);
   const [deleting, setDeleting] = useState<BoardColumn | null>(null);
-  const [openCard, setOpenCard] = useState<BoardCard | null>(null);
+  const [openCard, setOpenCard] = useState<BoardCard | null>(
+    () => initialCards.find((c) => c.id === openCardId) ?? null,
+  );
 
   // MOUSE ONLY, deliberately. A touch sensor claims the gesture on the way to
   // recognising a drag, and a phone only has so many gestures to give:

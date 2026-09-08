@@ -67,6 +67,22 @@ the board through these tools.
 that. If the user pasted an image with no source URL, leave \`imageUrl\` unset —
 the card renders text-only. Never inline image bytes or base64 into any field.
 
+## The kanban board
+
+Tickets say what was RAISED; the board says what's being DONE about it. Move
+something across with \`create_card_from_ticket\` — it carries the ticket's words
+and links back to it — and pick the column deliberately, since where it lands is
+the decision being made. Columns are editable rows, so call
+\`list_kanban_columns\` first rather than assuming To Do/Doing/Done, and never
+assume a board: \`list_kanban_boards\` first, each is its own workflow.
+
+Moving a card is \`update_kanban_card\` with a \`column\`, or
+\`move_kanban_card\`; landing in a column marked isDone stamps it complete for
+you. Prefer moving a finished card to a done column over \`delete_kanban_card\`,
+the same way WONT_FIX beats deleting a ticket — it keeps the record. Deleting a
+column never deletes the work in it: \`delete_kanban_column\` makes you say where
+the cards go.
+
 ## Everything else
 
 Meetings structure into briefs (\`create_meeting\` + \`structure_meeting\`), and a
