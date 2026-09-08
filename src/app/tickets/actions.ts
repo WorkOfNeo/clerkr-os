@@ -128,6 +128,55 @@ export async function commentOnTicket(input: z.infer<typeof commentInput>): Prom
   if (ticket) revalidatePath(`/tickets/${ticket.slug}`);
 }
 
+const sendToBoardInput = z.object({
+  ticketId: z.string().min(1),
+  boardId: z.string().optional(),
+  columnId: z.string().optional(),
+  /** Copy the ticket body into the card's notes. Default true. */
+  includeBody: z.boolean().optional(),
+});
+
+/**
+ * Send a ticket to a kanban board — the queue says what was raised, the board
+ * says what's being done about it, and this is the bridge between them.
+ *
+ * A ticket can go to more than one board on purpose (the same report can be
+ * worked on a dev board and tracked on a release board), so this never refuses
+ * a second card. The ticket page shows what's already there so you can open it
+ * instead of making a duplicate by accident.
+ */
+export async function sendTicketToBoard(
+  input: z.infer<typeof sendToBoardInput>,
+): Promise<{ id: string; number: number; boardSlug: string }> {
+  const session = await requireSession();
+  const parsed = sendToBoardInput.parse(input);
+
+  const { cardFromTicket } = await import("@/lib/kanban");
+  const card = await cardFromTicket({
+    ticket: parsed.ticketId,
+    board: parsed.boardId,
+    columnId: parsed.columnId || null,
+    includeBody: parsed.includeBody,
+  });
+
+  // You follow what you raise — same rule as a card created on the board.
+  await db.cardSubscriber.create({ data: { cardId: card.id, userId: session.user.id } });
+
+  const board = await db.kanbanCard.findUniqueOrThrow({
+    where: { id: card.id },
+    select: { column: { select: { board: { select: { slug: true } } } } },
+  });
+
+  const ticket = await db.ticket.findUnique({
+    where: { id: parsed.ticketId },
+    select: { slug: true },
+  });
+  revalidatePath("/kanban");
+  if (ticket) revalidatePath(`/tickets/${ticket.slug}`);
+
+  return { id: card.id, number: card.number, boardSlug: board.column.board.slug };
+}
+
 /** Attach more screenshots to a ticket after the fact. */
 export async function addTicketAttachments(
   ticketId: string,

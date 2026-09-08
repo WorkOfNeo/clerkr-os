@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { ImagePlus, Link2, Trash2 } from "lucide-react";
+import { ImagePlus, Link2, Ticket, Trash2 } from "lucide-react";
 
 import {
   addCardAttachments,
@@ -290,6 +291,20 @@ function Body({
           <Link2 className="h-3.5 w-3.5" />
           Linked to {card.feature.title}
         </p>
+      )}
+
+      {/* Raised from a ticket. The card is the work and the ticket is the
+          report, so this stays a link rather than a copy — whoever asked for
+          it is one click away, with the screenshots they sent. */}
+      {card.ticket && (
+        <Link
+          href={`/tickets/${card.ticket.slug}`}
+          className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <Ticket className="h-3.5 w-3.5" />
+          From ticket <span className="font-mono">#{card.ticket.number}</span>
+          <span className="truncate">{card.ticket.title}</span>
+        </Link>
       )}
 
       <div className="flex justify-between border-t border-hairline pt-4">

@@ -3,21 +3,23 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import {
   boardSelect,
+  cardFromTicket,
   cardSelect,
-  clampConfidence,
   columnSelect,
   columnsFor,
-  completionFor,
   createCard,
   defaultBoardId,
-  endOfColumnOrder,
   ensureBoards,
+  removeColumn,
   resolveBoardId,
   resolveCard,
   resolveColumnId,
   seedColumns,
+  updateCardFields,
+  updateColumnFields,
 } from "@/lib/kanban";
 import { slugify, uniqueSlug } from "@/lib/slug";
+import { resolveTicket } from "@/lib/tickets";
 
 import type { ToolDef } from "./types";
 
@@ -183,6 +185,12 @@ export const KANBAN_TOOLS: ToolDef[] = [
         themeTag: { type: "string", description: "Short theme label, e.g. 'AI', 'Integrations'." },
         dueDate: { type: "string", description: "ISO date." },
         featureId: { type: "string", description: "Feature id or slug to link." },
+        ticket: {
+          type: "string",
+          description:
+            "Ticket id, slug or #number this card is the work for. To put an EXISTING " +
+            "ticket on the board, prefer create_card_from_ticket — it copies the words too.",
+        },
       },
       required: ["title"],
     },
@@ -197,6 +205,7 @@ export const KANBAN_TOOLS: ToolDef[] = [
           themeTag: z.string().optional(),
           dueDate: z.string().optional(),
           featureId: z.string().optional(),
+          ticket: z.string().optional(),
         })
         .parse(args);
 
@@ -207,9 +216,134 @@ export const KANBAN_TOOLS: ToolDef[] = [
         column: input.column,
         confidence: input.confidence,
         themeTag: input.themeTag,
+        ticketId: input.ticket ? (await resolveTicket(input.ticket)).id : null,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         featureId: input.featureId ? await resolveFeatureId(input.featureId) : null,
       });
+    },
+  },
+
+  {
+    name: "create_card_from_ticket",
+    description:
+      "Put an existing ticket on a board: creates a card carrying the ticket's title and " +
+      "body, linked back to it. This is the bridge between the queue (what was raised) and " +
+      "the board (what's being done about it). Choose the column deliberately — where it " +
+      "lands is the decision being made. Sending the same ticket twice is allowed but " +
+      "rarely wanted, so check list_kanban first if you're unsure.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ticket: { type: "string", description: "Ticket id, slug or #number." },
+        board: { type: "string", description: "Board name, slug or id. Defaults to the default board." },
+        column: { type: "string", description: "Column name, slug or id. Defaults to the board's default column." },
+        includeBody: {
+          type: "boolean",
+          description: "Copy the ticket body into the card. Default true.",
+        },
+        themeTag: { type: "string" },
+        dueDate: { type: "string", description: "ISO date." },
+      },
+      required: ["ticket"],
+    },
+    handler: async (args) => {
+      const input = z
+        .object({
+          ticket: z.string().min(1),
+          board: z.string().optional(),
+          column: z.string().optional(),
+          includeBody: z.boolean().optional(),
+          themeTag: z.string().optional(),
+          dueDate: z.string().optional(),
+        })
+        .parse(args);
+
+      return cardFromTicket({
+        ticket: input.ticket,
+        board: input.board,
+        column: input.column,
+        includeBody: input.includeBody,
+        themeTag: input.themeTag,
+        dueDate: input.dueDate ? new Date(input.dueDate) : null,
+      });
+    },
+  },
+
+  {
+    name: "update_kanban_column",
+    description:
+      "Rename a column or change its colour, icon, WIP limit or isDone flag. Flipping " +
+      "isDone backfills the cards already in it, so the column and its contents never " +
+      "disagree. The board's shape is the team's decision — only do this when asked.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ref: { type: "string", description: "Column name, slug or id." },
+        board: { type: "string", description: "Scopes the lookup when two boards share a column name." },
+        name: { type: "string" },
+        description: { type: ["string", "null"] },
+        color: { type: "string", description: "Hex, e.g. '#0A84FF'." },
+        isDone: { type: "boolean", description: "Landing here means finished." },
+        wipLimit: { type: ["integer", "null"], minimum: 1 },
+      },
+      required: ["ref"],
+    },
+    handler: async (args) => {
+      const input = z
+        .object({
+          ref: z.string().min(1),
+          board: z.string().optional(),
+          name: z.string().trim().min(1).max(60).optional(),
+          description: z.string().nullable().optional(),
+          color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+          isDone: z.boolean().optional(),
+          wipLimit: z.number().int().min(1).max(999).nullable().optional(),
+        })
+        .parse(args);
+
+      const boardId = input.board ? await resolveBoardId(input.board) : null;
+      const columnId = await resolveColumnId(input.ref, boardId);
+      if (!columnId) throw new Error(`No such kanban column: ${input.ref}`);
+
+      const { ref: _ref, board: _board, ...patch } = input;
+      return updateColumnFields(columnId, patch);
+    },
+  },
+
+  {
+    name: "delete_kanban_column",
+    description:
+      "Delete a column. Deleting a column never deletes the work in it: if it still holds " +
+      "cards you must say where they go via moveCardsTo, and a board can't drop below one " +
+      "column. Ask the user before removing part of their workflow.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ref: { type: "string", description: "Column name, slug or id." },
+        board: { type: "string", description: "Scopes the lookup when two boards share a column name." },
+        moveCardsTo: {
+          type: "string",
+          description: "Where the cards in it should go — required if it holds any.",
+        },
+      },
+      required: ["ref"],
+    },
+    handler: async (args) => {
+      const input = z
+        .object({
+          ref: z.string().min(1),
+          board: z.string().optional(),
+          moveCardsTo: z.string().optional(),
+        })
+        .parse(args);
+
+      const boardId = input.board ? await resolveBoardId(input.board) : null;
+      const columnId = await resolveColumnId(input.ref, boardId);
+      if (!columnId) throw new Error(`No such kanban column: ${input.ref}`);
+      const moveTo = input.moveCardsTo ? await resolveColumnId(input.moveCardsTo, boardId) : null;
+
+      const result = await removeColumn(columnId, moveTo);
+      return { ok: true, ...result };
     },
   },
 
@@ -233,19 +367,7 @@ export const KANBAN_TOOLS: ToolDef[] = [
         .object({ ref: z.string().min(1), column: z.string().min(1), board: z.string().optional() })
         .parse(args);
       const card = await resolveCard(input.ref);
-      const boardId = input.board ? await resolveBoardId(input.board) : null;
-      const columnId = await resolveColumnId(input.column, boardId);
-      if (!columnId) throw new Error(`No such kanban column: ${input.column}`);
-
-      return db.kanbanCard.update({
-        where: { id: card.id },
-        data: {
-          columnId,
-          order: await endOfColumnOrder(columnId),
-          completedAt: await completionFor(columnId, card.completedAt),
-        },
-        select: cardSelect,
-      });
+      return updateCardFields(card.id, { column: input.column, board: input.board });
     },
   },
 
@@ -253,19 +375,26 @@ export const KANBAN_TOOLS: ToolDef[] = [
     name: "update_kanban_card",
     description:
       "Update a card's fields (title, description, confidence 0-5, themeTag, dueDate, " +
-      "blocked + blockerNote, linked feature). Use move_kanban_card to change columns.",
+      "blocked + blockerNote, linked feature or ticket). Pass `column` to move it at the " +
+      "same time — if that column is marked done the card is stamped complete for you.",
     inputSchema: {
       type: "object",
       properties: {
         ref: { type: "string", description: "Card id, slug or #number." },
         title: { type: "string" },
         description: { type: ["string", "null"] },
+        column: { type: "string", description: "Move it: target column name, slug or id." },
+        board: { type: "string", description: "Scopes the column lookup when moving." },
         confidence: { type: "integer", minimum: 0, maximum: 5 },
         themeTag: { type: ["string", "null"] },
         dueDate: { type: ["string", "null"] },
         blocked: { type: "boolean" },
         blockerNote: { type: ["string", "null"] },
         featureId: { type: ["string", "null"], description: "Feature id or slug; null to unlink." },
+        ticket: {
+          type: ["string", "null"],
+          description: "Ticket id, slug or #number this card is the work for; null to unlink.",
+        },
       },
       required: ["ref"],
     },
@@ -275,34 +404,31 @@ export const KANBAN_TOOLS: ToolDef[] = [
           ref: z.string().min(1),
           title: z.string().min(1).optional(),
           description: z.string().nullable().optional(),
+          column: z.string().optional(),
+          board: z.string().optional(),
           confidence: z.number().int().min(0).max(5).optional(),
           themeTag: z.string().nullable().optional(),
           dueDate: z.string().nullable().optional(),
           blocked: z.boolean().optional(),
           blockerNote: z.string().nullable().optional(),
           featureId: z.string().nullable().optional(),
+          ticket: z.string().nullable().optional(),
         })
         .parse(args);
 
       const card = await resolveCard(input.ref);
-      const data: Record<string, unknown> = {};
-      if (input.title !== undefined) data.title = input.title.trim();
-      if (input.description !== undefined) data.description = input.description;
-      if (input.confidence !== undefined) data.confidence = clampConfidence(input.confidence);
-      if (input.themeTag !== undefined) data.themeTag = input.themeTag;
-      if (input.dueDate !== undefined) data.dueDate = input.dueDate ? new Date(input.dueDate) : null;
-      if (input.blocked !== undefined) {
-        data.blocked = input.blocked;
-        if (!input.blocked) data.blockerNote = null;
-      }
-      if (input.blockerNote !== undefined && input.blocked !== false) {
-        data.blockerNote = input.blockerNote;
-      }
-      if (input.featureId !== undefined) {
-        data.featureId = input.featureId === null ? null : await resolveFeatureId(input.featureId);
-      }
+      const { ref: _ref, dueDate, featureId, ticket, ...rest } = input;
 
-      return db.kanbanCard.update({ where: { id: card.id }, data, select: cardSelect });
+      return updateCardFields(card.id, {
+        ...rest,
+        ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
+        ...(featureId !== undefined
+          ? { featureId: featureId === null ? null : await resolveFeatureId(featureId) }
+          : {}),
+        ...(ticket !== undefined
+          ? { ticketId: ticket === null ? null : (await resolveTicket(ticket)).id }
+          : {}),
+      });
     },
   },
 

@@ -4,6 +4,14 @@ export interface KanbanFeatureRef {
   title: string;
 }
 
+export interface KanbanTicketRef {
+  id: string;
+  slug: string;
+  number: number;
+  title: string;
+  status: string;
+}
+
 export interface KanbanAttachment {
   id: string;
   fileName: string;
@@ -42,5 +50,7 @@ export interface BoardCard {
   completedAt: string | Date | null;
   featureId: string | null;
   feature: KanbanFeatureRef | null;
+  ticketId: string | null;
+  ticket: KanbanTicketRef | null;
   attachments: KanbanAttachment[];
 }

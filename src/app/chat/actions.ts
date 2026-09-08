@@ -133,6 +133,10 @@ export async function sendChatMessage(input: {
       : [];
 
     revalidatePath(`/chat/${sessionId}`);
+    // The board tools write straight through, so the cached board would
+    // otherwise still show what the assistant just changed.
+    if (turn.touchedBoard) revalidatePath("/kanban");
+
     return {
       sessionId,
       messages,

@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarDays, Flag, Link2, Paperclip } from "lucide-react";
+import { CalendarDays, Flag, Link2, Paperclip, Ticket } from "lucide-react";
 
 import { ConfidenceMeter } from "@/components/kanban/ConfidenceMeter";
 import { formatShortDate } from "@/lib/format";
@@ -113,6 +113,16 @@ export function KanbanCard({
         {card.feature && (
           <span className="inline-flex items-center gap-1" title={card.feature.title}>
             <Link2 className="h-3 w-3" />
+          </span>
+        )}
+
+        {card.ticket && (
+          <span
+            className="inline-flex items-center gap-1 tabular-nums"
+            title={`From ticket #${card.ticket.number} — ${card.ticket.title}`}
+          >
+            <Ticket className="h-3 w-3" />
+            {card.ticket.number}
           </span>
         )}
 

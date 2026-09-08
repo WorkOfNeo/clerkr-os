@@ -8,10 +8,12 @@ import { AppShell } from "@/components/AppShell";
 import { AttachmentGrid } from "@/components/ticket/AttachmentGrid";
 import { TicketBody } from "@/components/ticket/TicketBody";
 import { CommentComposer } from "@/components/ticket/CommentComposer";
+import { SendToBoardDialog } from "@/components/ticket/SendToBoardDialog";
 import { CategoryBadge, PriorityLabel } from "@/components/ticket/TicketBadges";
 import { TicketControls } from "@/components/ticket/TicketControls";
 import { db } from "@/lib/db";
 import { formatShortDate } from "@/lib/format";
+import { boardsWithColumns, cardsForTicket } from "@/lib/kanban";
 import { TICKET_SOURCES } from "@/lib/ticket-meta";
 import { ticketDetailSelect } from "@/lib/tickets";
 import { requireSession } from "@/lib/session";
@@ -41,11 +43,15 @@ export default async function TicketPage({
   const session = await requireSession();
   const { slug } = await params;
 
-  const [ticket, categories] = await Promise.all([
+  const [ticket, categories, boards] = await Promise.all([
     db.ticket.findUnique({ where: { slug }, select: ticketDetailSelect }),
     db.ticketCategory.findMany({ orderBy: { sortOrder: "asc" } }),
+    boardsWithColumns(),
   ]);
   if (!ticket) notFound();
+
+  // Where this ticket is already being worked, if anywhere.
+  const onBoard = await cardsForTicket(ticket.id);
 
   const who = (u: { name: string; email: string }) => u.name || u.email;
 
@@ -82,13 +88,41 @@ export default async function TicketPage({
             <CategoryBadge category={ticket.category} />
           </div>
 
-          <div className="mt-3.5">
+          <div className="mt-3.5 space-y-2">
             <TicketControls
               ticketId={ticket.id}
               status={ticket.status}
               priority={ticket.priority}
               categoryId={ticket.category?.id ?? null}
               categories={categories}
+            />
+            <SendToBoardDialog
+              ticketId={ticket.id}
+              ticketBody={ticket.body}
+              boards={boards.map((b) => ({
+                id: b.id,
+                slug: b.slug,
+                name: b.name,
+                isDefault: b.isDefault,
+                columns: b.columns.map((c) => ({
+                  id: c.id,
+                  name: c.name,
+                  color: c.color,
+                  icon: c.icon,
+                  isDone: c.isDone,
+                  isDefault: c.isDefault,
+                })),
+              }))}
+              existing={onBoard.map((c) => ({
+                id: c.id,
+                number: c.number,
+                columnName: c.column.name,
+                columnColor: c.column.color,
+                columnIcon: c.column.icon,
+                boardName: c.column.board.name,
+                boardSlug: c.column.board.slug,
+                done: Boolean(c.completedAt),
+              }))}
             />
           </div>
         </header>
