@@ -1,4 +1,11 @@
-import { CHAT_MODEL, getOpenAI, isOpenAIAvailable } from "@/lib/ai/openai";
+import {
+  CLAUDE_MAX_TOKENS,
+  CLAUDE_MODEL,
+  getAnthropic,
+  isAnthropicAvailable,
+} from "@/lib/ai/anthropic";
+import type Anthropic from "@anthropic-ai/sdk";
+
 import { db } from "@/lib/db";
 
 import { meetingText } from "./structure";
@@ -42,8 +49,8 @@ export async function askMeeting(input: {
   const question = input.question.trim();
   if (!question) return { answer: "", error: "Ask something first." };
 
-  if (!isOpenAIAvailable()) {
-    return { answer: "", error: "OPENAI_API_KEY is not set, so questions can't be answered." };
+  if (!isAnthropicAvailable()) {
+    return { answer: "", error: "ANTHROPIC_API_KEY is not set, so questions can't be answered." };
   }
 
   const meeting = await db.meeting.findUnique({
@@ -85,24 +92,57 @@ export async function askMeeting(input: {
     : head;
 
   try {
-    const client = getOpenAI();
-    const completion = await client.chat.completions.create({
-      model: CHAT_MODEL,
-      temperature: 0.2,
+    const client = getAnthropic();
+
+    // Streamed, then collapsed with finalMessage(). The call itself stays
+    // synchronous for the server action, but a long transcript plus thinking
+    // can outrun a non-streaming HTTP timeout, and this costs nothing to avoid.
+    //
+    // No `temperature`: sampling parameters are rejected outright on this
+    // model. Depth is controlled by thinking/effort instead.
+    const stream = client.messages.stream({
+      model: CLAUDE_MODEL,
+      max_tokens: CLAUDE_MAX_TOKENS,
+      thinking: { type: "adaptive" },
+      system: SYSTEM,
       messages: [
-        { role: "system", content: SYSTEM },
-        { role: "system", content: contextBlock },
-        ...history
-          .reverse()
-          .map((m) => ({
-            role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
-            content: m.content,
-          })),
+        {
+          role: "user",
+          // The transcript is the bulk of every request and does not change
+          // between questions in a thread, so it gets the cache breakpoint and
+          // the volatile parts (history, question) follow it. A short meeting
+          // falls under the minimum cacheable prefix and simply won't cache.
+          content: [
+            {
+              type: "text",
+              text: contextBlock,
+              cache_control: { type: "ephemeral" },
+            },
+          ],
+        },
+        // Fetched newest-first for the LIMIT; the model needs them oldest-first.
+        // Copied rather than reversed in place.
+        ...[...history].reverse().map((m) => ({
+          role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+          content: m.content,
+        })),
         { role: "user", content: question },
       ],
     });
+    const message = await stream.finalMessage();
 
-    const answer = completion.choices[0]?.message?.content?.trim();
+    // A policy decline arrives as HTTP 200 — check before reading content.
+    if (message.stop_reason === "refusal") {
+      return { answer: "", error: "Claude declined to answer that one." };
+    }
+
+    // content is a discriminated union; thinking blocks are in there too.
+    const answer = message.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
+
     if (!answer) return { answer: "", error: "The model returned nothing. Try rephrasing." };
 
     // Persist only once an answer exists, so a failed call doesn't leave a
