@@ -26,10 +26,19 @@ export async function AppShell({
 }) {
   // The one live number in the chrome. Counting here rather than in each page
   // keeps the badge honest wherever you happen to be.
-  const [openTickets, unreadNotifications] = await Promise.all([
+  //
+  // The role is resolved here too, so /admin can appear in the nav without
+  // every page having to look it up and pass it down. Read from the row rather
+  // than the session — a promotion should show up on the next request, not
+  // after the person signs in again.
+  const [openTickets, unreadNotifications, viewer] = await Promise.all([
     db.ticket.count({ where: { status: { in: OPEN_STATUSES } } }).catch(() => 0),
     db.notification.count({ where: { readAt: null } }).catch(() => 0),
+    db.user
+      .findUnique({ where: { email }, select: { role: true } })
+      .catch(() => null),
   ]);
+  const isSuperadmin = viewer?.role === "SUPERADMIN";
 
   return (
     <div
@@ -46,6 +55,7 @@ export async function AppShell({
         email={email}
         openTickets={openTickets}
         unreadNotifications={unreadNotifications}
+        isSuperadmin={isSuperadmin}
       />
 
       <div
@@ -58,7 +68,7 @@ export async function AppShell({
           className,
         )}
       >
-        <MobileNav openTickets={openTickets} />
+        <MobileNav openTickets={openTickets} isSuperadmin={isSuperadmin} />
         {children}
       </div>
     </div>

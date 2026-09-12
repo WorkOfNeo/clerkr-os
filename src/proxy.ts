@@ -49,6 +49,11 @@ export function proxy(req: NextRequest) {
     pathname === "/favicon.ico" ||
     pathname === "/signin" ||
     pathname === "/signup" ||
+    // Password recovery is for people who cannot sign in, so it cannot sit
+    // behind the session cookie. /reset-password carries a single-use token
+    // in the query string; that token is the credential.
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password" ||
     // PWA install assets MUST be reachable without a session. iOS fetches the
     // manifest and the apple-touch-icon with no credentials, so behind the
     // cookie they 307 to /signin, Safari receives an HTML page where it wanted

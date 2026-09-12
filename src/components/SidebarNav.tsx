@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ChevronDown, LogOut, PanelLeft, Search, Settings } from "lucide-react";
+import { ChevronDown, LogOut, PanelLeft, Search, Settings, ShieldCheck } from "lucide-react";
 
 import { ClerkrLogo } from "@/components/ClerkrLogo";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -18,10 +18,12 @@ export function SidebarNav({
   email,
   openTickets,
   unreadNotifications,
+  isSuperadmin,
 }: {
   email: string;
   openTickets: number;
   unreadNotifications: number;
+  isSuperadmin: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -152,6 +154,22 @@ export function SidebarNav({
 
         <div className="flex flex-col gap-0.5 pt-2">
           <NotificationBell initialUnread={unreadNotifications} collapsed={collapsed} />
+          {isSuperadmin && (
+            <Link
+              href="/admin"
+              title={collapsed ? "Admin" : undefined}
+              className={cn(
+                "flex h-8 items-center gap-2.5 rounded-md px-2 text-[13px] font-medium transition-colors",
+                isActive(pathname, "/admin")
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+                collapsed && "justify-center px-0",
+              )}
+            >
+              <ShieldCheck className="h-4 w-4 shrink-0" />
+              {!collapsed && <span>Admin</span>}
+            </Link>
+          )}
           <Link
             href="/settings"
             title={collapsed ? "Settings" : undefined}
@@ -207,7 +225,11 @@ export function SidebarNav({
         </div>
       </aside>
 
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        isSuperadmin={isSuperadmin}
+      />
     </>
   );
 }

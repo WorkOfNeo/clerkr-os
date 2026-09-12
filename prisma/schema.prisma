@@ -40,6 +40,14 @@ model User {
   notifications  Notification[]
   pushSubs       PushSubscription[]
 
+  // Everyone signed in can read and edit everything — this app is
+  // single-tenant by design. SUPERADMIN is narrower than that: it gates
+  // /admin, which is where one person promotes another and where a
+  // password-reset link is minted on someone else's behalf. An enum rather
+  // than an editable row, for the same reason as TicketStatus — code branches
+  // on it, so it must not be editable out from under the check.
+  role UserRole @default(MEMBER)
+
   // Which board /kanban opens on FOR THIS PERSON. Distinct from
   // KanbanBoard.isDefault, which is the workspace-wide fallback and where an
   // unrouted card lands (MCP, chat intake) — those have no user to ask.
@@ -56,6 +64,11 @@ model User {
   pocketConnections PocketConnection[]
 
   @@map("user")
+}
+
+enum UserRole {
+  MEMBER
+  SUPERADMIN
 }
 
 model Session {

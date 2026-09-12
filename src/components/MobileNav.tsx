@@ -4,7 +4,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Menu, Search, Settings, X } from "lucide-react";
+import { Menu, Search, Settings, ShieldCheck, X } from "lucide-react";
 
 import { ClerkrLogo } from "@/components/ClerkrLogo";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -18,7 +18,13 @@ import { cn } from "@/lib/utils";
  * The drawer slides in from the left and dismisses to the left — enter and exit
  * along the same path, so it goes back where it came from.
  */
-export function MobileNav({ openTickets }: { openTickets: number }) {
+export function MobileNav({
+  openTickets,
+  isSuperadmin,
+}: {
+  openTickets: number;
+  isSuperadmin: boolean;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -107,6 +113,15 @@ export function MobileNav({ openTickets }: { openTickets: number }) {
               ))}
             </nav>
 
+            {isSuperadmin && (
+              <Link
+                href="/admin"
+                className="flex h-11 items-center gap-3 rounded-lg px-2.5 text-[14.5px] font-medium text-muted-foreground"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Admin
+              </Link>
+            )}
             <Link
               href="/settings"
               className="pb-safe flex h-11 items-center gap-3 rounded-lg px-2.5 text-[14.5px] font-medium text-muted-foreground"
@@ -118,7 +133,11 @@ export function MobileNav({ openTickets }: { openTickets: number }) {
         </DialogPrimitive.Portal>
       </DialogPrimitive.Root>
 
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        isSuperadmin={isSuperadmin}
+      />
     </>
   );
 }

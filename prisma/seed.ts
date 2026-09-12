@@ -1,6 +1,7 @@
-// Seeds the default ticket categories and a wiki note explaining how the
-// ticket queue works. Idempotent — categories are upserted on slug, so a
-// renamed label survives a re-seed and re-running never duplicates.
+// Seeds the default ticket categories, the founding superadmins, and a wiki
+// note explaining how the ticket queue works. Idempotent — categories are
+// upserted on slug, so a renamed label survives a re-seed and re-running never
+// duplicates.
 // Run: `npx prisma db seed` or `npm run db:seed`.
 
 import { PrismaClient } from "@prisma/client";
@@ -8,6 +9,9 @@ import { PrismaClient } from "@prisma/client";
 import { DEFAULT_CATEGORIES } from "../src/lib/ticket-meta";
 
 const db = new PrismaClient();
+
+// The people who set this workspace up. Overridable with SUPERADMIN_EMAILS.
+const DEFAULT_SUPERADMINS = "yaw@clerkr.ai,niels@clerkr.ai,patrick@clerkr.ai";
 
 const HOW_IT_WORKS = `Clerkr OS keeps the ticket queue that used to live in a Google Doc.
 
@@ -47,6 +51,33 @@ async function main() {
       create: { ...c },
     });
     console.log(`  ${c.label}`);
+  }
+
+  // Bootstrap superadmins. Only ever PROMOTES — a demotion made at /admin is a
+  // decision, and a re-seed must not quietly undo it. Which addresses these are
+  // is a deploy-time fact, so it lives in an env var like ALLOWED_EMAILS does;
+  // after the first promotion /admin is the place to change a role.
+  const superadmins = (process.env.SUPERADMIN_EMAILS ?? DEFAULT_SUPERADMINS)
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (superadmins.length > 0) {
+    console.log("Promoting superadmins…");
+    const existing = await db.user.findMany({
+      where: { email: { in: superadmins } },
+      select: { email: true },
+    });
+    const promoted = await db.user.updateMany({
+      where: { email: { in: superadmins }, role: "MEMBER" },
+      data: { role: "SUPERADMIN" },
+    });
+    console.log(`  ${promoted.count} promoted, ${existing.length - promoted.count} already superadmin`);
+    for (const email of superadmins) {
+      if (!existing.some((u) => u.email === email)) {
+        console.log(`  ${email} has no account yet — re-run after they sign up.`);
+      }
+    }
   }
 
   const noteAuthor = await db.user.findFirst({ orderBy: { createdAt: "asc" } });

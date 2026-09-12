@@ -40,12 +40,23 @@ const COMMANDS: Command[] = [
   { label: "Settings", hint: "Tokens & MCP", href: "/settings", keywords: "settings token api mcp connect" },
 ];
 
+// Appended only for superadmins. Listing a destination that redirects the
+// moment you pick it is worse than not listing it.
+const ADMIN_COMMAND: Command = {
+  label: "Admin",
+  hint: "People & roles",
+  href: "/admin",
+  keywords: "admin superadmin role promote demote user people password reset recovery allowlist access",
+};
+
 export function CommandPalette({
   open,
   onOpenChange,
+  isSuperadmin,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  isSuperadmin?: boolean;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -71,13 +82,18 @@ export function CommandPalette({
     }
   }, [open]);
 
+  const commands = useMemo(
+    () => (isSuperadmin ? [...COMMANDS, ADMIN_COMMAND] : COMMANDS),
+    [isSuperadmin],
+  );
+
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return COMMANDS;
-    return COMMANDS.filter(
+    if (!q) return commands;
+    return commands.filter(
       (c) => c.label.toLowerCase().includes(q) || c.keywords.includes(q),
     );
-  }, [query]);
+  }, [query, commands]);
 
   useEffect(() => {
     setActive(0);

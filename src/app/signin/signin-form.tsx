@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -50,7 +51,15 @@ export function SignInForm() {
         />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="password">Password</Label>
+        <div className="flex items-baseline justify-between gap-2">
+          <Label htmlFor="password">Password</Label>
+          <Link
+            href="/forgot-password"
+            className="text-[12px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Forgot?
+          </Link>
+        </div>
         <Input
           id="password"
           type="password"

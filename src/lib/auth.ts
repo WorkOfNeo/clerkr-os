@@ -5,6 +5,12 @@ import bcrypt from "bcryptjs";
 
 import { ensureProtocol } from "./base-url";
 import { db } from "./db";
+import {
+  recordDelivery,
+  resetLink,
+  resetMode,
+  sendResetEmail,
+} from "./password-reset";
 
 const BCRYPT_COST = 10;
 
@@ -35,6 +41,44 @@ export const auth = betterAuth({
     enabled: true,
     autoSignIn: true,
     requireEmailVerification: false,
+
+    // A reset invalidates every existing session for that account. If the
+    // password had to be reset because someone else knew it, leaving their
+    // 30-day cookie working would make the reset pointless.
+    revokeSessionsOnPasswordReset: true,
+
+    // The one place a reset link is ever sent. Better Auth requires this hook
+    // to exist before `requestPasswordReset` will run at all, and routing the
+    // send through it means a call straight to /api/auth/request-password-reset
+    // behaves the same as our own form.
+    //
+    // The `url` Better Auth hands us points at its own callback endpoint; we
+    // build our own link to the page that actually shows the form. What
+    // happened is recorded because Better Auth swallows anything thrown here
+    // and reports success anyway — see `recordDelivery`.
+    sendResetPassword: async ({
+      user,
+      token,
+    }: {
+      user: { email: string };
+      token: string;
+    }) => {
+      if (resetMode() === "direct") {
+        recordDelivery(token, { sent: false, reason: "direct-mode" });
+        return;
+      }
+      try {
+        await sendResetEmail(user.email, resetLink(token));
+        recordDelivery(token, { sent: true });
+      } catch (e) {
+        recordDelivery(token, {
+          sent: false,
+          reason: "failed",
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    },
+
     password: {
       hash: async (password: string) => bcrypt.hash(password, BCRYPT_COST),
       verify: async ({ hash, password }: { hash: string; password: string }) =>

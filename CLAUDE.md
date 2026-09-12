@@ -459,6 +459,76 @@ npm run typecheck
 - **Single-tenant** — any signed-in user can read/edit everything (tickets, wiki). Don't accidentally add per-user scopes without an explicit decision.
 - MCP uses Bearer `ApiToken` (created in `/settings`).
 
+### Roles and `/admin`
+
+`User.role` is an enum (`MEMBER` / `SUPERADMIN`), for the same reason
+`TicketStatus` is: code branches on it, so it must not become an editable row.
+It does **not** narrow what anyone can read — single-tenant still holds. It
+gates exactly two things, both at `/admin`: changing someone's role, and
+minting a password-reset link on someone else's behalf.
+
+- `requireSuperadmin()` in [src/lib/session.ts](src/lib/session.ts) is the gate,
+  and **every server action behind /admin calls it too**. A server action is a
+  public endpoint with an unguessable name, not a private function — guarding
+  only the page would leave the action open.
+- The role is read from the row, never off the session. Better Auth doesn't
+  carry unknown fields, and a session lives 30 days: reading the row means a
+  promotion lands on the next request rather than the next sign-in. That's also
+  why `AppShell` resolves it once for the nav instead of threading it through
+  every page.
+- **The last superadmin can't be demoted.** /admin is the only place a role
+  changes, so emptying the role locks the door from the inside and leaves psql
+  as the way back. Self-demotion is fine while someone else holds it.
+- Seeding only ever PROMOTES (`SUPERADMIN_EMAILS`, defaulting to the three
+  founders) — a demotion made at /admin is a decision, and a re-seed must not
+  quietly undo it.
+- The Admin nav link sits beside Settings rather than in `NAV_SECTIONS`: that
+  list is the set of destinations *everyone* has, and this one is conditional.
+  `CommandPalette` gets it the same way — appended only when `isSuperadmin`,
+  because listing a destination that redirects the moment you pick it is worse
+  than not listing it.
+
+### Forgotten passwords
+
+`/forgot-password` → `/reset-password?token=…`, both public in
+[src/proxy.ts](src/proxy.ts) because they exist for people who can't sign in.
+Logic in [src/lib/password-reset.ts](src/lib/password-reset.ts).
+
+**One env var decides the whole shape of it — `RESEND_API_KEY`:**
+
+- **unset → `direct`.** Type any `@clerkr.ai` address and you land straight on
+  the new-password form. Nothing is emailed and nothing confirms it's you,
+  which means anyone who can reach the sign-in page can take over any
+  `@clerkr.ai` account. A deliberate stopgap while there's no way to send mail,
+  and every surface that can be in this mode says so out loud — the
+  forgot-password form, and /admin.
+- **set → `email`.** The link is emailed and the inbox is the only way to the
+  form. Read per request, so setting the variable in Railway switches it over
+  with no deploy and no code change.
+
+Non-`@clerkr.ai` addresses can't use the page at all; a superadmin mints them a
+link from /admin instead.
+
+- **Better Auth owns the password**, always. `auth.api.requestPasswordReset`
+  mints the token, `auth.api.resetPassword` spends it — one hour, single use,
+  and `revokeSessionsOnPasswordReset` drops every session on that account. No
+  password hashing lives in this app's own code.
+- The token is read back out of `Verification` (`reset-password:<token>`,
+  value = user id) because `requestPasswordReset` deliberately returns nothing
+  but a neutral "if that address exists…". The row is written before the send
+  hook runs, so it's always there.
+- **`sendResetPassword` is the only place mail is sent**, so a raw call to
+  `/api/auth/request-password-reset` behaves like our own form. But Better Auth
+  invokes it through `runInBackgroundOrAwait`, which logs a failure and reports
+  success anyway — so the hook records what actually happened via
+  `recordDelivery`, and the action reads it back with `takeDelivery` before
+  deciding whether to say "check your inbox". Saying that when Resend refused
+  the send wastes someone's afternoon.
+- Direct mode **redirects from the server action**, not `router.push` on the
+  client. A push issued right after an action resolves races the RSC re-render
+  that same action triggers, and loses: the server renders the new URL and the
+  browser stays put. That bug is why the code looks like this.
+
 ## AI wiring
 
 All under [src/lib/ai/](src/lib/ai/):
