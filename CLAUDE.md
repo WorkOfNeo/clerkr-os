@@ -329,6 +329,13 @@ the `appleWebApp` metadata and apple-touch-icon that iOS actually reads.
   needs one, or it sits under the notch or the home indicator.
 - Icons are generated from `public/icons/icon.svg`. Regenerate the PNGs with
   `qlmanage -t -s 512` + `sips`, or any rasteriser — there is no build step.
+  `icon-32/192/512` are the SVG as drawn (squircle, transparent corners).
+  `apple-touch-icon` and `icon-maskable-512` are **full-bleed** — the `#151919`
+  square with no corners, since iOS and Android apply their own mask and iOS
+  paints transparency black — and the maskable one has the mark scaled to 85%
+  about the centre so a circle crop can't clip it.
+- The in-app mark is [`ClerkrLogo`](src/components/ClerkrLogo.tsx): the same
+  shape in `currentColor` with the tab fixed at `#717473`.
 - `public/sw.js` is a **push-only** service worker with **no `fetch` listener**,
   and it must stay that way. A worker that intercepts fetches and caches RSC
   payloads breaks the app in ways that persist in the user's browser long after
