@@ -4,12 +4,15 @@ import {
   DndContext,
   DragOverlay,
   MouseSensor,
+  closestCenter,
   closestCorners,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { SortableContext, arrayMove, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { startTransition, useOptimistic, useState } from "react";
@@ -19,6 +22,7 @@ import {
   deleteColumn,
   moveCard,
   quickAddCard,
+  reorderColumns,
   setDefaultColumn,
 } from "@/app/kanban/actions";
 import { BoardContextMenu } from "@/components/kanban/BoardContextMenu";
@@ -26,7 +30,7 @@ import { CardPanel } from "@/components/kanban/CardPanel";
 import { ColumnEditor } from "@/components/kanban/ColumnEditor";
 import { DeleteColumnDialog } from "@/components/kanban/DeleteColumnDialog";
 import { KanbanCard } from "@/components/kanban/KanbanCard";
-import { KanbanColumnView } from "@/components/kanban/KanbanColumnView";
+import { ColumnDragPreview, KanbanColumnView, columnSortId } from "@/components/kanban/KanbanColumnView";
 import { useToast } from "@/components/ui/toast";
 import { orderForSlot } from "@/lib/kanban-order";
 
@@ -44,7 +48,7 @@ export function KanbanBoard({
   isMyDefault,
   notifySubscribed,
   subscribedCardIds,
-  columns,
+  columns: initialColumns,
   cards: initialCards,
   openCardId,
 }: {
@@ -70,7 +74,15 @@ export function KanbanBoard({
     state.map((c) => (c.id === move.id ? { ...c, columnId: move.columnId, order: move.order } : c)),
   );
 
+  // Same deal for the columns: a dragged column lands at once and the write
+  // follows. The server's order replaces this the moment the action resolves.
+  const [columns, applyColumnOrder] = useOptimistic<BoardColumn[], BoardColumn[]>(
+    initialColumns,
+    (_state, next) => next,
+  );
+
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
   const [editing, setEditing] = useState<BoardColumn | null>(null);
   const [creatingColumn, setCreatingColumn] = useState(false);
   const [deleting, setDeleting] = useState<BoardColumn | null>(null);
@@ -98,6 +110,49 @@ export function KanbanBoard({
 
   const activeCard = cards.find((c) => c.id === activeId) ?? null;
   const activeColumn = activeCard ? columns.find((c) => c.id === activeCard.columnId) : null;
+  const draggedColumn = columns.find((c) => c.id === activeColumnId) ?? null;
+
+  function persistColumnOrder(next: BoardColumn[]) {
+    startTransition(async () => {
+      applyColumnOrder(next);
+      try {
+        await reorderColumns(
+          boardId,
+          next.map((c) => c.id),
+        );
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "Could not move that column.", { tone: "error" });
+        router.refresh();
+      }
+    });
+  }
+
+  /** The column menu's Move left / Move right — the touch and keyboard path,
+   *  since dragging is mouse-only on this board. */
+  function nudgeColumn(columnId: string, by: -1 | 1) {
+    const from = columns.findIndex((c) => c.id === columnId);
+    const to = from + by;
+    if (from < 0 || to < 0 || to >= columns.length) return;
+    persistColumnOrder(arrayMove(columns, from, to));
+  }
+
+  function handleDragStart(e: DragStartEvent) {
+    if (e.active.data.current?.type === "column") {
+      setActiveColumnId(String(e.active.data.current.columnId));
+    } else {
+      setActiveId(String(e.active.id));
+    }
+  }
+
+  function handleColumnDragEnd(e: DragEndEvent) {
+    setActiveColumnId(null);
+    if (!e.over || e.over.id === e.active.id) return;
+    const ids = columns.map((c) => columnSortId(c.id));
+    const from = ids.indexOf(String(e.active.id));
+    const to = ids.indexOf(String(e.over.id));
+    if (from < 0 || to < 0) return;
+    persistColumnOrder(arrayMove(columns, from, to));
+  }
 
   function columnOf(id: string): string | null {
     if (id.startsWith("col-")) return id.slice(4);
@@ -105,6 +160,7 @@ export function KanbanBoard({
   }
 
   function handleDragEnd(e: DragEndEvent) {
+    if (e.active.data.current?.type === "column") return handleColumnDragEnd(e);
     setActiveId(null);
     const draggedId = String(e.active.id);
     const destId = e.over ? columnOf(String(e.over.id)) : null;
@@ -142,9 +198,12 @@ export function KanbanBoard({
     <>
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
-        onDragStart={(e: DragStartEvent) => setActiveId(String(e.active.id))}
-        onDragCancel={() => setActiveId(null)}
+        collisionDetection={collisionDetection}
+        onDragStart={handleDragStart}
+        onDragCancel={() => {
+          setActiveId(null);
+          setActiveColumnId(null);
+        }}
         onDragEnd={handleDragEnd}
       >
         <BoardContextMenu
@@ -154,10 +213,19 @@ export function KanbanBoard({
           notifySubscribed={notifySubscribed}
         >
         <div className="scroll-rail flex min-h-[60vh] snap-x snap-mandatory items-start gap-3 overflow-x-auto overscroll-x-contain pb-6 sm:snap-none">
-          {columns.map((column) => (
+          <SortableContext
+            items={columns.map((c) => columnSortId(c.id))}
+            strategy={horizontalListSortingStrategy}
+          >
+          {columns.map((column, index) => (
             <KanbanColumnView
               key={column.id}
               column={column}
+              columnDragging={activeColumnId !== null}
+              onMoveLeft={index > 0 ? () => nudgeColumn(column.id, -1) : undefined}
+              onMoveRight={
+                index < columns.length - 1 ? () => nudgeColumn(column.id, 1) : undefined
+              }
               cards={byColumn.get(column.id) ?? []}
               onQuickAdd={(columnId, title) =>
                 startTransition(async () => {
@@ -178,6 +246,7 @@ export function KanbanBoard({
               onDelete={setDeleting}
             />
           ))}
+          </SortableContext>
 
           <button
             onClick={() => setCreatingColumn(true)}
@@ -192,6 +261,12 @@ export function KanbanBoard({
         {/* The lifted card tilts and grows a little — it reads as picked up off
             the board rather than sliding along it. */}
         <DragOverlay dropAnimation={{ duration: 220, easing: "cubic-bezier(0.32,0.72,0,1)" }}>
+          {draggedColumn && (
+            <ColumnDragPreview
+              column={draggedColumn}
+              cards={byColumn.get(draggedColumn.id) ?? []}
+            />
+          )}
           {activeCard && (
             <motion.div
               initial={{ rotate: 0, scale: 1 }}
@@ -245,6 +320,22 @@ export function KanbanBoard({
     </>
   );
 }
+
+/**
+ * A card only ever lands on a card or a column body; a column only ever lands
+ * on another column. Without the split, a column dragged across the board
+ * would "land" on whichever card happened to be under the pointer, and a card
+ * could drop onto a column's sortable wrapper instead of into its list.
+ */
+const collisionDetection: CollisionDetection = (args) => {
+  const draggingColumn = args.active.data.current?.type === "column";
+  const droppableContainers = args.droppableContainers.filter(
+    (c) => (c.data.current?.type === "column") === draggingColumn,
+  );
+  return draggingColumn
+    ? closestCenter({ ...args, droppableContainers })
+    : closestCorners({ ...args, droppableContainers });
+};
 
 function truncate(s: string, n = 32): string {
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;

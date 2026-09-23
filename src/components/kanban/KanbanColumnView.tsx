@@ -1,7 +1,8 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { MoreHorizontal, Plus } from "lucide-react";
@@ -22,6 +23,12 @@ import { cn } from "@/lib/utils";
 
 import type { BoardCard, BoardColumn } from "./types";
 
+/** A column's id in the board-level SortableContext. Prefixed so it can never
+ *  collide with the card-drop target (`col-<id>`) or a card's own id. */
+export function columnSortId(columnId: string): string {
+  return `colsort-${columnId}`;
+}
+
 /**
  * A column is a droppable region plus its own quick-add. The header carries the
  * column's identity (icon + colour), its count, and the two controls that
@@ -38,9 +45,17 @@ export function KanbanColumnView({
   onDelete,
   subscribed,
   allColumns,
+  columnDragging = false,
+  onMoveLeft,
+  onMoveRight,
 }: {
   column: BoardColumn;
   cards: BoardCard[];
+  /** A column (any column) is being dragged — card layout animation pauses. */
+  columnDragging?: boolean;
+  /** Undefined at the board's edge, which disables the menu item. */
+  onMoveLeft?: () => void;
+  onMoveRight?: () => void;
   /** Card ids this person follows — drives the right-click menu's wording. */
   subscribed: Set<string>;
   allColumns: BoardColumn[];
@@ -51,6 +66,12 @@ export function KanbanColumnView({
   onDelete: (column: BoardColumn) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col-${column.id}`, data: { columnId: column.id } });
+  // The column itself is sortable along the board. Only the header's title
+  // area starts the drag — the ⋯ and + buttons beside it stay plain buttons.
+  const sortable = useSortable({
+    id: columnSortId(column.id),
+    data: { type: "column", columnId: column.id },
+  });
   const isTouch = useIsTouch();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
@@ -65,31 +86,51 @@ export function KanbanColumnView({
   }
 
   return (
-    <div className="flex w-[86vw] max-w-[320px] shrink-0 snap-start flex-col sm:w-[290px]">
+    <div
+      ref={sortable.setNodeRef}
+      style={{
+        // Translate, not Transform: columns differ in height, and the scale
+        // component would squash one into the other's slot.
+        transform: CSS.Translate.toString(sortable.transform),
+        transition: sortable.transition,
+      }}
+      className={cn(
+        "flex w-[86vw] max-w-[320px] shrink-0 snap-start flex-col sm:w-[290px]",
+        // Left in place, faded, while the overlay carries it — same as a card.
+        sortable.isDragging && "opacity-40",
+      )}
+    >
       <div className="mb-2 flex items-center gap-2 px-1">
-        <ColumnIcon name={column.icon} color={column.color} />
-        <h3 className="text-[13px] font-semibold tracking-[-0.01em]">{column.name}</h3>
-        <span
-          className={cn(
-            "text-[12px] tabular-nums",
-            overLimit ? "font-semibold text-warning" : "text-muted-foreground",
-          )}
-          title={
-            column.wipLimit !== null
-              ? `${cards.length} of a ${column.wipLimit} card limit`
-              : undefined
-          }
+        <div
+          ref={sortable.setActivatorNodeRef}
+          {...sortable.listeners}
+          title="Drag to reorder columns"
+          className="flex min-w-0 flex-1 cursor-grab select-none items-center gap-2 active:cursor-grabbing"
         >
-          {cards.length}
-          {column.wipLimit !== null && `/${column.wipLimit}`}
-        </span>
-        {column.isDone && (
-          <span className="rounded-full bg-success/12 px-1.5 py-0.5 text-[10px] font-medium text-success">
-            Done
+          <ColumnIcon name={column.icon} color={column.color} />
+          <h3 className="truncate text-[13px] font-semibold tracking-[-0.01em]">{column.name}</h3>
+          <span
+            className={cn(
+              "text-[12px] tabular-nums",
+              overLimit ? "font-semibold text-warning" : "text-muted-foreground",
+            )}
+            title={
+              column.wipLimit !== null
+                ? `${cards.length} of a ${column.wipLimit} card limit`
+                : undefined
+            }
+          >
+            {cards.length}
+            {column.wipLimit !== null && `/${column.wipLimit}`}
           </span>
-        )}
+          {column.isDone && (
+            <span className="rounded-full bg-success/12 px-1.5 py-0.5 text-[10px] font-medium text-success">
+              Done
+            </span>
+          )}
+        </div>
 
-        <div className="ml-auto flex items-center gap-0.5">
+        <div className="flex shrink-0 items-center gap-0.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -107,6 +148,13 @@ export function KanbanColumnView({
                 onSelect={() => onSetDefault(column.id)}
               >
                 {column.isDefault ? "Default for new cards" : "Make default"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={!onMoveLeft} onSelect={() => onMoveLeft?.()}>
+                Move left
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!onMoveRight} onSelect={() => onMoveRight?.()}>
+                Move right
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -145,7 +193,10 @@ export function KanbanColumnView({
       >
         <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
           {cards.map((card) => (
-            <motion.div key={card.id} layout transition={SPRING}>
+            // Layout animation pauses while a column is dragged: the column's
+            // own transform would otherwise read to motion as every card in
+            // it moving, and they'd trail behind the drag.
+            <motion.div key={card.id} layout={!columnDragging} transition={SPRING}>
               <CardContextMenu
                 card={card}
                 columns={allColumns}
@@ -193,6 +244,47 @@ export function KanbanColumnView({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * What rides under the pointer while a column is dragged: the header and the
+ * first few titles. Not the real column — that one registers droppables and
+ * sortables, and a second copy of those ids would confuse dnd-kit.
+ */
+export function ColumnDragPreview({ column, cards }: { column: BoardColumn; cards: BoardCard[] }) {
+  const shown = cards.slice(0, 5);
+  return (
+    <motion.div
+      initial={{ rotate: 0, scale: 1 }}
+      animate={{ rotate: -1.5, scale: 1.02 }}
+      transition={{ type: "spring", bounce: 0.25, duration: 0.35 }}
+      className="w-[290px] rounded-xl bg-card p-2 shadow-[0_0_0_1px_hsl(var(--hairline)),0_24px_48px_-12px_rgb(0_0_0/0.28)]"
+    >
+      <div className="mb-2 flex items-center gap-2 px-1 pt-1">
+        <ColumnIcon name={column.icon} color={column.color} />
+        <span className="truncate text-[13px] font-semibold tracking-[-0.01em]">{column.name}</span>
+        <span className="text-[12px] tabular-nums text-muted-foreground">{cards.length}</span>
+      </div>
+      <div className="flex flex-col gap-1.5 rounded-lg bg-muted/45 p-2">
+        {shown.map((card) => (
+          <div
+            key={card.id}
+            className="truncate rounded-md bg-card px-2.5 py-2 text-[12.5px] font-medium shadow-[0_0_0_1px_hsl(var(--hairline))]"
+          >
+            {card.title}
+          </div>
+        ))}
+        {cards.length > shown.length && (
+          <span className="px-1 text-[11.5px] text-muted-foreground">
+            +{cards.length - shown.length} more
+          </span>
+        )}
+        {cards.length === 0 && (
+          <span className="px-1 py-3 text-center text-[11.5px] text-muted-foreground">Empty</span>
+        )}
+      </div>
+    </motion.div>
   );
 }
 

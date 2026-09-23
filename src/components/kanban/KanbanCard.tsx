@@ -5,6 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { CalendarDays, Flag, Link2, Paperclip, Ticket } from "lucide-react";
 
 import { ConfidenceMeter } from "@/components/kanban/ConfidenceMeter";
+import { SubtaskProgress } from "@/components/kanban/SubtaskList";
 import { formatShortDate } from "@/lib/format";
 import { markdownExcerpt } from "@/lib/markdown/convert";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,7 @@ export function KanbanCard({
   const due = card.dueDate ? new Date(card.dueDate) : null;
   const overdue = due ? due.getTime() < Date.now() && !card.completedAt : false;
   const today = due ? isToday(due) : false;
+  const subtasksDone = card.subtasks.filter((s) => s.done).length;
 
   return (
     <div
@@ -47,7 +49,14 @@ export function KanbanCard({
       }
       {...(overlay ? {} : sortable.attributes)}
       {...(overlay ? {} : sortable.listeners)}
-      onClick={() => onOpen?.(card)}
+      onClick={(e) => {
+        // ⌘/Ctrl-click opens the full page in a new tab, as a link would.
+        if (e.metaKey || e.ctrlKey) {
+          window.open(`/kanban/cards/${card.slug}`, "_blank", "noopener");
+          return;
+        }
+        onOpen?.(card);
+      }}
       className={cn(
         "group relative w-full cursor-grab select-none rounded-lg bg-card p-3 text-left active:cursor-grabbing",
         // Keep vertical panning with the browser so the column still scrolls;
@@ -81,6 +90,12 @@ export function KanbanCard({
         <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-muted-foreground">
           {card.feature?.title ?? card.themeTag ?? markdownExcerpt(card.description, 110)}
         </p>
+      )}
+
+      {/* A card that's a project shows how far along it is — done of total —
+          without being opened. */}
+      {card.subtasks.length > 0 && (
+        <SubtaskProgress done={subtasksDone} total={card.subtasks.length} className="mt-2.5" />
       )}
 
       <div className="mt-2.5 flex items-center gap-2 text-[11.5px] text-muted-foreground">

@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { attachImages } from "@/lib/attachments";
+import { attachImages, attachImagesReturningIds } from "@/lib/attachments";
 import { db } from "@/lib/db";
 import {
   boardSelect,
@@ -12,13 +13,26 @@ import {
   createCard,
   defaultBoardId,
   defaultColumnId,
+  endOfColumnOrder,
   removeColumn,
+  reorderBoardColumns,
   seedColumns,
   updateCardFields,
   updateColumnFields,
 } from "@/lib/kanban";
+import {
+  addSubtasks,
+  deleteSubtask,
+  subtaskOrderForSlot,
+  updateSubtask,
+} from "@/lib/kanban-subtasks";
 import { requireSession } from "@/lib/session";
 import { slugify, uniqueSlug } from "@/lib/slug";
+
+/** The board and every card page under it (`/kanban/cards/[slug]`). */
+function revalidateKanban() {
+  revalidatePath("/kanban", "layout");
+}
 
 const attachmentSchema = z.object({
   dataUrl: z.string().min(1),
@@ -64,14 +78,17 @@ export async function createCardAction(
     data: { cardId: card.id, userId: session.user.id },
   });
 
-  revalidatePath("/kanban");
+  revalidateKanban();
   return { id: card.id };
 }
 
 const moveInput = z.object({
   id: z.string().min(1),
   columnId: z.string().min(1),
-  order: z.number().int(),
+  // From a drag, via orderForSlot. Omitted = the end of the column, which is
+  // what "Move to" means. (Callers used to pass Date.now() for that, which
+  // overflows the int4 column and failed every such move.)
+  order: z.number().int().min(-2147483648).max(2147483647).optional(),
 });
 
 /** Drag autosave. The `completedAt` stamp is derived from the destination
@@ -79,6 +96,7 @@ const moveInput = z.object({
 export async function moveCard(input: z.infer<typeof moveInput>): Promise<void> {
   const session = await requireSession();
   const parsed = moveInput.parse(input);
+  const order = parsed.order ?? (await endOfColumnOrder(parsed.columnId));
 
   const current = await db.kanbanCard.findUnique({
     where: { id: parsed.id },
@@ -89,7 +107,7 @@ export async function moveCard(input: z.infer<typeof moveInput>): Promise<void> 
     where: { id: parsed.id },
     data: {
       columnId: parsed.columnId,
-      order: parsed.order,
+      order,
       completedAt: await completionFor(parsed.columnId, current?.completedAt ?? null),
     },
     select: { id: true, number: true, title: true, column: { select: { name: true } } },
@@ -109,7 +127,7 @@ export async function moveCard(input: z.infer<typeof moveInput>): Promise<void> 
     console.warn("[kanban] follower notify failed:", err);
   }
 
-  revalidatePath("/kanban");
+  revalidateKanban();
 }
 
 const updateInput = z.object({
@@ -122,6 +140,7 @@ const updateInput = z.object({
   blockerNote: z.string().nullable().optional(),
   dueDate: z.string().nullable().optional(),
   featureId: z.string().nullable().optional(),
+  ledgerUrl: z.string().max(500).nullable().optional(),
 });
 
 export async function updateCard(input: z.infer<typeof updateInput>): Promise<void> {
@@ -135,29 +154,100 @@ export async function updateCard(input: z.infer<typeof updateInput>): Promise<vo
     ...fields,
     ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
   });
-  revalidatePath("/kanban");
+  revalidateKanban();
 }
 
 export async function deleteCard(id: string): Promise<void> {
   await requireSession();
   await db.kanbanCard.delete({ where: { id } });
-  revalidatePath("/kanban");
+  revalidateKanban();
 }
 
+/**
+ * Delete from the card's own page, and go back to its board. The redirect is
+ * issued HERE rather than by the client after the action resolves: the
+ * action's revalidation re-renders the page it was called from, and that page
+ * is the card that no longer exists.
+ */
+export async function deleteCardFromPage(id: string): Promise<void> {
+  await requireSession();
+  const card = await db.kanbanCard.findUnique({
+    where: { id: z.string().min(1).parse(id) },
+    select: { column: { select: { board: { select: { slug: true } } } } },
+  });
+  if (card) await db.kanbanCard.delete({ where: { id } });
+  revalidateKanban();
+  redirect(card ? `/kanban?board=${card.column.board.slug}` : "/kanban");
+}
+
+/**
+ * Upload screenshots pasted into a card's note. Returns the ids so the note
+ * can link `/api/attachments/<id>` — the bytes live in the attachment row and
+ * the note stays small, where inlining a data URL would put every screenshot
+ * inside every board load.
+ */
 export async function addCardAttachments(
   cardId: string,
   attachments: z.infer<typeof attachmentSchema>[],
-): Promise<void> {
+): Promise<{ id: string; fileName: string }[]> {
   const session = await requireSession();
   const parsed = z.array(attachmentSchema).max(12).parse(attachments);
-  await attachImages(parsed, { kind: "kanbanCard", id: cardId }, session.user.id);
-  revalidatePath("/kanban");
+  const rows = await attachImagesReturningIds(
+    parsed,
+    { kind: "kanbanCard", id: z.string().min(1).parse(cardId) },
+    session.user.id,
+  );
+  revalidateKanban();
+  return rows;
 }
 
 export async function deleteCardAttachment(id: string): Promise<void> {
   await requireSession();
   await db.attachment.delete({ where: { id } });
-  revalidatePath("/kanban");
+  revalidateKanban();
+}
+
+// ─── Subtasks ────────────────────────────────────────────────────────────────
+// The checklist the card face counts. Same write path as MCP (lib/kanban-subtasks).
+
+/** Several at once is the paste case: a list copied from a plan lands as one
+ *  subtask per line. */
+export async function addSubtasksAction(cardId: string, titles: string[]): Promise<void> {
+  await requireSession();
+  const clean = z.array(z.string().trim().min(1).max(500)).min(1).max(100).parse(titles);
+  await addSubtasks(
+    z.string().min(1).parse(cardId),
+    clean.map((title) => ({ title })),
+  );
+  revalidateKanban();
+}
+
+const subtaskInput = z.object({
+  id: z.string().min(1),
+  title: z.string().trim().min(1).max(500).optional(),
+  done: z.boolean().optional(),
+});
+
+export async function updateSubtaskAction(input: z.infer<typeof subtaskInput>): Promise<void> {
+  await requireSession();
+  const { id, ...patch } = subtaskInput.parse(input);
+  await updateSubtask(id, patch);
+  revalidateKanban();
+}
+
+/** Drop a subtask at `index` of its card's list. */
+export async function moveSubtask(id: string, index: number): Promise<void> {
+  await requireSession();
+  const parsedId = z.string().min(1).parse(id);
+  const order = await subtaskOrderForSlot(parsedId, z.number().int().min(0).parse(index));
+  await updateSubtask(parsedId, { order });
+  revalidateKanban();
+}
+
+export async function deleteSubtaskAction(id: string): Promise<void> {
+  await requireSession();
+  await deleteSubtask(z.string().min(1).parse(id));
+  revalidateKanban();
 }
 
 // ─── Columns ─────────────────────────────────────────────────────────────────
@@ -207,7 +297,7 @@ export async function createColumn(input: z.infer<typeof columnInput>) {
     },
     select: columnSelect,
   });
-  revalidatePath("/kanban");
+  revalidateKanban();
   return column;
 }
 
@@ -218,7 +308,7 @@ export async function updateColumn(input: z.infer<typeof columnUpdateInput>): Pr
   const { id, boardId: _boardId, ...rest } = columnUpdateInput.parse(input);
 
   await updateColumnFields(id, rest);
-  revalidatePath("/kanban");
+  revalidateKanban();
 }
 
 /** Exactly one default. Clearing the others is part of setting the new one. */
@@ -237,18 +327,16 @@ export async function setDefaultColumn(id: string): Promise<void> {
     }),
     db.kanbanColumn.update({ where: { id }, data: { isDefault: true } }),
   ]);
-  revalidatePath("/kanban");
+  revalidateKanban();
 }
 
-export async function reorderColumns(orderedIds: string[]): Promise<void> {
+/** Drag a column along the board. The whole order is sent, and lib/kanban
+ *  refuses a list that isn't exactly this board's columns. */
+export async function reorderColumns(boardId: string, orderedIds: string[]): Promise<void> {
   await requireSession();
   const ids = z.array(z.string().min(1)).min(1).parse(orderedIds);
-  await db.$transaction(
-    ids.map((id, i) =>
-      db.kanbanColumn.update({ where: { id }, data: { sortOrder: (i + 1) * 10 } }),
-    ),
-  );
-  revalidatePath("/kanban");
+  await reorderBoardColumns(z.string().min(1).parse(boardId), ids);
+  revalidateKanban();
 }
 
 /**
@@ -258,7 +346,7 @@ export async function reorderColumns(orderedIds: string[]): Promise<void> {
 export async function deleteColumn(id: string, moveCardsTo?: string): Promise<void> {
   await requireSession();
   await removeColumn(id, moveCardsTo);
-  revalidatePath("/kanban");
+  revalidateKanban();
 }
 
 export async function listColumns(boardId?: string) {
@@ -277,7 +365,7 @@ export async function quickAddCard(columnId: string, title: string): Promise<voi
     title: clean,
     columnId: columnId || (await defaultColumnId(await defaultBoardId())),
   });
-  revalidatePath("/kanban");
+  revalidateKanban();
 }
 
 // ─── Boards ──────────────────────────────────────────────────────────────────
@@ -315,7 +403,7 @@ export async function createBoard(input: z.infer<typeof boardInput>) {
   // set a fresh install gets. Rename them from there.
   await seedColumns(board.id);
 
-  revalidatePath("/kanban");
+  revalidateKanban();
   return board;
 }
 
@@ -342,7 +430,7 @@ export async function updateBoard(input: {
         : {}),
     },
   });
-  revalidatePath("/kanban");
+  revalidateKanban();
 }
 
 /**
@@ -358,7 +446,7 @@ export async function setMyDefaultBoard(id: string | null): Promise<void> {
     where: { id: session.user.id },
     data: { defaultBoardId: id },
   });
-  revalidatePath("/kanban");
+  revalidateKanban();
 }
 
 /**
@@ -372,7 +460,7 @@ export async function setWorkspaceDefaultBoard(id: string): Promise<void> {
     db.kanbanBoard.updateMany({ where: { isDefault: true }, data: { isDefault: false } }),
     db.kanbanBoard.update({ where: { id }, data: { isDefault: true } }),
   ]);
-  revalidatePath("/kanban");
+  revalidateKanban();
 }
 
 /**
@@ -408,7 +496,7 @@ export async function deleteBoard(id: string): Promise<void> {
     if (first) await db.kanbanBoard.update({ where: { id: first.id }, data: { isDefault: true } });
   }
 
-  revalidatePath("/kanban");
+  revalidateKanban();
 }
 
 // ─── Following a card ────────────────────────────────────────────────────────
@@ -426,7 +514,7 @@ export async function setCardSubscription(cardId: string, follow: boolean): Prom
   } else {
     await db.cardSubscriber.deleteMany({ where: { cardId, userId: session.user.id } });
   }
-  revalidatePath("/kanban");
+  revalidateKanban();
 }
 
 /** Whether activity on followed cards reaches this person at all. Per person,
@@ -437,7 +525,7 @@ export async function setNotifySubscribedCards(enabled: boolean): Promise<void> 
     where: { id: session.user.id },
     data: { notifySubscribedCards: enabled },
   });
-  revalidatePath("/kanban");
+  revalidateKanban();
 }
 
 export async function myKanbanPrefs(): Promise<{

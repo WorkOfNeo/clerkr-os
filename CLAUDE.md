@@ -190,6 +190,74 @@ pointing at `/api/attachments/[id]`.
   ticket's "on the board" chip lands on the work rather than on the board.
 - The board **seeds its own columns on first visit** (`ensureColumns`), so there
   is no setup step on a fresh database.
+- **Columns reorder by dragging the header** (mouse), or **Move left / Move
+  right** in the column's ⋯ menu — that's the touch and keyboard path, since the
+  board deliberately has no touch drag sensor. One `DndContext` holds both
+  kinds of drag; the custom `collisionDetection` in `KanbanBoard` keeps a card
+  from landing on a column's sortable wrapper and a column from landing on a
+  card. `reorderBoardColumns` refuses any list that isn't exactly the board's
+  columns, so a stale tab can't shuffle one it never saw. Card `layout`
+  animation pauses during a column drag — the column's transform would
+  otherwise read to motion as every card in it moving.
+
+### A card as a page (`/kanban/cards/[slug]`)
+
+The side sheet is the quick look; **Open as page** (in the sheet, the
+right-click menu, or ⌘/Ctrl-click a card) gives a card the whole screen, for
+the cards that are projects. `/kanban/cards/14` redirects to the slug. Both
+are built from the same pieces — `useCardDraft`, `CardDocument`,
+`SubtaskList`, `CardFields` — so they save identically. The note autosaves
+1.2s after typing stops, flushes on the way out, and fields still save on blur.
+
+- `CardDocument` has two tabs on one text: **Document** (live tiptap —
+  `# ` heading, `- ` list, `[ ] ` checkbox, `> ` quote, ` ``` ` code) and
+  **Markdown** (the stored source). Markdown stays the storage format.
+- **Editor gotchas, all fixed here, don't reintroduce them:**
+  - `markdownToHtml` uses its OWN `Marked` instance. Stock marked renders
+    `- [ ] x` as `<li><input type=checkbox>`, which tiptap reads as a plain
+    bullet — every checkbox became `- x` on the next save. It now emits
+    tiptap's `data-type="taskItem"` shape, and splits a mixed list into runs
+    (a task list followed by a bullet list serialises as ONE `-` list).
+  - `RichTextEditor` needs `@tiptap/extension-image`. Without it `<img>` has
+    no node, so a screenshot vanished and was dropped from the markdown on the
+    next keystroke. `allowBase64` stays on only so old notes keep inlined images.
+  - Pasted images are **uploaded first** (`addCardAttachments` returns ids via
+    `attachImagesReturningIds`) and linked as `/api/attachments/<id>`. The old
+    path inlined a data URL into `description`, which rides in every board load.
+  - Plain-text markdown pasted into the Document tab is rendered, not inserted
+    literally (`looksLikeMarkdown`); rich clipboard HTML keeps its formatting.
+
+### Subtasks
+
+`KanbanSubtask` rows, not `- [ ]` lines in the note — MCP ticks one by id and a
+Ledger sync remembers which Ledger item each mirrors. The card face shows
+done/total as a bar (`SubtaskProgress`); the same component heads the list.
+Writes go through [src/lib/kanban-subtasks.ts](src/lib/kanban-subtasks.ts)
+(`doneAt` is stamped there only). Pasting a multi-line list into "Add a
+subtask" adds one per line. Finishing every subtask does **not** move the
+card — where a card sits is a person's decision.
+
+### NEO Ledger link
+
+A card can carry `ledgerUrl`, a NEO Ledger master-plan share link
+(`https://…/share/<token>`, validated by `parseLedgerShareUrl` — https only,
+since it's rendered as an anchor). **The Ledger has no API and no webhooks by
+design**, so Clerkr OS never calls it. Progress arrives when an agent holding
+both MCPs reads `get_plan` and calls `sync_card_from_ledger`; the card's copy
+button hands you the sentence that asks for it.
+
+- **One way, tick-only.** Ledger → Clerkr. A subtask is ticked when its Ledger
+  item is done and never unticked (reported as `doneHereOpenInLedger`), and
+  nothing is ever written back — the Ledger's own rules forbid an agent marking
+  work done there.
+- Matching: remembered `ledgerRef` first (plan-item id or task id), then exact
+  title after `ledgerMatchKey` (case/spacing/punctuation only — nothing fuzzier,
+  a wrong match ticks work that isn't done). A title match records the id.
+- The share token can't be looked up over Ledger's MCP, so the first sync
+  stores `ledgerProjectId`; changing the link clears it and `ledgerSyncedAt`.
+- `createMissing` backfills a card from its plan. Without a card, only
+  remembered ids match, across every card — the "I just finished Ledger task X"
+  call.
 
 ## Attachments — one table, every surface
 

@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { PageHeader } from "@/components/PageHeader";
 import { BoardBar, type BoardOption } from "@/components/kanban/BoardBar";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
-import type { BoardCard, BoardColumn } from "@/components/kanban/types";
+import { toBoardColumn, type BoardCard, type BoardColumn } from "@/components/kanban/types";
 import { db } from "@/lib/db";
 import { cardSelect, columnsFor, ensureBoards } from "@/lib/kanban";
 import { requireSession } from "@/lib/session";
@@ -63,18 +63,7 @@ export default async function KanbanPage({
     columnCount: b._count.columns,
   }));
 
-  const columns: BoardColumn[] = columnRows.map((c) => ({
-    id: c.id,
-    slug: c.slug,
-    name: c.name,
-    description: c.description,
-    color: c.color,
-    icon: c.icon,
-    sortOrder: c.sortOrder,
-    isDone: c.isDone,
-    isDefault: c.isDefault,
-    wipLimit: c.wipLimit,
-  }));
+  const columns: BoardColumn[] = columnRows.map(toBoardColumn);
 
   const cards: BoardCard[] = cardRows.map((c) => ({ ...c }));
   const done = cards.filter((c) => c.completedAt).length;

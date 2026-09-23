@@ -716,8 +716,19 @@ model KanbanCard {
   ticketId String?
   ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
 
+  // A NEO Ledger master-plan share link (https://…/share/<token>). The card
+  // steers a project; the Ledger is where its hours are logged. Ledger has no
+  // API or webhooks by design, so nothing here polls it — an agent holding
+  // both MCPs reads the plan and calls `sync_card_from_ledger`.
+  ledgerUrl       String?
+  // The share token can't be looked up over Ledger's MCP, so the first sync
+  // records which project it resolved to. Cleared when the link changes.
+  ledgerProjectId String?
+  ledgerSyncedAt  DateTime?
+
   attachments Attachment[]
   subscribers CardSubscriber[]
+  subtasks    KanbanSubtask[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -726,6 +737,32 @@ model KanbanCard {
   @@index([featureId])
   @@index([ticketId])
   @@map("kanban_card")
+}
+
+// A checklist line on a card — what the card face's "3/7" counts. Rows rather
+// than `- [ ]` lines in the body so MCP can tick one by id and a Ledger sync
+// can remember which Ledger item each one mirrors.
+model KanbanSubtask {
+  id String @id @default(uuid())
+
+  cardId String
+  card   KanbanCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  title  String
+  done   Boolean   @default(false)
+  doneAt DateTime?
+  order  Int       @default(0) // sparse, same scheme as KanbanCard.order
+
+  // The NEO Ledger plan-item or task id this line mirrors, recorded the first
+  // time a sync matches it by title so later syncs match by id.
+  ledgerRef String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([cardId, order])
+  @@index([ledgerRef])
+  @@map("kanban_subtask")
 }
 
 // ─── Tickets ─────────────────────────────────────────────────────────────────
