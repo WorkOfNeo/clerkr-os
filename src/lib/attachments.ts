@@ -61,24 +61,48 @@ export async function attachImages(
 ): Promise<number> {
   if (!attachments?.length) return 0;
   try {
-    const decoded = decodeImageAttachments(attachments);
-    await db.attachment.createMany({
-      data: decoded.map((d) => ({
-        [OWNER_COLUMN[owner.kind]]: owner.id,
-        data: d.data,
-        mimeType: d.mimeType,
-        fileName: d.fileName,
-        byteSize: d.byteSize,
-        width: d.width,
-        height: d.height,
-        uploadedById: uploadedById ?? null,
-      })) as Prisma.AttachmentCreateManyInput[],
-    });
-    return decoded.length;
+    const data = attachmentRows(attachments, owner, uploadedById);
+    await db.attachment.createMany({ data });
+    return data.length;
   } catch (err) {
     console.warn(`[attachments] save failed for ${owner.kind} ${owner.id}:`, err);
     return 0;
   }
+}
+
+/**
+ * Same as attachImages, but returns the new rows' ids and THROWS on failure —
+ * for a caller about to write `/api/attachments/<id>` into a document, where a
+ * silent failure would leave a broken image in someone's notes.
+ */
+export async function attachImagesReturningIds(
+  attachments: ImageAttachmentInput[],
+  owner: AttachmentOwner,
+  uploadedById?: string | null,
+): Promise<{ id: string; fileName: string }[]> {
+  if (!attachments.length) return [];
+  return db.attachment.createManyAndReturn({
+    data: attachmentRows(attachments, owner, uploadedById),
+    select: { id: true, fileName: true },
+  });
+}
+
+/** The one place the owner column is chosen — "exactly one parent set". */
+function attachmentRows(
+  attachments: ImageAttachmentInput[],
+  owner: AttachmentOwner,
+  uploadedById?: string | null,
+): Prisma.AttachmentCreateManyInput[] {
+  return decodeImageAttachments(attachments).map((d) => ({
+    [OWNER_COLUMN[owner.kind]]: owner.id,
+    data: d.data,
+    mimeType: d.mimeType,
+    fileName: d.fileName,
+    byteSize: d.byteSize,
+    width: d.width,
+    height: d.height,
+    uploadedById: uploadedById ?? null,
+  })) as Prisma.AttachmentCreateManyInput[];
 }
 
 /** Move loose attachments onto a real owner. The chat composer stages

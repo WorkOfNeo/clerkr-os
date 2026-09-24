@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { ensureProtocol } from "@/lib/base-url";
 import { db } from "@/lib/db";
 import {
   boardSelect,
@@ -10,6 +11,7 @@ import {
   createCard,
   defaultBoardId,
   ensureBoards,
+  moveColumnTo,
   removeColumn,
   resolveBoardId,
   resolveCard,
@@ -18,6 +20,14 @@ import {
   updateCardFields,
   updateColumnFields,
 } from "@/lib/kanban";
+import {
+  addSubtasks,
+  deleteSubtask,
+  ledgerLinkedCards,
+  progressOf,
+  syncSubtasksFromLedger,
+  updateSubtask,
+} from "@/lib/kanban-subtasks";
 import { slugify, uniqueSlug } from "@/lib/slug";
 import { resolveTicket } from "@/lib/tickets";
 
@@ -191,6 +201,15 @@ export const KANBAN_TOOLS: ToolDef[] = [
             "Ticket id, slug or #number this card is the work for. To put an EXISTING " +
             "ticket on the board, prefer create_card_from_ticket — it copies the words too.",
         },
+        subtasks: {
+          type: "array",
+          items: { type: "string" },
+          description: "Checklist lines to start with, in order. The card face shows done/total.",
+        },
+        ledgerUrl: {
+          type: "string",
+          description: "A NEO Ledger master-plan share link (https://…/share/<token>) for the project this card steers.",
+        },
       },
       required: ["title"],
     },
@@ -206,10 +225,14 @@ export const KANBAN_TOOLS: ToolDef[] = [
           dueDate: z.string().optional(),
           featureId: z.string().optional(),
           ticket: z.string().optional(),
+          subtasks: z.array(z.string()).max(100).optional(),
+          ledgerUrl: z.string().optional(),
         })
         .parse(args);
 
       return createCard({
+        subtasks: input.subtasks,
+        ledgerUrl: input.ledgerUrl,
         title: input.title,
         description: input.description,
         board: input.board,
@@ -375,8 +398,9 @@ export const KANBAN_TOOLS: ToolDef[] = [
     name: "update_kanban_card",
     description:
       "Update a card's fields (title, description, confidence 0-5, themeTag, dueDate, " +
-      "blocked + blockerNote, linked feature or ticket). Pass `column` to move it at the " +
-      "same time — if that column is marked done the card is stamped complete for you.",
+      "blocked + blockerNote, linked feature or ticket, NEO Ledger link). Pass `column` to " +
+      "move it at the same time — if that column is marked done the card is stamped " +
+      "complete for you. Subtasks have their own tools (add_card_subtasks, …).",
     inputSchema: {
       type: "object",
       properties: {
@@ -394,6 +418,12 @@ export const KANBAN_TOOLS: ToolDef[] = [
         ticket: {
           type: ["string", "null"],
           description: "Ticket id, slug or #number this card is the work for; null to unlink.",
+        },
+        ledgerUrl: {
+          type: ["string", "null"],
+          description:
+            "NEO Ledger master-plan share link (https://…/share/<token>); null to unlink. " +
+            "Changing it forgets the Ledger project the old link resolved to.",
         },
       },
       required: ["ref"],
@@ -413,6 +443,7 @@ export const KANBAN_TOOLS: ToolDef[] = [
           blockerNote: z.string().nullable().optional(),
           featureId: z.string().nullable().optional(),
           ticket: z.string().nullable().optional(),
+          ledgerUrl: z.string().nullable().optional(),
         })
         .parse(args);
 
@@ -482,6 +513,255 @@ export const KANBAN_TOOLS: ToolDef[] = [
       const card = await resolveCard(ref);
       await db.kanbanCard.delete({ where: { id: card.id } });
       return { ok: true, id: card.id, title: card.title };
+    },
+  },
+  {
+    name: "move_kanban_column",
+    description:
+      "Move a column to a position on its board (1 = leftmost). This is how the board's " +
+      "left-to-right order changes — the same thing dragging a column header does. " +
+      "Reorder only when asked: the order of the workflow is the team's.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ref: { type: "string", description: "Column name, slug or id." },
+        board: { type: "string", description: "Board name, slug or id — scopes the column lookup." },
+        position: { type: "integer", minimum: 1, description: "1-based; past the end means last." },
+      },
+      required: ["ref", "position"],
+    },
+    handler: async (args) => {
+      const input = z
+        .object({ ref: z.string().min(1), board: z.string().optional(), position: z.number().int().min(1) })
+        .parse(args);
+      const boardId = input.board ? await resolveBoardId(input.board) : null;
+      const columnId = await resolveColumnId(input.ref, boardId);
+      if (!columnId) throw new Error(`No such kanban column: ${input.ref}`);
+      const { order } = await moveColumnTo(columnId, input.position);
+      return { ok: true, order };
+    },
+  },
+
+  {
+    name: "get_kanban_card",
+    description:
+      "Read one card in full: its markdown note, subtasks (with ids, done state and the " +
+      "NEO Ledger id each mirrors, if linked), progress, column, board and NEO Ledger link.",
+    inputSchema: {
+      type: "object",
+      properties: { ref: { type: "string", description: "Card id, slug or #number." } },
+      required: ["ref"],
+    },
+    handler: async (args) => {
+      const { ref } = idSchema.parse(args);
+      const found = await resolveCard(ref);
+      const card = await db.kanbanCard.findUniqueOrThrow({
+        where: { id: found.id },
+        select: {
+          ...cardSelect,
+          column: { select: { name: true, isDone: true, board: { select: { name: true, slug: true } } } },
+        },
+      });
+      const path = `/kanban/cards/${card.slug}`;
+      const origin = ensureProtocol(process.env.BETTER_AUTH_URL);
+      return {
+        ...card,
+        ref: `#${card.number}`,
+        url: origin ? `${origin}${path}` : path,
+        progress: progressOf(card.subtasks),
+      };
+    },
+  },
+
+  {
+    name: "add_card_subtasks",
+    description:
+      "Append subtasks to a card's checklist, in order. The card face shows done/total, " +
+      "which is how the board reads as project progress. Pass `ledgerRef` when a line " +
+      "mirrors a known NEO Ledger plan item or task, so later syncs match it by id.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ref: { type: "string", description: "Card id, slug or #number." },
+        subtasks: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              done: { type: "boolean" },
+              ledgerRef: { type: "string", description: "NEO Ledger plan item id or task id." },
+            },
+            required: ["title"],
+          },
+        },
+      },
+      required: ["ref", "subtasks"],
+    },
+    handler: async (args) => {
+      const input = z
+        .object({
+          ref: z.string().min(1),
+          subtasks: z
+            .array(
+              z.object({
+                title: z.string().min(1).max(500),
+                done: z.boolean().optional(),
+                ledgerRef: z.string().optional(),
+              }),
+            )
+            .min(1)
+            .max(100),
+        })
+        .parse(args);
+      const card = await resolveCard(input.ref);
+      const added = await addSubtasks(card.id, input.subtasks);
+      return { ok: true, card: `#${card.number}`, added };
+    },
+  },
+
+  {
+    name: "update_card_subtask",
+    description:
+      "Tick, untick, rename or re-link one subtask by id (ids come from get_kanban_card). " +
+      "`ledgerRef: null` forgets which NEO Ledger item it mirrors.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Subtask id." },
+        title: { type: "string" },
+        done: { type: "boolean" },
+        ledgerRef: { type: ["string", "null"] },
+      },
+      required: ["id"],
+    },
+    handler: async (args) => {
+      const input = z
+        .object({
+          id: z.string().min(1),
+          title: z.string().min(1).max(500).optional(),
+          done: z.boolean().optional(),
+          ledgerRef: z.string().nullable().optional(),
+        })
+        .parse(args);
+      const { id, ...patch } = input;
+      return updateSubtask(id, patch);
+    },
+  },
+
+  {
+    name: "delete_card_subtask",
+    description: "Remove one subtask from a card's checklist, by id.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", description: "Subtask id." } },
+      required: ["id"],
+    },
+    handler: async (args) => {
+      const { id } = z.object({ id: z.string().min(1) }).parse(args);
+      return { ok: true, ...(await deleteSubtask(id)) };
+    },
+  },
+
+  {
+    name: "list_ledger_linked_cards",
+    description:
+      "Every card that carries a NEO Ledger plan link, with its subtasks, progress, the " +
+      "Ledger project id it resolved to (null until its first sync) and when it was last " +
+      "synced. Where a sync pass starts.",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => {
+      const cards = await ledgerLinkedCards();
+      return { cards, count: cards.length };
+    },
+  },
+
+  {
+    name: "sync_card_from_ledger",
+    description:
+      "Mirror NEO Ledger progress onto a card's subtasks. ONE WAY — Ledger → Clerkr OS; " +
+      "nothing here writes to the Ledger, and you must not mark Ledger tasks done to make " +
+      "the two agree.\n\n" +
+      "How to run it with the NEO Ledger MCP:\n" +
+      "1. get_kanban_card (or list_ledger_linked_cards) for the card's ledgerUrl and " +
+      "ledgerProjectId.\n" +
+      "2. Read the plan with NEO Ledger's get_plan — by ledgerProjectId when it is set. " +
+      "When it's null, the share token can't be looked up directly: find the project whose " +
+      "get_plan shareUrl ends in the same /share/<token> as ledgerUrl (ask the user which " +
+      "project if you can't tell), and pass its projectId here as ledgerProjectId so the " +
+      "next sync doesn't have to search.\n" +
+      "3. Flatten every phase's items AND their subItems into `items`: ref = item.id, " +
+      "taskId = item.ledgerTask?.id, title = item.title, taskTitle = item.ledgerTask?.title, " +
+      "done = item.done OR item.ledgerTask.status === 'DONE'. For a project with no plan, " +
+      "use its tasks from find_task instead (ref = task id).\n\n" +
+      "Subtasks match by the Ledger id they remember first, then by title (case, spacing and " +
+      "punctuation ignored); a title match remembers the id. Matching subtasks are TICKED " +
+      "when the Ledger says done, never unticked — ones ticked here but open in the Ledger " +
+      "come back under doneHereOpenInLedger for you to mention. createMissing adds a subtask " +
+      "per unmatched Ledger item (backfilling a card from its plan); leave it off when the " +
+      "user wrote the subtasks themselves, and report notOnCard instead.\n\n" +
+      "Omit `ref` to tick already-linked subtasks across ALL cards — e.g. right after " +
+      "finishing a Ledger task, pass just that task (ref = its id, done = true). Without a " +
+      "card only remembered ids match, never titles.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ref: { type: "string", description: "Card id, slug or #number. Omit for the id-only, all-cards mode." },
+        ledgerProjectId: {
+          type: "string",
+          description: "The NEO Ledger project the card's link resolved to — remembered on the card.",
+        },
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              ref: { type: "string", description: "Plan item id (or task id when there is no plan)." },
+              taskId: { type: "string", description: "The Ledger task the plan item links, if any." },
+              title: { type: "string" },
+              taskTitle: { type: "string", description: "The linked task's own title." },
+              done: { type: "boolean" },
+            },
+            required: ["ref", "title", "done"],
+          },
+        },
+        createMissing: {
+          type: "boolean",
+          description: "Add a subtask for each Ledger item no subtask matched. Default false.",
+        },
+      },
+      required: ["items"],
+    },
+    handler: async (args) => {
+      const input = z
+        .object({
+          ref: z.string().optional(),
+          ledgerProjectId: z.string().optional(),
+          items: z
+            .array(
+              z.object({
+                ref: z.string().min(1),
+                taskId: z.string().nullable().optional(),
+                title: z.string().min(1),
+                taskTitle: z.string().nullable().optional(),
+                done: z.boolean(),
+              }),
+            )
+            .max(1000),
+          createMissing: z.boolean().optional(),
+        })
+        .parse(args);
+
+      if (!input.ref && input.createMissing) {
+        throw new Error("createMissing needs a card — pass `ref` for the card to add them to.");
+      }
+      const card = input.ref ? await resolveCard(input.ref) : null;
+      return syncSubtasksFromLedger({
+        cardId: card?.id ?? null,
+        ledgerProjectId: input.ledgerProjectId,
+        items: input.items,
+        createMissing: input.createMissing,
+      });
     },
   },
 ];

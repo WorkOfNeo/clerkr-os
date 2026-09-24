@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { attachmentSelect } from "@/lib/attachments";
 import { db } from "@/lib/db";
 import { ORDER_GAP, orderForSlot } from "@/lib/kanban-order";
+import { parseLedgerShareUrl } from "@/lib/ledger";
 import { slugify, uniqueSlug } from "@/lib/slug";
 import { resolveTicket } from "@/lib/tickets";
 
@@ -45,6 +46,15 @@ export const columnSelect = {
   _count: { select: { cards: true } },
 } satisfies Prisma.KanbanColumnSelect;
 
+export const subtaskSelect = {
+  id: true,
+  title: true,
+  done: true,
+  doneAt: true,
+  order: true,
+  ledgerRef: true,
+} satisfies Prisma.KanbanSubtaskSelect;
+
 export const cardSelect = {
   id: true,
   slug: true,
@@ -66,6 +76,10 @@ export const cardSelect = {
   feature: { select: { id: true, slug: true, title: true } },
   ticket: { select: { id: true, slug: true, number: true, title: true, status: true } },
   attachments: { select: attachmentSelect },
+  ledgerUrl: true,
+  ledgerProjectId: true,
+  ledgerSyncedAt: true,
+  subtasks: { orderBy: { order: "asc" }, select: subtaskSelect },
 } satisfies Prisma.KanbanCardSelect;
 
 export type KanbanBoardRow = Prisma.KanbanBoardGetPayload<{ select: typeof boardSelect }>;
@@ -260,6 +274,9 @@ export interface CreateCardInput {
   ticketId?: string | null;
   blocked?: boolean;
   blockerNote?: string | null;
+  ledgerUrl?: string | null;
+  /** Checklist lines to start with, in order. */
+  subtasks?: string[];
 }
 
 export async function createCard(input: CreateCardInput) {
@@ -287,10 +304,32 @@ export async function createCard(input: CreateCardInput) {
       ticketId: input.ticketId ?? null,
       blocked: input.blocked ?? false,
       blockerNote: input.blockerNote?.trim() || null,
+      ledgerUrl: normaliseLedgerUrl(input.ledgerUrl),
       completedAt: await completionFor(columnId, null),
+      subtasks: {
+        create: (input.subtasks ?? [])
+          .map((t) => t.trim())
+          .filter(Boolean)
+          .map((title, i) => ({ title, order: (i + 1) * ORDER_GAP })),
+      },
     },
     select: cardSelect,
   });
+}
+
+/**
+ * The stored form of a Ledger link, or null for "no link". Throws on anything
+ * that isn't a share link, with a sentence that says what one looks like.
+ */
+export function normaliseLedgerUrl(input: string | null | undefined): string | null {
+  if (!input?.trim()) return null;
+  const parsed = parseLedgerShareUrl(input);
+  if (!parsed) {
+    throw new Error(
+      "That isn't a NEO Ledger share link — it should look like https://neo-ledger.up.railway.app/share/<token>.",
+    );
+  }
+  return parsed.url;
 }
 
 /** Resolve a card by id, slug or #number — same convenience as tickets. */
@@ -325,6 +364,8 @@ export interface UpdateCardInput {
   blockerNote?: string | null;
   featureId?: string | null;
   ticketId?: string | null;
+  /** A NEO Ledger share link; null to unlink. */
+  ledgerUrl?: string | null;
   /** Target column by id, slug or name. Moving is what stamps completedAt. */
   column?: string | null;
   columnId?: string | null;
@@ -360,6 +401,21 @@ export async function updateCardFields(cardId: string, patch: UpdateCardInput) {
   }
   if (patch.blockerNote !== undefined && patch.blocked !== false) {
     data.blockerNote = patch.blockerNote?.trim() || null;
+  }
+
+  if (patch.ledgerUrl !== undefined) {
+    const next = normaliseLedgerUrl(patch.ledgerUrl);
+    const current = await db.kanbanCard.findUnique({
+      where: { id: cardId },
+      select: { ledgerUrl: true },
+    });
+    data.ledgerUrl = next;
+    // A different link is a different project — forget what the old one
+    // resolved to, or the next sync would read the wrong plan.
+    if (next !== (current?.ledgerUrl ?? null)) {
+      data.ledgerProjectId = null;
+      data.ledgerSyncedAt = null;
+    }
   }
 
   const boardId = patch.board ? await resolveBoardId(patch.board) : null;
@@ -491,6 +547,57 @@ export async function removeColumn(
   }
 
   return { id: column.id, name: column.name, movedCards };
+}
+
+/**
+ * Put a board's columns in this order. The list must be the board's whole set
+ * — a stale tab that missed a new column would otherwise shuffle it somewhere
+ * arbitrary — and the sort order is rewritten densely (10, 20, 30…) in one
+ * transaction, so there is never a moment where two columns share a slot.
+ */
+export async function reorderBoardColumns(boardId: string, orderedIds: string[]): Promise<void> {
+  const columns = await db.kanbanColumn.findMany({ where: { boardId }, select: { id: true } });
+  const known = new Set(columns.map((c) => c.id));
+  const unique = new Set(orderedIds);
+  if (
+    unique.size !== orderedIds.length ||
+    orderedIds.length !== known.size ||
+    orderedIds.some((id) => !known.has(id))
+  ) {
+    throw new Error("The board's columns changed while you were moving one — reload and try again.");
+  }
+  await db.$transaction(
+    orderedIds.map((id, i) =>
+      db.kanbanColumn.update({ where: { id }, data: { sortOrder: (i + 1) * 10 } }),
+    ),
+  );
+}
+
+/**
+ * Move one column to a 1-based position on its board — what a person says
+ * ("put Review before Done", "Done goes last") rather than a full ordering.
+ * Positions past the end clamp to last.
+ */
+export async function moveColumnTo(
+  columnId: string,
+  position: number,
+): Promise<{ boardId: string; order: string[] }> {
+  const column = await db.kanbanColumn.findUnique({
+    where: { id: columnId },
+    select: { boardId: true },
+  });
+  if (!column) throw new Error("That column no longer exists.");
+
+  const columns = await columnsFor(column.boardId);
+  const rest = columns.filter((c) => c.id !== columnId).map((c) => c.id);
+  const index = Math.max(0, Math.min(rest.length, Math.round(position) - 1));
+  rest.splice(index, 0, columnId);
+
+  await reorderBoardColumns(column.boardId, rest);
+  return {
+    boardId: column.boardId,
+    order: rest.map((id) => columns.find((c) => c.id === id)!.name),
+  };
 }
 
 export interface CardFromTicketInput {

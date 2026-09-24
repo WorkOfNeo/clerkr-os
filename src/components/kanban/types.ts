@@ -21,6 +21,16 @@ export interface KanbanAttachment {
   height: number | null;
 }
 
+export interface BoardSubtask {
+  id: string;
+  title: string;
+  done: boolean;
+  doneAt: string | Date | null;
+  order: number;
+  /** The NEO Ledger plan item / task this line mirrors, once a sync linked it. */
+  ledgerRef: string | null;
+}
+
 export interface BoardColumn {
   id: string;
   slug: string;
@@ -32,6 +42,23 @@ export interface BoardColumn {
   isDone: boolean;
   isDefault: boolean;
   wipLimit: number | null;
+}
+
+/** Server column row → the shape the board components take. Shared by the
+ *  board and the card page so both hand the client the same thing. */
+export function toBoardColumn(c: BoardColumn & Record<string, unknown>): BoardColumn {
+  return {
+    id: c.id,
+    slug: c.slug,
+    name: c.name,
+    description: c.description,
+    color: c.color,
+    icon: c.icon,
+    sortOrder: c.sortOrder,
+    isDone: c.isDone,
+    isDefault: c.isDefault,
+    wipLimit: c.wipLimit,
+  };
 }
 
 export interface BoardCard {
@@ -53,4 +80,8 @@ export interface BoardCard {
   ticketId: string | null;
   ticket: KanbanTicketRef | null;
   attachments: KanbanAttachment[];
+  subtasks: BoardSubtask[];
+  ledgerUrl: string | null;
+  ledgerProjectId: string | null;
+  ledgerSyncedAt: string | Date | null;
 }

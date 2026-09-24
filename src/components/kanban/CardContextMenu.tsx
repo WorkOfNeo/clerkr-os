@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { Bell, BellOff, CheckCircle2, Copy, Flag, Trash2 } from "lucide-react";
+import { Bell, BellOff, CheckCircle2, Copy, Flag, Maximize2, Trash2 } from "lucide-react";
 
 import { deleteCard, setCardSubscription, updateCard, moveCard } from "@/app/kanban/actions";
 import {
@@ -54,6 +54,11 @@ export function CardContextMenu({
       <ContextMenuContent>
         <ContextMenuLabel>#{card.number}</ContextMenuLabel>
 
+        <ContextMenuItem onSelect={() => router.push(`/kanban/cards/${card.slug}`)}>
+          <Maximize2 className="h-3.5 w-3.5" />
+          Open as page
+        </ContextMenuItem>
+
         <ContextMenuItem
           disabled={isPending}
           onSelect={() =>
@@ -100,7 +105,7 @@ export function CardContextMenu({
             key={c.id}
             disabled={c.id === card.columnId || isPending}
             onSelect={() =>
-              run(() => moveCard({ id: card.id, columnId: c.id, order: Date.now() }))
+              run(() => moveCard({ id: card.id, columnId: c.id }))
             }
           >
             <ColumnIcon name={c.icon} color={c.color} className="h-3.5 w-3.5" />

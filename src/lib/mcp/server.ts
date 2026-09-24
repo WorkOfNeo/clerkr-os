@@ -81,7 +81,23 @@ Moving a card is \`update_kanban_card\` with a \`column\`, or
 you. Prefer moving a finished card to a done column over \`delete_kanban_card\`,
 the same way WONT_FIX beats deleting a ticket — it keeps the record. Deleting a
 column never deletes the work in it: \`delete_kanban_column\` makes you say where
-the cards go.
+the cards go. \`move_kanban_column\` changes a board's left-to-right order —
+only when asked.
+
+A card can be a project: \`get_kanban_card\` reads its note and its subtasks
+(the checklist whose done/total shows on the card face), and
+\`add_card_subtasks\` / \`update_card_subtask\` / \`delete_card_subtask\` edit it.
+
+**NEO Ledger.** A card may carry \`ledgerUrl\`, a NEO Ledger master-plan share
+link. The Ledger has no API, so progress only arrives when you carry it: read
+the plan with the NEO Ledger MCP's \`get_plan\`, then \`sync_card_from_ledger\`
+(its description has the exact recipe). It is one way — it ticks subtasks here
+and never unticks one, and you must never mark Ledger work done to make the two
+agree. When you finish a Ledger task in a session that also has this server,
+call \`sync_card_from_ledger\` without a card, passing just that task, so any
+subtask mirroring it is ticked too. \`list_ledger_linked_cards\` is where a
+full sync pass starts. The \`clerkr-os-align\` skill (on /settings) is this
+whole procedure written out; if the user types "clerkr-os-align", follow it.
 
 ## Everything else
 

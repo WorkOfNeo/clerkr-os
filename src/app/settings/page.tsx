@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
 import type { Metadata } from "next";
 
 import { listApiTokens } from "@/lib/api-tokens";
@@ -6,6 +9,7 @@ import { requireSession } from "@/lib/session";
 
 import { AppShell } from "@/components/AppShell";
 
+import { AlignSkillSection } from "./AlignSkillSection";
 import { ConnectGuide } from "./ConnectGuide";
 import { CreateTokenForm } from "./CreateTokenForm";
 import { SkillSection } from "./SkillSection";
@@ -19,9 +23,14 @@ export const metadata: Metadata = {
 
 export default async function SettingsPage() {
   const session = await requireSession();
-  const [tokens, origin] = await Promise.all([
+  const [tokens, origin, alignSkill] = await Promise.all([
     listApiTokens(session.user.id),
     currentOrigin(),
+    // Read from the repo rather than inlined, so skills/clerkr-os-align/SKILL.md
+    // is the only copy. `next start` runs from the repo root on Railway.
+    readFile(path.join(process.cwd(), "skills/clerkr-os-align/SKILL.md"), "utf8").catch(
+      () => "skills/clerkr-os-align/SKILL.md wasn't found on this deploy.",
+    ),
   ]);
 
   return (
@@ -66,6 +75,16 @@ export default async function SettingsPage() {
             </p>
           </div>
           <SkillSection />
+        </section>
+
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-base font-semibold">Align the board with NEO Ledger</h2>
+            <p className="text-xs text-muted-foreground">
+              A second skill, for cards that steer a project with a NEO Ledger plan.
+            </p>
+          </div>
+          <AlignSkillSection skill={alignSkill} />
         </section>
 
         <section className="space-y-3">

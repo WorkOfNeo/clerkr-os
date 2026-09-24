@@ -1,4 +1,4 @@
-import { marked } from "marked";
+import { Marked } from "marked";
 import TurndownService from "turndown";
 
 /**
@@ -28,16 +28,74 @@ function service(): TurndownService {
       node.nodeName === "LI" && node.getAttribute("data-checked") !== null,
     replacement: (content, node) => {
       const checked = (node as HTMLElement).getAttribute("data-checked") === "true";
-      return `- [${checked ? "x" : " "}] ${content.trim()}\n`;
+      // Continuation lines (a nested list) indent under the box, as they would
+      // under a plain bullet.
+      return `- [${checked ? "x" : " "}] ${content.trim().replace(/\n/g, "\n  ")}\n`;
     },
   });
 
   return turndown;
 }
 
+/**
+ * The editor's own markdown parser. A separate instance so these overrides
+ * can't leak into the global `marked` other pages render with.
+ *
+ * GFM task lists are the reason it exists. marked renders `- [ ] x` as
+ * `<li><input type="checkbox"> x</li>`, which TipTap reads as a PLAIN bullet
+ * — the checkbox was dropped on load and the next save wrote `- x`, so every
+ * checkbox in a card note silently became a bullet. TipTap wants
+ * `<ul data-type="taskList"><li data-type="taskItem" data-checked>`.
+ */
+const editorMarked = new Marked({
+  renderer: {
+    list(token) {
+      if (token.ordered || !token.items.some((i) => i.task)) return false;
+      // TipTap can't mix task and plain items in one list — and a task list
+      // followed by a bullet list serialises as ONE mixed list, since both use
+      // "-". So split into runs, which is how it was drawn in the editor.
+      const runs: { task: boolean; items: typeof token.items }[] = [];
+      for (const item of token.items) {
+        const last = runs.at(-1);
+        if (last && last.task === item.task) last.items.push(item);
+        else runs.push({ task: item.task, items: [item] });
+      }
+      return runs
+        .map(
+          (run) =>
+            `<ul${run.task ? ' data-type="taskList"' : ""}>\n${run.items.map((i) => this.listitem(i)).join("")}</ul>\n`,
+        )
+        .join("");
+    },
+    listitem(item) {
+      if (!item.task) return false;
+      return `<li data-type="taskItem" data-checked="${item.checked ? "true" : "false"}">${this.parser.parse(item.tokens)}</li>\n`;
+    },
+    // The state rides on the <li> above; the <input> itself would only be
+    // dropped by the editor.
+    checkbox() {
+      return "";
+    },
+  },
+});
+
 export function markdownToHtml(markdown: string): string {
   if (!markdown.trim()) return "";
-  return marked.parse(markdown, { async: false }) as string;
+  return editorMarked.parse(markdown, { async: false }) as string;
+}
+
+/**
+ * Whether pasted plain text is markdown worth rendering rather than inserting
+ * literally — what you get copying out of Claude, a README or a terminal.
+ * Block syntax at a line start, or unmistakable inline syntax. A sentence that
+ * merely contains an asterisk isn't enough.
+ */
+export function looksLikeMarkdown(text: string): boolean {
+  if (!text.trim()) return false;
+  return (
+    /^\s{0,3}(#{1,6}\s+\S|[-*+]\s+\S|\d+[.)]\s+\S|>\s?\S|```|~~~|\|.+\|\s*$)/m.test(text) ||
+    /\*\*[^*\n]+\*\*|\[[^\]\n]+\]\((?:https?:\/\/|\/)[^)\s]+\)/.test(text)
+  );
 }
 
 export function htmlToMarkdown(html: string): string {

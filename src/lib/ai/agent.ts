@@ -442,6 +442,7 @@ function cardLine(card: {
   blocked: boolean;
   dueDate: Date | null;
   ticket: { number: number } | null;
+  subtasks: { done: boolean }[];
 }) {
   return {
     ref: `#${card.number}`,
@@ -449,6 +450,11 @@ function cardLine(card: {
     ...(card.blocked ? { blocked: true } : {}),
     ...(card.dueDate ? { due: card.dueDate.toISOString().slice(0, 10) } : {}),
     ...(card.ticket ? { fromTicket: `#${card.ticket.number}` } : {}),
+    // Done of total — what the card face shows, so "how far along is X?"
+    // gets the same number the board does.
+    ...(card.subtasks.length
+      ? { subtasks: `${card.subtasks.filter((s) => s.done).length}/${card.subtasks.length}` }
+      : {}),
   };
 }
 
@@ -483,6 +489,7 @@ async function runBoardTool(name: string, args: Record<string, unknown>): Promis
           dueDate: true,
           columnId: true,
           ticket: { select: { number: true } },
+          subtasks: { select: { done: true } },
         },
       });
 
