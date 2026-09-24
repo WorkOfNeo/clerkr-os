@@ -258,6 +258,13 @@ button hands you the sentence that asks for it.
 - `createMissing` backfills a card from its plan. Without a card, only
   remembered ids match, across every card — the "I just finished Ledger task X"
   call.
+- **`clerkr-os-align` is the way people run it** — a Claude skill, the
+  whole procedure written out (which card, finding the Ledger project, building
+  `items` from `get_plan`, the report, read-only on the Ledger). The file is
+  [skills/clerkr-os-align/SKILL.md](skills/clerkr-os-align/SKILL.md) and is the
+  only copy: `/settings` reads it off disk at request time (fine because Railway
+  runs `next start` from the repo root — no standalone output). The card's copy
+  button hands out `clerkr-os-align #<n> …`.
 
 ## Attachments — one table, every surface
 

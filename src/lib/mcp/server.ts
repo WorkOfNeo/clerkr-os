@@ -96,7 +96,8 @@ and never unticks one, and you must never mark Ledger work done to make the two
 agree. When you finish a Ledger task in a session that also has this server,
 call \`sync_card_from_ledger\` without a card, passing just that task, so any
 subtask mirroring it is ticked too. \`list_ledger_linked_cards\` is where a
-full sync pass starts.
+full sync pass starts. The \`clerkr-os-align\` skill (on /settings) is this
+whole procedure written out; if the user types "clerkr-os-align", follow it.
 
 ## Everything else
 

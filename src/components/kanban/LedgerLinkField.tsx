@@ -46,9 +46,11 @@ export function LedgerLinkField({ card }: { card: BoardCard }) {
   }
 
   function copyPrompt() {
+    // Invokes the clerkr-os-align skill (see /settings); the rest of the
+    // sentence still says what to do if the skill isn't installed.
     const prompt =
-      `Sync Clerkr OS card #${card.number} from its NEO Ledger plan (${card.ledgerUrl}). ` +
-      "Read the plan with get_plan, then call sync_card_from_ledger.";
+      `clerkr-os-align #${card.number} — sync its subtasks from its NEO Ledger plan ` +
+      `(${card.ledgerUrl}): read the plan with get_plan, then call sync_card_from_ledger.`;
     void navigator.clipboard
       ?.writeText(prompt)
       .then(() => {
@@ -119,7 +121,7 @@ export function LedgerLinkField({ card }: { card: BoardCard }) {
           <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate">{new URL(card.ledgerUrl).host}</span>
         </a>
-        <IconButton label="Copy the sync request for Claude" onClick={copyPrompt}>
+        <IconButton label="Copy the clerkr-os-align request for Claude" onClick={copyPrompt}>
           {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
         </IconButton>
         <IconButton label="Change link" onClick={() => setEditing(true)}>
@@ -132,7 +134,7 @@ export function LedgerLinkField({ card }: { card: BoardCard }) {
       <p className="mt-1.5 text-[12px] leading-snug text-muted-foreground">
         {card.ledgerSyncedAt
           ? `Synced ${formatShortDate(card.ledgerSyncedAt)} · ${linked} of ${card.subtasks.length} subtasks linked to the plan.`
-          : "Not synced yet — copy the request and ask Claude in a session with both MCPs connected."}
+          : "Not synced yet — copy the request and paste it to Claude, with the Clerkr OS and NEO Ledger connectors on."}
       </p>
     </div>
   );
