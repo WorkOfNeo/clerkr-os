@@ -444,6 +444,39 @@ the row is deleted rather than retried forever.
 why the install guide sits above the toggle on the same page, and why
 `PushToggle` disables itself on an iOS device that isn't running standalone.
 
+## Numbers board (`/numbers`) — read before touching it
+
+The founders' numbers, OUTSIDE the Clerkr app so Clerkr never grows an inbound
+door for them. Three tabs: **Drift** (Clerkr's /ops-board, copied), **Website**
+(clerkr.ai from AnalyticsOS) and **Omsætning** (revenue managed here by hand).
+
+- **Clerkr pushes, never listens.** The Clerkr PROD worker POSTs to
+  `/api/ingest/clerkr-stats`: kind `ops` every 30 s (the ops-board snapshot,
+  stored latest-only in `ClerkrOpsLatest` because it names who is online) and
+  kind `stats` hourly (counts + the firm list, kept 120 days). The HMAC over
+  `${timestamp}.${body}` with `STATS_INGEST_SECRET` is the boundary; a
+  timestamp more than 5 min off, or an environment not in `STATS_ACCEPT_ENVS`
+  (unset = `production` only), is refused and nothing is stored.
+- **Access** (`src/lib/numbers/access.ts`): a share link, or a signed-in
+  SUPERADMIN. `/n/<token>` swaps the token for an httpOnly cookie scoped to
+  `/numbers` and redirects; only the SHA-256 of a token is stored; every page
+  load and every `/numbers/live` poll re-checks revoked/expired/scopes. A
+  MEMBER without a link is refused — revenue is narrower than the rest of this
+  single-tenant tool. Links and revenue amounts are managed at
+  `/admin/numbers-links` and `/admin/revenue-firms`; every action calls
+  `requireSuperadmin()`.
+- **Nothing on `/numbers` may link into the rest of clerkr-internal** — no
+  AppShell, no palette. The proxy opens `/n/`, `/numbers*` and the ingest path
+  only; everything else still needs a session.
+- **The Drift tab is a copy** of Clerkr-V2 `apps/web/app/ops-board/` (UI,
+  CSS, snapshot.ts) in `src/components/numbers/ops/`, with the Clerkr tokens it
+  reads in `tokens.css`. Changes there are marked `NUMBERS`. When Clerkr's
+  ops-board changes, copy it again.
+- **Revenue** (`src/lib/numbers/revenue.ts`): MRR = Σ monthly over firms
+  switched on; pipeline = Σ estimate over firms switched on without a monthly
+  amount; on demo = active firms Clerkr marks demo or in trial. New firms arrive
+  switched off; ingest never touches the amounts.
+
 ## Layout & design system
 
 Every page sits in [`AppShell`](src/components/AppShell.tsx) — a structural

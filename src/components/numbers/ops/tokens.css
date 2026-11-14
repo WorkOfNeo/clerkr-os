@@ -1,0 +1,109 @@
+/*
+ * The Clerkr app tokens /ops-board's CSS reads (Clerkr-V2 apps/web/app/
+ * globals.css :root, copied 2026-11-14). Scoped to .ob-root so they never
+ * reach the rest of clerkr-internal, whose own tokens share some names.
+ * If the ops-board in Clerkr changes colour, copy the new values here.
+ */
+.ob-root {
+  --affirm: #6ba284;
+  --affirm-bright: #5fa37b;
+  --affirm-bright-rgb: 95 163 123;
+  --affirm-ink: #4e7460;
+  --affirm-on-ink: #8fc4a6;
+  --affirm-subtle: #e5efea;
+  --amber: #e67e22;
+  --amber-bg: #fbeee1;
+  --amber-ink: #b4661b;
+  --amber-rgb: 230 126 34;
+  --background: #f2f4ef;
+  --border: #d2d6ce;
+  --border-subtle: #dde1d9;
+  --card: #ffffff;
+  --chart-channel-1: #2a78d6;
+  --chart-channel-1-ink: #3987e5;
+  --chart-channel-2: #eb6834;
+  --chart-channel-2-ink: #d95926;
+  --chart-channel-3: #1baf7a;
+  --chart-channel-3-ink: #199e70;
+  --chart-channel-4: #eda100;
+  --chart-channel-4-ink: #c98500;
+  --chart-channel-5: #e87ba4;
+  --chart-channel-5-ink: #d55181;
+  --chart-channel-6: #008300;
+  --chart-channel-6-ink: #008300;
+  --chart-ramp-1: #95bba7;
+  --chart-ramp-2: #7ca992;
+  --chart-ramp-3: #63977d;
+  --chart-ramp-4: #4b8267;
+  --chart-ramp-5: #346c51;
+  --ink: #151814;
+  --ink-raised: #1b1f1a;
+  --on-ink: #f7f7f3;
+  --on-ink-rgb: 247 247 243;
+  --surface-hover: #f1f3ee;
+  --surface-secondary: #ebeee8;
+  --text-primary: #1c1c1e;
+  --text-secondary: #5c5a56;
+  --text-tertiary: #9c9a96;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/* ─── additions for the numbers board (not in Clerkr's ops-board) ───────── */
+
+/* Tabs between Drift / Website / Omsætning, in the brand cell. */
+.ob-brandrow { display: flex; align-items: center; gap: 18px; min-width: 0; }
+.ob-tabs {
+  display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px;
+  background: var(--ob-veil2); transition: background-color 2s ease;
+}
+.ob-tab {
+  font-size: 13px; font-weight: 600; padding: 5px 13px; border-radius: 999px;
+  color: var(--ob-body); text-decoration: none; transition: color 0.15s, background-color 0.15s;
+}
+.ob-tab:hover { color: var(--ob-ink); }
+.ob-tab[aria-current='page'] { background: var(--ob-card); color: var(--ob-ink); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+
+/* A strip with N cells instead of the ops-board's six. */
+.ob-strip[data-cols] { grid-template-columns: repeat(var(--ob-cols), minmax(0, 1fr)); }
+@media (max-width: 900px) {
+  .ob-strip[data-cols] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ob-strip[data-cols] .ob-cell + .ob-cell { border-left: 0; }
+}
+.ob-two { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 900px) { .ob-two { grid-template-columns: minmax(0, 1fr); } }
+
+/* Ranked bars (top pages, sources). */
+.ob-rank { display: flex; flex-direction: column; gap: 10px; }
+.ob-rank-row { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) 4.5rem; align-items: center; gap: 12px; font-size: 13px; color: var(--ob-body); }
+.ob-rank-row > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ob-rank-row > b { text-align: right; }
+
+/* Tables (revenue firms). */
+.ob-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.ob-table th {
+  text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ob-mut); padding: 0 12px 8px; border-bottom: 1px solid var(--ob-line); white-space: nowrap;
+}
+.ob-table td { padding: 10px 12px; border-bottom: 1px solid var(--ob-line); color: var(--ob-body); }
+.ob-table tr:last-child td { border-bottom: 0; }
+.ob-table td:first-child { color: var(--ob-ink); font-weight: 600; }
+.ob-table .ob-r { text-align: right; }
+.ob-table th:first-child, .ob-table td:first-child { padding-left: 0; }
+.ob-table th:last-child, .ob-table td:last-child { padding-right: 0; }
+.ob-tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--ob-veil2); color: var(--ob-body); white-space: nowrap; }
+.ob-tag[data-tone='ok'] { background: var(--ob-ok-soft); color: var(--ob-ok-ink); }
+.ob-tag[data-tone='warn'] { background: var(--ob-warn-soft); color: var(--ob-warn); }
+.ob-dim { color: var(--ob-mut) !important; font-weight: 400 !important; }
+.ob-line-chart { display: block; width: 100%; }
+
+/* Dead ends (link revoked, no access). */
+.ob-dead { max-width: 520px; margin: 14vh auto 0; display: flex; flex-direction: column; gap: 10px; }
+.ob-dead h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.ob-dead p { margin: 0; font-size: 14px; color: var(--ob-body); }
+
+/* Website and Omsætning are reading pages, not the TV: they scroll and keep
+   their natural size instead of the ops-board's fixed 1920×1080 canvas. */
+@media (min-width: 1100px) and (min-aspect-ratio: 5/4) {
+  .ob-root[data-flow] { display: block; overflow-y: auto; }
+  .ob-root[data-flow] .ob { width: auto; height: auto; max-width: 1480px; margin: 0 auto; overflow: visible; zoom: 1; }
+}
