@@ -107,3 +107,39 @@
   .ob-root[data-flow] { display: block; overflow-y: auto; }
   .ob-root[data-flow] .ob { width: auto; height: auto; max-width: 1480px; margin: 0 auto; overflow: visible; zoom: 1; }
 }
+
+/* The tab's hairline fills toward the loop's next switch (NumbersTabs). */
+.ob-tab { position: relative; overflow: hidden; }
+.ob-tab-next {
+  position: absolute; left: 12px; right: 12px; bottom: 2px; height: 2px; border-radius: 1px;
+  background: var(--ob-ink); opacity: 0.35; transform-origin: left; transform: scaleX(0);
+  animation-name: ob-tab-fill; animation-timing-function: linear; animation-fill-mode: forwards;
+}
+@keyframes ob-tab-fill { to { transform: scaleX(1); } }
+
+/* Entering a tab: panels rise in, staggered; bars grow from their base — on
+   the ops-board's own spring. Only on mount: a poll keeps the elements, so
+   nothing re-plays. */
+@keyframes ob-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes ob-grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes ob-grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.ob > .ob-sentence, .ob > .ob-panel, .ob > .ob-two > .ob-panel, .ob-grid > .ob-panel {
+  animation: ob-rise 700ms var(--ob-spring) both;
+}
+.ob > :nth-child(3) { animation-delay: 60ms; }
+.ob > :nth-child(4), .ob-grid > :nth-child(2), .ob-two > :nth-child(2) { animation-delay: 120ms; }
+.ob > :nth-child(5), .ob-grid > :nth-child(3) { animation-delay: 180ms; }
+.ob-grid > :nth-child(4) { animation-delay: 240ms; }
+.ob-cbar i, .ob-fl-track i { transform-origin: left; animation: ob-grow-x 900ms var(--ob-spring) 150ms both; }
+.ob-mbars i, .ob-ch-24 i { transform-origin: bottom; animation: ob-grow-y 900ms var(--ob-spring) 150ms both; }
+.ob-line-chart path { animation: ob-rise 900ms var(--ob-spring) 200ms both; }
+@media (prefers-reduced-motion: reduce) {
+  .ob > *, .ob-grid > *, .ob-two > *, .ob-cbar i, .ob-fl-track i, .ob-mbars i, .ob-ch-24 i, .ob-line-chart path, .ob-tab-next { animation: none !important; }
+  .ob-tab-next { display: none; }
+}
+
+/* Phones: the tabs get their own row under the brand, so they never run into the clock. */
+@media (max-width: 720px) {
+  .ob-brandrow { flex-wrap: wrap; row-gap: 10px; }
+  .ob-brandrow .ob-tabs { order: 3; flex-basis: 100%; width: fit-content; max-width: 100%; }
+}

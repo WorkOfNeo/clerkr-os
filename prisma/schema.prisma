@@ -1188,18 +1188,19 @@ model Playbook {
 // traffic (read from AnalyticsOS) and revenue (managed by hand here). The board
 // is opened by a share link; see src/lib/numbers/access.ts.
 
-// A share link to /numbers. The token is shown once; only its SHA-256 is kept.
-// `scopes` limits the tabs: "product" | "website" | "revenue".
+// A share link to /numbers — a MIRROR. Links are created and revoked in
+// app.clerkr.ai (/admin/numbers-links); the Clerkr worker pushes the full list
+// every 30 s (kind "links") and this table is replaced to match. Only the
+// SHA-256 of a token is ever known here. lastUsedAt is the one local column.
 model NumbersLink {
-  id          String    @id @default(uuid())
-  label       String
-  tokenHash   String    @unique
-  scopes      String[]
-  expiresAt   DateTime?
-  revokedAt   DateTime?
-  lastUsedAt  DateTime?
-  createdById String
-  createdAt   DateTime  @default(now())
+  id         String    @id
+  label      String
+  tokenHash  String    @unique
+  scopes     String[]
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  syncedAt   DateTime  @default(now())
 
   @@map("numbers_link")
 }
@@ -1218,28 +1219,8 @@ model ClerkrStatsSnapshot {
   @@map("clerkr_stats_snapshot")
 }
 
-// A Clerkr firm, as revenue sees it. The status columns are refreshed from
-// each production snapshot; onDashboard / amounts / note are only ever set by a
-// superadmin at /admin/revenue-firms. A new firm arrives switched off.
-model RevenueFirm {
-  orgId       String    @id
-  name        String
-  onDashboard Boolean   @default(false)
-  monthlyDkk  Int?
-  estimateDkk Int?
-  note        String    @default("")
-  isActive    Boolean   @default(true)
-  isDemo      Boolean   @default(false)
-  inTrial     Boolean   @default(false)
-  trialEndsAt DateTime?
-  lastSeenAt  DateTime?
-  updatedAt   DateTime  @default(now()) @updatedAt
-
-  @@map("revenue_firm")
-}
-
-// MRR per day, written whenever a snapshot arrives or an amount changes, so
-// the history is what the board said that day.
+// MRR per day, written whenever a stats snapshot arrives, so the history is
+// what the board said that day. The amounts themselves live in Clerkr.
 model RevenueDay {
   day         DateTime @id @db.Date
   mrrDkk      Int

@@ -446,36 +446,33 @@ why the install guide sits above the toggle on the same page, and why
 
 ## Numbers board (`/numbers`) — read before touching it
 
-The founders' numbers, OUTSIDE the Clerkr app so Clerkr never grows an inbound
-door for them. Three tabs: **Drift** (Clerkr's /ops-board, copied), **Website**
-(clerkr.ai from AnalyticsOS) and **Omsætning** (revenue managed here by hand).
+The founders' numbers, served here but MANAGED ENTIRELY IN app.clerkr.ai. This
+app only displays: there is no admin UI for the board in clerkr-internal, and
+nothing here edits its data. Three tabs: **Drift** (Clerkr's /ops-board,
+copied), **Website** (clerkr.ai from AnalyticsOS) and **Omsætning** (revenue
+fields a superadmin sets on each firm in Clerkr /admin/orgs/[id]). The tabs
+loop on their own, 60 s each (NumbersTabs), and numbers roll in on every tab.
 
 - **Clerkr pushes, never listens.** The Clerkr PROD worker POSTs to
-  `/api/ingest/clerkr-stats`: kind `ops` every 30 s (the ops-board snapshot,
-  stored latest-only in `ClerkrOpsLatest` because it names who is online) and
-  kind `stats` hourly (counts + the firm list, kept 120 days). The HMAC over
+  `/api/ingest/clerkr-stats`: kinds `ops` and `links` every 30 s, `stats`
+  every 5 min (counts + firms with their revenue fields). The HMAC over
   `${timestamp}.${body}` with `STATS_INGEST_SECRET` is the boundary; a
   timestamp more than 5 min off, or an environment not in `STATS_ACCEPT_ENVS`
   (unset = `production` only), is refused and nothing is stored.
-- **Access** (`src/lib/numbers/access.ts`): a share link, or a signed-in
-  SUPERADMIN. `/n/<token>` swaps the token for an httpOnly cookie scoped to
-  `/numbers` and redirects; only the SHA-256 of a token is stored; every page
-  load and every `/numbers/live` poll re-checks revoked/expired/scopes. A
-  MEMBER without a link is refused — revenue is narrower than the rest of this
-  single-tenant tool. Links and revenue amounts are managed at
-  `/admin/numbers-links` and `/admin/revenue-firms`; every action calls
-  `requireSuperadmin()`.
-- **Nothing on `/numbers` may link into the rest of clerkr-internal** — no
-  AppShell, no palette. The proxy opens `/n/`, `/numbers*` and the ingest path
-  only; everything else still needs a session.
-- **The Drift tab is a copy** of Clerkr-V2 `apps/web/app/ops-board/` (UI,
-  CSS, snapshot.ts) in `src/components/numbers/ops/`, with the Clerkr tokens it
-  reads in `tokens.css`. Changes there are marked `NUMBERS`. When Clerkr's
-  ops-board changes, copy it again.
-- **Revenue** (`src/lib/numbers/revenue.ts`): MRR = Σ monthly over firms
-  switched on; pipeline = Σ estimate over firms switched on without a monthly
-  amount; on demo = active firms Clerkr marks demo or in trial. New firms arrive
-  switched off; ingest never touches the amounts.
+  `ClerkrOpsLatest` keeps the latest ops snapshot only (it names who is online).
+- **Share links** are created and revoked in Clerkr /admin/numbers-links.
+  `NumbersLink` here is a mirror replaced by each `links` push (token hashes
+  only; `lastUsedAt` is the one local column). A revoke reaches the board
+  within 30 s.
+- **Access** (`src/lib/numbers/access.ts`): a live mirrored link, or a
+  signed-in SUPERADMIN of this app. `/n/<token>` swaps the token for an
+  httpOnly cookie scoped to `/numbers`; every page load and `/numbers/live` poll
+  re-checks it. A MEMBER without a link is refused.
+- **Nothing on `/numbers` may link into the rest of clerkr-internal.** The
+  proxy opens `/n/`, `/numbers*` and the ingest path only.
+- **The Drift tab is a copy** of Clerkr-V2 `apps/web/app/ops-board/` in
+  `src/components/numbers/ops/` (tokens in `tokens.css`); changes are marked
+  `NUMBERS`. When Clerkr's ops-board changes, copy it again.
 
 ## Layout & design system
 

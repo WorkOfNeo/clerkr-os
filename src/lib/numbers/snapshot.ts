@@ -39,6 +39,10 @@ const Firm = z
     docs7d: z.number(),
     llmCostUsd7d: z.number(),
     lastActiveAt: z.string().nullable(),
+    // Set by a superadmin on the firm in app.clerkr.ai (/admin/orgs/[id]).
+    revenueOnBoard: z.boolean(),
+    revenueMonthlyDkk: z.number().nullable(),
+    revenueEstimateDkk: z.number().nullable(),
   })
   .strict();
 export type SnapshotFirm = z.infer<typeof Firm>;
@@ -96,7 +100,58 @@ export const OpsPayload = z
   .strict();
 export type OpsPayload = z.infer<typeof OpsPayload>;
 
-export const IngestPayload = z.discriminatedUnion("kind", [StatsPayload, OpsPayload]);
+/**
+ * The share links, as app.clerkr.ai holds them — the FULL list, revoked ones
+ * included, every 30 s. Hashes only; a token never leaves the app after it
+ * was shown once to the superadmin who made it.
+ */
+export const LinksPayload = z
+  .object({
+    kind: z.literal("links"),
+    version: z.literal(1),
+    environment: z.string().min(1).max(40),
+    generatedAt: z.string().datetime({ offset: true }),
+    links: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1).max(64),
+            label: z.string().max(120),
+            tokenHash: z.string().regex(/^[0-9a-f]{64}$/),
+            scopes: z.array(z.enum(["product", "website", "revenue"])),
+            expiresAt: z.string().datetime({ offset: true }).nullable(),
+            revokedAt: z.string().datetime({ offset: true }).nullable(),
+          })
+          .strict(),
+      )
+      .max(1000),
+  })
+  .strict();
+export type LinksPayload = z.infer<typeof LinksPayload>;
+
+export const IngestPayload = z.discriminatedUnion("kind", [StatsPayload, OpsPayload, LinksPayload]);
+
+/**
+ * Replaces the link mirror with the app's list: upsert every link, delete any
+ * the app no longer has. lastUsedAt is the only column that survives.
+ */
+export async function storeLinks(payload: LinksPayload) {
+  const ids = payload.links.map((l) => l.id);
+  await db.$transaction([
+    db.numbersLink.deleteMany({ where: { id: { notIn: ids } } }),
+    ...payload.links.map((l) => {
+      const data = {
+        label: l.label,
+        tokenHash: l.tokenHash,
+        scopes: l.scopes,
+        expiresAt: l.expiresAt ? new Date(l.expiresAt) : null,
+        revokedAt: l.revokedAt ? new Date(l.revokedAt) : null,
+        syncedAt: new Date(),
+      };
+      return db.numbersLink.upsert({ where: { id: l.id }, create: { id: l.id, ...data }, update: data });
+    }),
+  ]);
+}
 
 /** How far a request's timestamp may be from now before it's treated as a replay. */
 export const MAX_SKEW_MS = 5 * 60 * 1000;
@@ -171,11 +226,7 @@ export async function latestSnapshot(): Promise<LatestSnapshot | null> {
 /** Keep about four months of hourly snapshots; trends past that come from RevenueDay. */
 const KEEP_DAYS = 120;
 
-/**
- * Stores a verified snapshot and refreshes the firm list revenue is managed
- * from. Status columns only — onDashboard, the amounts and the note belong to
- * the superadmin who set them and are never touched here.
- */
+/** Stores a verified stats snapshot and prunes old ones. */
 export async function storeSnapshot(payload: StatsPayload) {
   await db.clerkrStatsSnapshot.create({
     data: {
@@ -184,23 +235,6 @@ export async function storeSnapshot(payload: StatsPayload) {
       payload: payload as unknown as object,
     },
   });
-
-  const seenAt = new Date(payload.generatedAt);
-  for (const f of payload.firms) {
-    const status = {
-      name: f.name,
-      isActive: f.isActive,
-      isDemo: f.isDemo,
-      inTrial: f.inTrial,
-      trialEndsAt: f.trialEndsAt ? new Date(f.trialEndsAt) : null,
-      lastSeenAt: seenAt,
-    };
-    await db.revenueFirm.upsert({
-      where: { orgId: f.id },
-      create: { orgId: f.id, ...status },
-      update: status,
-    });
-  }
 
   await db.clerkrStatsSnapshot.deleteMany({
     where: { receivedAt: { lt: new Date(Date.now() - KEEP_DAYS * 86_400_000) } },

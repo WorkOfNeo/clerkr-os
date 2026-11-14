@@ -1,5 +1,4 @@
 import { ObCell, ObFrame, ObLine, ObPanel, fmtInt, fmtKr } from "@/components/numbers/ObFrame";
-import { latestSnapshot } from "@/lib/numbers/snapshot";
 import { loadRevenue, mrrAtStartOfMonth, revenueHistory, type RevenueRow } from "@/lib/numbers/revenue";
 
 import { gate } from "../gate";
@@ -18,16 +17,18 @@ function status(f: RevenueRow): { label: string; tone?: "ok" | "warn" } {
   return { label: "Kunde", tone: "ok" };
 }
 
-/** Revenue as the founders manage it (/admin/revenue-firms), in the ops-board's look. */
+/** Revenue as the founders set it in app.clerkr.ai, in the ops-board's look. */
 export default async function NumbersRevenuePage() {
   const access = await gate("revenue");
-  const [rev, history, monthStart, snap] = await Promise.all([
-    loadRevenue(),
-    revenueHistory(),
-    mrrAtStartOfMonth(),
-    latestSnapshot(),
-  ]);
-  const activeUsers = new Map(snap?.data.firms.map((f) => [f.id, f.activeUsers7d]) ?? []);
+  const [rev, history, monthStart] = await Promise.all([loadRevenue(), revenueHistory(), mrrAtStartOfMonth()]);
+
+  if (!rev) {
+    return (
+      <ObFrame scopes={access.scopes} active="revenue" status={<span>Venter på prod</span>}>
+        <p className="ob-empty" style={{ fontSize: 15 }}>Der er ikke kommet tal fra Clerkr endnu.</p>
+      </ObFrame>
+    );
+  }
   const move = monthStart == null ? 0 : rev.mrr - monthStart;
 
   return (
@@ -37,7 +38,7 @@ export default async function NumbersRevenuePage() {
       status={
         <>
           <span>Omsætning</span>
-          <span className="ob-pill-sub">kr. ekskl. moms · beløb I selv har sat</span>
+          <span className="ob-pill-sub">kr. ekskl. moms · beløb sat i app.clerkr.ai</span>
         </>
       }
     >
@@ -49,16 +50,16 @@ export default async function NumbersRevenuePage() {
           cap="denne måned"
         />
         <ObCell label="ARR" value={fmtKr(rev.arr)} cap="MRR × 12" />
-        <ObCell label="Betalende kontorer" value={fmtInt(rev.payingFirms)} cap="på dashboardet" />
-        <ObCell label="Kontorer på demo" value={fmtInt(rev.onDemo)} cap={<><b>{fmtInt(rev.onDemoOnDashboard)}</b> på dashboardet</>} />
+        <ObCell label="Betalende kontorer" value={fmtInt(rev.payingFirms)} cap="på boardet" />
+        <ObCell label="Kontorer på demo" value={fmtInt(rev.onDemo)} cap={<><b>{fmtInt(rev.onDemoOnBoard)}</b> på boardet</>} />
         <ObCell label="Pipeline MRR" value={fmtKr(rev.pipeline)} cap="jeres skøn, når demoen er slut" />
       </section>
 
-      <ObPanel title="Kontorer på dashboardet" meta={`${fmtInt(rev.rows.length)} kontorer`}>
+      <ObPanel title="Kontorer på boardet" meta={`${fmtInt(rev.rows.length)} kontorer`}>
         {rev.rows.length === 0 ? (
           <p className="ob-empty">
-            Ingen kontorer er slået til endnu. En superadmin gør det, med beløbene, i clerkr-internal under
-            Admin › Revenue firms.
+            Ingen kontorer er slået til endnu. En superadmin gør det på kontoret i app.clerkr.ai under
+            Admin › Kontorer › Omsætning på tal-boardet.
           </p>
         ) : (
           <div style={{ overflowX: "auto" }}>
@@ -75,7 +76,6 @@ export default async function NumbersRevenuePage() {
               <tbody>
                 {rev.rows.map((f) => {
                   const st = status(f);
-                  const au = activeUsers.get(f.orgId);
                   return (
                     <tr key={f.orgId}>
                       <td>{f.name}</td>
@@ -86,7 +86,7 @@ export default async function NumbersRevenuePage() {
                       </td>
                       <td className={`ob-r${f.monthlyDkk ? "" : " ob-dim"}`}>{f.monthlyDkk ? fmtKr(f.monthlyDkk) : "–"}</td>
                       <td className={`ob-r${f.estimateDkk ? "" : " ob-dim"}`}>{f.estimateDkk ? fmtKr(f.estimateDkk) : "–"}</td>
-                      <td className="ob-r">{au == null ? "–" : fmtInt(au)}</td>
+                      <td className="ob-r">{fmtInt(f.activeUsers7d)}</td>
                     </tr>
                   );
                 })}

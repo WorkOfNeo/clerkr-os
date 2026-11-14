@@ -1,3 +1,7 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+
 /**
  * A number that rolls. Each digit is a 0–9 column translated to its place, so
  * a poll that moves 146 → 149 rolls the last digit instead of swapping text.
@@ -10,13 +14,22 @@
  * reduced motion turns it off — the digits simply change.
  *
  * Ported from NEO Ledger's /live board (wiki: "Live dashboard recipe").
+ *
+ * NUMBERS: rolls IN on mount — first render shows every digit as 0 (server and
+ * client agree, so no hydration mismatch), then the real value one frame later,
+ * so each tab of the looping board animates its numbers in like a poll does.
  */
 export function Odometer({ value }: { value: string | number }) {
-  const text = String(value)
+  const real = String(value)
+  const [text, setText] = useState(() => real.replace(/\d/g, '0'))
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setText(real))
+    return () => cancelAnimationFrame(raf)
+  }, [real])
   const chars = [...text]
   return (
     <span className="ob-odo">
-      <span className="ob-odo-sr">{text}</span>
+      <span className="ob-odo-sr">{real}</span>
       <span className="ob-odo-ov" aria-hidden>
         {chars.map((c, i) => {
           const key = chars.length - i

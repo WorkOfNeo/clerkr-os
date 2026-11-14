@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 
 import { db } from "@/lib/db";
@@ -8,7 +8,8 @@ import { getSession, isSuperadmin } from "@/lib/session";
  * Who may look at /numbers, and which tabs.
  *
  * Two ways in, and only two:
- *  1. A share link. `/n/<token>` swaps the token for an httpOnly cookie scoped
+ *  1. A share link — created and revoked in app.clerkr.ai, mirrored here by
+ *     the worker's push (only token hashes ever arrive). `/n/<token>` swaps the token for an httpOnly cookie scoped
  *     to /numbers and redirects, so the token is in the address bar for one
  *     request only. The cookie holds the same token; every page load hashes it
  *     and looks the link up again, so a revoke or an expiry bites on the next
@@ -32,11 +33,6 @@ export type NumbersAccess =
 
 export function hashToken(token: string): string {
   return createHash("sha256").update(token, "utf8").digest("hex");
-}
-
-/** 32 random bytes, base64url: 43 characters, 256 bits. */
-export function newToken(): string {
-  return randomBytes(32).toString("base64url");
 }
 
 const TOKEN_SHAPE = /^[A-Za-z0-9_-]{43}$/;

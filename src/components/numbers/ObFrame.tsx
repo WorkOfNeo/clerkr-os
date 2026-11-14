@@ -1,8 +1,9 @@
-import Link from "next/link";
-
 import type { NumbersScope } from "@/lib/numbers/access";
 
+import { NumbersTabs } from "./NumbersTabs";
+import { scopeHref } from "./tabs";
 import { Clock } from "./ops/Clock";
+import { Odometer } from "./ops/Odometer";
 import { ClerkrLogo } from "./ops/ClerkrLogo";
 import "./ops/ops-board.css";
 import "./ops/tokens.css";
@@ -12,30 +13,6 @@ import "./ops/tokens.css";
  * look of Clerkr's /ops-board: same header, same panels, same tokens. The
  * Drift tab IS the ops-board (./ops/OpsBoard.tsx) and draws its own header.
  */
-
-const TABS: { scope: NumbersScope; label: string; href: string }[] = [
-  { scope: "product", label: "Drift", href: "/numbers" },
-  { scope: "website", label: "Website", href: "/numbers/website" },
-  { scope: "revenue", label: "Omsætning", href: "/numbers/revenue" },
-];
-
-export function scopeHref(scope: NumbersScope) {
-  return TABS.find((t) => t.scope === scope)!.href;
-}
-
-export function NumbersTabs({ scopes, active }: { scopes: NumbersScope[]; active: NumbersScope }) {
-  const tabs = TABS.filter((t) => scopes.includes(t.scope));
-  if (tabs.length < 2) return null;
-  return (
-    <nav className="ob-tabs" aria-label="Tal">
-      {tabs.map((t) => (
-        <Link key={t.scope} href={t.href} className="ob-tab" aria-current={t.scope === active ? "page" : undefined}>
-          {t.label}
-        </Link>
-      ))}
-    </nav>
-  );
-}
 
 export function ObFrame({
   scopes,
@@ -100,10 +77,10 @@ export function ObCell({ label, value, delta, cap }: { label: string; value: str
     <div className="ob-cell">
       <span className="ob-lbl">{label}</span>
       <span className="ob-big">
-        {value}
+        <Odometer value={value} />
         {delta ? (
           <span className="ob-delta" data-up={delta.up || undefined}>
-            {delta.text}
+            <Odometer value={delta.text} />
           </span>
         ) : null}
       </span>
@@ -157,9 +134,13 @@ export function ObRank({ items, format }: { items: { key: string; label: string;
           <span className="ob-cbar">
             <i style={{ width: `${(i.value / max) * 100}%` }} />
           </span>
-          <b>{format(i.value, i.value / sum)}</b>
+          <b>
+            <Odometer value={format(i.value, i.value / sum)} />
+          </b>
         </div>
       ))}
     </div>
   );
 }
+
+export { NumbersTabs, scopeHref };

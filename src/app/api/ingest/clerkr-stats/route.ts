@@ -1,10 +1,11 @@
 import { recordRevenueDay } from "@/lib/numbers/revenue";
-import { IngestPayload, acceptedEnvironments, storeOps, storeSnapshot, verifySignature } from "@/lib/numbers/snapshot";
+import { IngestPayload, acceptedEnvironments, storeLinks, storeOps, storeSnapshot, verifySignature } from "@/lib/numbers/snapshot";
 
 /**
- * Receives what the Clerkr prod worker pushes: the hourly stats snapshot
- * (kind "stats": firm list + counts) and the ops-board snapshot every 30 s
- * (kind "ops"). Machine to
+ * Receives what the Clerkr prod worker pushes: the ops-board snapshot and the
+ * share-link list every 30 s (kinds "ops", "links") and the stats snapshot
+ * every 5 min (kind "stats": counts + firms with their revenue fields).
+ * Nothing here is ever edited by hand — app.clerkr.ai is where things change. Machine to
  * machine, so it sits outside the session gate (src/proxy.ts) — the HMAC is the
  * boundary: no valid signature over `${timestamp}.${body}` with
  * STATS_INGEST_SECRET, or a timestamp more than five minutes off, and nothing
@@ -56,6 +57,10 @@ export async function POST(req: Request) {
     return Response.json({ ok: false, error: "environment not accepted" }, { status: 403 });
   }
 
+  if (parsed.data.kind === "links") {
+    await storeLinks(parsed.data);
+    return Response.json({ ok: true, kind: "links", links: parsed.data.links.length });
+  }
   if (parsed.data.kind === "ops") {
     await storeOps(parsed.data);
     return Response.json({ ok: true, kind: "ops" });

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
-import Link from "next/link";
-import { BarChart3, KeyRound, ShieldAlert, ShieldCheck } from "lucide-react";
+import { KeyRound, ShieldAlert, ShieldCheck } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
 import { PageHeader } from "@/components/PageHeader";
@@ -77,22 +76,6 @@ export default async function AdminPage() {
             </p>
           </div>
           <PeopleTable people={people} currentUserId={session.user.id} mode={mode} />
-        </section>
-
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-base font-semibold">Numbers board</h2>
-            <p className="text-xs text-muted-foreground">
-              Clerkr's ops-board, clerkr.ai traffic and revenue, outside the Clerkr app. Opened by a share
-              link, or by a superadmin signed in here.
-            </p>
-          </div>
-          <div className="surface flex flex-wrap items-center gap-x-5 gap-y-2 p-4 text-[13px]">
-            <BarChart3 className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
-            <Link href="/numbers" className="font-medium underline-offset-2 hover:underline">Open the board</Link>
-            <Link href="/admin/numbers-links" className="font-medium underline-offset-2 hover:underline">Share links</Link>
-            <Link href="/admin/revenue-firms" className="font-medium underline-offset-2 hover:underline">Revenue firms</Link>
-          </div>
         </section>
 
         <section className="space-y-3">

@@ -1,13 +1,16 @@
 import { db } from "@/lib/db";
 
+import { latestSnapshot, type SnapshotFirm } from "./snapshot";
+
 /**
- * Revenue is managed by hand at /admin/revenue-firms — firms don't sign up and
- * pay on their own, so neither Stripe nor the seat price in Clerkr is the truth.
+ * Revenue as the founders set it in app.clerkr.ai (/admin/orgs/[id]: on the
+ * board, monthly amount, estimate when the demo ends) and the worker pushes in
+ * every stats snapshot. Nothing is edited here.
  *
- *  MRR       = Σ monthlyDkk   over firms switched on with a monthly amount
- *  Pipeline  = Σ estimateDkk  over firms switched on that have no monthly amount yet
- *  On demo   = active firms Clerkr marks as a demo or that are still in trial,
- *              counted whether or not they're switched on
+ *  MRR       = Σ monthly   over firms on the board with a monthly amount
+ *  Pipeline  = Σ estimate  over firms on the board with no monthly amount yet
+ *  On demo   = active firms Clerkr marks as a demo or still in trial,
+ *              counted whether or not they're on the board
  *  ARR       = MRR × 12
  */
 
@@ -20,6 +23,7 @@ export type RevenueRow = {
   isDemo: boolean;
   inTrial: boolean;
   trialEndsAt: Date | null;
+  activeUsers7d: number;
 };
 
 export type RevenueSummary = {
@@ -28,54 +32,63 @@ export type RevenueSummary = {
   pipeline: number;
   payingFirms: number;
   onDemo: number;
-  onDemoOnDashboard: number;
+  onDemoOnBoard: number;
   rows: RevenueRow[];
 };
-
-type FirmLike = RevenueRow & { onDashboard: boolean };
 
 export const isOnDemo = (f: { isActive: boolean; isDemo: boolean; inTrial: boolean }) =>
   f.isActive && (f.isDemo || f.inTrial);
 
-export function summariseRevenue(firms: FirmLike[]): RevenueSummary {
-  const on = firms.filter((f) => f.onDashboard);
-  const paying = on.filter((f) => (f.monthlyDkk ?? 0) > 0);
-  const pipelineFirms = on.filter((f) => !((f.monthlyDkk ?? 0) > 0) && (f.estimateDkk ?? 0) > 0);
-  const mrr = paying.reduce((sum, f) => sum + (f.monthlyDkk ?? 0), 0);
-  const pipeline = pipelineFirms.reduce((sum, f) => sum + (f.estimateDkk ?? 0), 0);
+const has = (n: number | null) => (n ?? 0) > 0;
 
-  const rows = [...on].sort(
-    (a, b) =>
-      (b.monthlyDkk ?? 0) - (a.monthlyDkk ?? 0) ||
-      (b.estimateDkk ?? 0) - (a.estimateDkk ?? 0) ||
-      a.name.localeCompare(b.name, "da"),
-  );
-
+export function summariseRevenue(firms: SnapshotFirm[]): RevenueSummary {
+  const on = firms.filter((f) => f.revenueOnBoard);
+  const paying = on.filter((f) => has(f.revenueMonthlyDkk));
+  const pipelineFirms = on.filter((f) => !has(f.revenueMonthlyDkk) && has(f.revenueEstimateDkk));
+  const mrr = paying.reduce((sum, f) => sum + (f.revenueMonthlyDkk ?? 0), 0);
+  const rows = [...on]
+    .sort(
+      (a, b) =>
+        (b.revenueMonthlyDkk ?? 0) - (a.revenueMonthlyDkk ?? 0) ||
+        (b.revenueEstimateDkk ?? 0) - (a.revenueEstimateDkk ?? 0) ||
+        a.name.localeCompare(b.name, "da"),
+    )
+    .map((f) => ({
+      orgId: f.id,
+      name: f.name,
+      monthlyDkk: f.revenueMonthlyDkk,
+      estimateDkk: f.revenueEstimateDkk,
+      isActive: f.isActive,
+      isDemo: f.isDemo,
+      inTrial: f.inTrial,
+      trialEndsAt: f.trialEndsAt ? new Date(f.trialEndsAt) : null,
+      activeUsers7d: f.activeUsers7d,
+    }));
   return {
     mrr,
     arr: mrr * 12,
-    pipeline,
+    pipeline: pipelineFirms.reduce((sum, f) => sum + (f.revenueEstimateDkk ?? 0), 0),
     payingFirms: paying.length,
     onDemo: firms.filter(isOnDemo).length,
-    onDemoOnDashboard: on.filter(isOnDemo).length,
-    rows: rows.map(({ onDashboard: _on, ...r }) => r),
+    onDemoOnBoard: on.filter(isOnDemo).length,
+    rows,
   };
 }
 
-export async function loadRevenue(): Promise<RevenueSummary> {
-  const firms = await db.revenueFirm.findMany();
-  return summariseRevenue(firms);
+export async function loadRevenue(): Promise<RevenueSummary | null> {
+  const snap = await latestSnapshot();
+  return snap ? summariseRevenue(snap.data.firms) : null;
 }
 
-/** Today's date at UTC midnight — the RevenueDay key. */
 function today(): Date {
   const d = new Date();
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
-/** Writes today's MRR point. Called after a snapshot lands and after an amount is saved. */
+/** Writes today's MRR point. Called after each stats snapshot lands. */
 export async function recordRevenueDay() {
   const s = await loadRevenue();
+  if (!s) return;
   const data = { mrrDkk: s.mrr, pipelineDkk: s.pipeline, payingFirms: s.payingFirms };
   await db.revenueDay.upsert({ where: { day: today() }, create: { day: today(), ...data }, update: data });
 }
