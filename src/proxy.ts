@@ -64,6 +64,15 @@ export function proxy(req: NextRequest) {
     //
     // Safe to expose, unlike /api/attachments and /api/documents: these are
     // branding files and a push-only worker with no secrets in them.
+    // The numbers board. `/n/<token>` and `/numbers` decide access themselves
+    // (src/lib/numbers/access.ts: a live share link, or a signed-in
+    // superadmin) and send everyone else to sign-in or a dead end; the ingest
+    // endpoint's boundary is its HMAC. Exact prefixes only — nothing else
+    // opens up.
+    pathname.startsWith("/n/") ||
+    pathname === "/numbers" ||
+    pathname.startsWith("/numbers/") ||
+    pathname === "/api/ingest/clerkr-stats" ||
     pathname === "/manifest.webmanifest" ||
     pathname === "/sw.js" ||
     pathname.startsWith("/icons/");

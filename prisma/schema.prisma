@@ -1181,3 +1181,64 @@ model Playbook {
   @@index([enabled])
   @@map("playbook")
 }
+
+// ─── Numbers board (/numbers) ───────────────────────────────────────────────
+// Founders' numbers: Clerkr product usage (pushed hourly by the Clerkr prod
+// worker — Clerkr itself never accepts an inbound call for this), clerkr.ai
+// traffic (read from AnalyticsOS) and revenue (managed by hand here). The board
+// is opened by a share link; see src/lib/numbers/access.ts.
+
+// A share link to /numbers — a MIRROR. Links are created and revoked in
+// app.clerkr.ai (/admin/numbers-links); the Clerkr worker pushes the full list
+// every 30 s (kind "links") and this table is replaced to match. Only the
+// SHA-256 of a token is ever known here. lastUsedAt is the one local column.
+model NumbersLink {
+  id         String    @id
+  label      String
+  tokenHash  String    @unique
+  scopes     String[]
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  syncedAt   DateTime  @default(now())
+
+  @@map("numbers_link")
+}
+
+// One hourly snapshot from the Clerkr worker, as received (counts only — no
+// people, no content). Only `production` snapshots are shown unless
+// STATS_ACCEPT_ENVS says otherwise.
+model ClerkrStatsSnapshot {
+  id          String   @id @default(uuid())
+  environment String
+  generatedAt DateTime
+  receivedAt  DateTime @default(now())
+  payload     Json
+
+  @@index([environment, generatedAt])
+  @@map("clerkr_stats_snapshot")
+}
+
+// MRR per day, written whenever a stats snapshot arrives, so the history is
+// what the board said that day. The amounts themselves live in Clerkr.
+model RevenueDay {
+  day         DateTime @id @db.Date
+  mrrDkk      Int
+  pipelineDkk Int
+  payingFirms Int
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  @@map("revenue_day")
+}
+
+// The latest ops-board snapshot per environment, pushed every 30 s by the
+// Clerkr worker. Latest only, overwritten in place: it names the people who are
+// online right now (as Clerkr's own /ops-board does), so no history is kept.
+model ClerkrOpsLatest {
+  environment String   @id
+  generatedAt DateTime
+  receivedAt  DateTime @default(now()) @updatedAt
+  payload     Json
+
+  @@map("clerkr_ops_latest")
+}

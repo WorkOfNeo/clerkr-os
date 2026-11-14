@@ -444,6 +444,36 @@ the row is deleted rather than retried forever.
 why the install guide sits above the toggle on the same page, and why
 `PushToggle` disables itself on an iOS device that isn't running standalone.
 
+## Numbers board (`/numbers`) — read before touching it
+
+The founders' numbers, served here but MANAGED ENTIRELY IN app.clerkr.ai. This
+app only displays: there is no admin UI for the board in clerkr-internal, and
+nothing here edits its data. Three tabs: **Drift** (Clerkr's /ops-board,
+copied), **Website** (clerkr.ai from AnalyticsOS) and **Omsætning** (revenue
+fields a superadmin sets on each firm in Clerkr /admin/orgs/[id]). The tabs
+loop on their own, 30 s each (NumbersTabs), and numbers roll in on every tab.
+
+- **Clerkr pushes, never listens.** The Clerkr PROD worker POSTs to
+  `/api/ingest/clerkr-stats`: kinds `ops` and `links` every 30 s, `stats`
+  every 5 min (counts + firms with their revenue fields). The HMAC over
+  `${timestamp}.${body}` with `STATS_INGEST_SECRET` is the boundary; a
+  timestamp more than 5 min off, or an environment not in `STATS_ACCEPT_ENVS`
+  (unset = `production` only), is refused and nothing is stored.
+  `ClerkrOpsLatest` keeps the latest ops snapshot only (it names who is online).
+- **Share links** are created and revoked in Clerkr /admin/numbers-links.
+  `NumbersLink` here is a mirror replaced by each `links` push (token hashes
+  only; `lastUsedAt` is the one local column). A revoke reaches the board
+  within 30 s.
+- **Access** (`src/lib/numbers/access.ts`): a live mirrored link, or a
+  signed-in SUPERADMIN of this app. `/n/<token>` swaps the token for an
+  httpOnly cookie scoped to `/numbers`; every page load and `/numbers/live` poll
+  re-checks it. A MEMBER without a link is refused.
+- **Nothing on `/numbers` may link into the rest of clerkr-internal.** The
+  proxy opens `/n/`, `/numbers*` and the ingest path only.
+- **The Drift tab is a copy** of Clerkr-V2 `apps/web/app/ops-board/` in
+  `src/components/numbers/ops/` (tokens in `tokens.css`); changes are marked
+  `NUMBERS`. When Clerkr's ops-board changes, copy it again.
+
 ## Layout & design system
 
 Every page sits in [`AppShell`](src/components/AppShell.tsx) — a structural
