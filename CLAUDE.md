@@ -451,7 +451,7 @@ app only displays: there is no admin UI for the board in clerkr-internal, and
 nothing here edits its data. Three tabs: **Drift** (Clerkr's /ops-board,
 copied), **Website** (clerkr.ai from AnalyticsOS) and **Omsætning** (revenue
 fields a superadmin sets on each firm in Clerkr /admin/orgs/[id]). The tabs
-loop on their own, 60 s each (NumbersTabs), and numbers roll in on every tab.
+loop on their own, 30 s each (NumbersTabs), and numbers roll in on every tab.
 
 - **Clerkr pushes, never listens.** The Clerkr PROD worker POSTs to
   `/api/ingest/clerkr-stats`: kinds `ops` and `links` every 30 s, `stats`

@@ -9,15 +9,15 @@ import type { NumbersScope } from "@/lib/numbers/access";
 import { TABS } from "./tabs";
 
 /**
- * The tabs, and the TV loop: every tab stays up DWELL_MS, then the board moves
+ * The tabs, and the TV loop: every tab stays up DWELL_MS (30 s), then the board moves
  * on to the next tab the viewer may see (Drift → Website → Omsætning → …).
  * Navigation is client-side, so each page's numbers are read fresh and roll in
  * (Odometer, ops-board.css enter motion). The hairline under the active tab
  * fills toward the switch. A hidden browser tab pauses the loop; clicking a
- * tab simply starts that tab's 60 s.
+ * tab simply starts that tab's 30 s.
  */
 
-export const DWELL_MS = 60_000;
+export const DWELL_MS = 30_000;
 
 export function NumbersTabs({ scopes, active }: { scopes: NumbersScope[]; active: NumbersScope }) {
   const router = useRouter();
