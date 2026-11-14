@@ -16,10 +16,32 @@ export const dynamic = "force-dynamic";
 
 const YEAR_S = 365 * 24 * 60 * 60;
 
+/**
+ * The address the browser actually used. Behind Railway's proxy `req.url` is
+ * the container's own (http://localhost:8080), so a redirect built from it
+ * sends the viewer to localhost and the cookie loses `secure`. The public
+ * origin comes from BETTER_AUTH_URL (this app's own public URL), else from the
+ * forwarded headers, else req.url for a plain local run.
+ */
+function publicOrigin(req: NextRequest): URL {
+  const configured = process.env.BETTER_AUTH_URL?.trim();
+  if (configured) {
+    try {
+      return new URL(configured);
+    } catch {
+      // fall through to the headers
+    }
+  }
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  const proto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  if (host && proto) return new URL(`${proto}://${host}`);
+  return new URL(req.url);
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const link = await findLiveLink(token);
-  const base = new URL(req.url);
+  const base = publicOrigin(req);
 
   if (!link) {
     const res = NextResponse.redirect(new URL("/numbers/unavailable", base), 303);
