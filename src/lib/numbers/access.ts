@@ -1,31 +1,30 @@
 import { createHash } from "node:crypto";
-import { cookies } from "next/headers";
 
 import { db } from "@/lib/db";
 import { getSession, isSuperadmin } from "@/lib/session";
 
 /**
- * Who may look at /numbers, and which tabs.
+ * Who may look at the numbers board, and which tabs.
  *
  * Two ways in, and only two:
  *  1. A share link — created and revoked in app.clerkr.ai, mirrored here by
- *     the worker's push (only token hashes ever arrive). `/n/<token>` swaps the token for an httpOnly cookie scoped
- *     to /numbers and redirects, so the token is in the address bar for one
- *     request only. The cookie holds the same token; every page load hashes it
- *     and looks the link up again, so a revoke or an expiry bites on the next
- *     load, not when the cookie runs out.
- *  2. A signed-in SUPERADMIN, who sees every tab. A signed-in MEMBER does not:
- *     revenue is narrower than the rest of this single-tenant tool.
+ *     the worker's push (only token hashes ever arrive). The link IS the
+ *     board: /n/<token> shows it, with the token staying in the path as the
+ *     credential (`linkAccess`, src/app/n/[token]). Every page load and poll
+ *     hashes it and looks the link up again, so a revoke or an expiry bites on
+ *     the next load. There is no cookie: it used to swap the token for one and
+ *     redirect to /numbers, and every way that cookie went missing (another
+ *     device, a private window, a different host) ended on sign-in.
+ *  2. A signed-in SUPERADMIN at /numbers, who sees every tab. A signed-in
+ *     MEMBER does not: revenue is narrower than the rest of this single-tenant
+ *     tool.
  *
- * The cookie is path-scoped to /numbers and grants nothing anywhere else — the
- * rest of the app still asks for a Better Auth session (src/proxy.ts).
+ * A token grants the board and nothing else — the rest of the app still asks
+ * for a Better Auth session (src/proxy.ts).
  */
 
 export const NUMBERS_SCOPES = ["product", "website", "revenue"] as const;
 export type NumbersScope = (typeof NUMBERS_SCOPES)[number];
-
-export const NUMBERS_COOKIE = "numbers_link";
-export const NUMBERS_COOKIE_PATH = "/numbers";
 
 export type NumbersAccess =
   | { kind: "superadmin"; scopes: NumbersScope[] }
@@ -55,14 +54,16 @@ export async function touchLink(id: string) {
   await db.numbersLink.update({ where: { id }, data: { lastUsedAt: new Date() } }).catch(() => {});
 }
 
-export async function getNumbersAccess(): Promise<NumbersAccess | null> {
-  const token = (await cookies()).get(NUMBERS_COOKIE)?.value;
+/** What a share-link token opens: its live link's scopes, or null. */
+export async function linkAccess(token: string | undefined | null): Promise<NumbersAccess | null> {
   const link = await findLiveLink(token);
-  if (link) {
-    const scopes = asScopes(link.scopes);
-    if (scopes.length > 0) return { kind: "link", scopes, linkId: link.id, label: link.label };
-  }
+  if (!link) return null;
+  const scopes = asScopes(link.scopes);
+  return scopes.length > 0 ? { kind: "link", scopes, linkId: link.id, label: link.label } : null;
+}
 
+/** /numbers: a signed-in superadmin, or nobody. Share links read the board at /n/<token>. */
+export async function getNumbersAccess(): Promise<NumbersAccess | null> {
   const session = await getSession();
   if (session && (await isSuperadmin(session.user.id))) {
     return { kind: "superadmin", scopes: [...NUMBERS_SCOPES] };

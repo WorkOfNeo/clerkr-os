@@ -1,7 +1,6 @@
 import type { NumbersScope } from "@/lib/numbers/access";
 
 import { NumbersTabs } from "./NumbersTabs";
-import { scopeHref } from "./tabs";
 import { Clock } from "./ops/Clock";
 import { Odometer } from "./ops/Odometer";
 import { ClerkrLogo } from "./ops/ClerkrLogo";
@@ -17,11 +16,14 @@ import "./ops/tokens.css";
 export function ObFrame({
   scopes,
   active,
+  base,
   status,
   children,
 }: {
   scopes: NumbersScope[];
   active: NumbersScope;
+  /** Where the board is mounted — /numbers, or a share link's /n/<token> (./tabs.ts). */
+  base: string;
   status: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -34,7 +36,7 @@ export function ObFrame({
               <ClerkrLogo title="Clerkr" />
               Clerkr
             </div>
-            <NumbersTabs scopes={scopes} active={active} />
+            <NumbersTabs scopes={scopes} active={active} base={base} />
           </div>
           <span className="ob-pill" role="status">
             <span className="ob-pill-dot" aria-hidden />
@@ -142,5 +144,3 @@ export function ObRank({ items, format }: { items: { key: string; label: string;
     </div>
   );
 }
-
-export { NumbersTabs, scopeHref };
