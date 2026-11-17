@@ -6,6 +6,10 @@
  * literal colour. The night theme is a token swap on [data-night], and every
  * surface transitions its colours, so 19:00 and 07:00 glide instead of jump.
  *
+ * NUMBERS: the dark theme follows the SYSTEM (prefers-color-scheme), not
+ * Clerkr's 19:00–07:00 clock — the TV or laptop's own light/dark setting
+ * decides, and switching it glides the same way.
+ *
  * Motion: one curve for everything the board does on its own — lib/motion.ts's
  * SPRING (damping 1, response 0.4) sampled into linear(). Nothing animates on
  * first paint; motion only ever explains a change between two polls.
@@ -79,12 +83,16 @@
   overscroll-behavior: contain;
   background: var(--ob-bg);
   color: var(--ob-ink);
+  color-scheme: light;
   transition:
     background-color 2s ease,
     color 2s ease;
 }
 
-.ob-root[data-night] {
+/* NUMBERS: was `.ob-root[data-night]`, switched by Clerkr's clock. */
+@media (prefers-color-scheme: dark) {
+.ob-root {
+  color-scheme: dark;
   --ob-bg: var(--ink);
   --ob-card: var(--ink-raised);
   --ob-line: rgb(var(--on-ink-rgb) / 0.1);
@@ -112,6 +120,7 @@
   --ob-step-3: var(--chart-ramp-3);
   --ob-step-4: var(--chart-ramp-4);
   --ob-step-5: var(--chart-ramp-5);
+}
 }
 
 .ob {

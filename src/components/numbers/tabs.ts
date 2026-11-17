@@ -10,12 +10,25 @@ import type { NumbersScope } from "@/lib/numbers/access";
 export const NUMBERS_BASE = "/numbers";
 export const linkBase = (token: string) => `/n/${token}`;
 
-/** The board's tabs, in loop order. Plain module: read by server pages and the client loop alike. */
-export const TABS: { scope: NumbersScope; label: string; path: string }[] = [
-  { scope: "product", label: "Drift", path: "" },
-  { scope: "website", label: "Website", path: "/website" },
-  { scope: "revenue", label: "Omsætning", path: "/revenue" },
+export type TabId = NumbersScope | "logo";
+
+/**
+ * The board's tabs, in loop order. Plain module: read by server pages and the
+ * client loop alike. `scope` is what a share link must carry to see the tab;
+ * null means every viewer gets it (the logo slide shows no numbers). `dwellMs`
+ * is how long the loop stays before moving on.
+ */
+export const TABS: { id: TabId; scope: NumbersScope | null; label: string; path: string; dwellMs: number }[] = [
+  { id: "product", scope: "product", label: "Drift", path: "", dwellMs: 30_000 },
+  { id: "website", scope: "website", label: "Website", path: "/website", dwellMs: 30_000 },
+  { id: "revenue", scope: "revenue", label: "Omsætning", path: "/revenue", dwellMs: 30_000 },
+  { id: "logo", scope: null, label: "Logo", path: "/logo", dwellMs: 10_000 },
 ];
+
+/** The tabs a viewer with these scopes sees, in loop order. */
+export function tabsFor(scopes: readonly NumbersScope[]) {
+  return TABS.filter((t) => t.scope === null || scopes.includes(t.scope));
+}
 
 export function scopeHref(scope: NumbersScope, base: string) {
   return base + TABS.find((t) => t.scope === scope)!.path;

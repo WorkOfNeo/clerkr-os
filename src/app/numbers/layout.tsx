@@ -1,9 +1,17 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
   title: "Tal",
   robots: { index: false, follow: false, nocache: true },
   referrer: "no-referrer",
+};
+
+/** The browser's own chrome follows the board's light/dark (ops-board.css). */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f2f4ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#151814" },
+  ],
 };
 
 /**

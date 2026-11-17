@@ -448,10 +448,25 @@ why the install guide sits above the toggle on the same page, and why
 
 The founders' numbers, served here but MANAGED ENTIRELY IN app.clerkr.ai. This
 app only displays: there is no admin UI for the board in clerkr-internal, and
-nothing here edits its data. Three tabs: **Drift** (Clerkr's /ops-board,
-copied), **Website** (clerkr.ai from AnalyticsOS) and **Omsætning** (revenue
-fields a superadmin sets on each firm in Clerkr /admin/orgs/[id]). The tabs
-loop on their own, 30 s each (NumbersTabs), and numbers roll in on every tab.
+nothing here edits its data. Four tabs: **Drift** (Clerkr's /ops-board,
+copied), **Website** (clerkr.ai from AnalyticsOS), **Omsætning** (revenue
+fields a superadmin sets on each firm in Clerkr /admin/orgs/[id]) and **Logo**
+(the mark alone — no numbers, so every link gets it). The tabs loop on their
+own (NumbersTabs; dwell per tab in `src/components/numbers/tabs.ts`, 30 s,
+the logo 10 s).
+
+- **The logo is the loop's play/pause** (`LoopToggle`, store in
+  `src/components/numbers/loop.ts`). Pausing keeps the time left and freezes
+  the tab's hairline mid-fill; resuming carries on from that exact spot, not
+  from the start of the tab. A hidden browser tab pauses the same way. The
+  pause is module state so it survives clicking another tab; a reload plays.
+- **Nothing animates on the first load.** Numbers roll in and panels rise only
+  when the LOOP brings a tab in (`useEntered` → `data-enter`). Animating the
+  whole board while a TV was still hydrating it is what made the first load
+  stutter: 824 ms of dropped frames at 6× CPU before, 241 ms after. The next
+  tab is prefetched 5 s before the switch, not on mount, for the same reason.
+- **Light/dark follows the system** (`prefers-color-scheme` in
+  `ops-board.css`), not Clerkr's 19:00–07:00 clock — `snap.night` is ignored.
 
 - **Clerkr pushes, never listens.** The Clerkr PROD worker POSTs to
   `/api/ingest/clerkr-stats`: kinds `ops` and `links` every 30 s, `stats`
@@ -466,8 +481,8 @@ loop on their own, 30 s each (NumbersTabs), and numbers roll in on every tab.
   within 30 s.
 - **Access** (`src/lib/numbers/access.ts`): a live mirrored link, or a
   signed-in SUPERADMIN of this app. A MEMBER without a link is refused.
-- **The link IS the board.** `/n/<token>` shows Drift, `/n/<token>/website`
-  and `/n/<token>/revenue` the other tabs, `/n/<token>/live` is the poll —
+- **The link IS the board.** `/n/<token>` shows Drift, `/n/<token>/website`,
+  `/n/<token>/revenue` and `/n/<token>/logo` the other tabs, `/n/<token>/live` is the poll —
   the token stays in the path as the credential (`src/app/n/[token]/gate.ts`)
   and is re-checked on every load and poll. No cookie, no redirect, no
   sign-in: open it on any device, in a private window, on a TV, and it works.

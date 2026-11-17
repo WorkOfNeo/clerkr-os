@@ -3,6 +3,7 @@
 import './ops-board.css'
 import './tokens.css'
 import { useCallback, useEffect, useState } from 'react'
+import { useEntered } from '../loop'
 import { ClerkrLogo } from './ClerkrLogo'
 import { Clock } from './Clock'
 import { Odometer } from './Odometer'
@@ -13,9 +14,13 @@ const INT = new Intl.NumberFormat('da-DK', { maximumFractionDigits: 0 })
 
 /**
  * Copied from Clerkr-V2 apps/web/app/ops-board/OpsBoard.tsx (2026-11-14) for
- * the numbers board. Two changes, both marked NUMBERS: it polls clerkr-internal
+ * the numbers board. Changes, all marked NUMBERS: it polls clerkr-internal
  * (`pollUrl`, which serves the latest snapshot the Clerkr prod worker pushed)
- * instead of reading a database, and the header carries the board's tabs. The
+ * instead of reading a database; the header carries the board's tabs (`nav`)
+ * and its logo is the loop's play/pause (`brand`); the theme follows the
+ * system's light/dark rather than Clerkr's clock (`snap.night` is unused);
+ * and entrance motion runs only when the loop brings the tab in, never on the
+ * first load (`data-enter`, ../loop.ts). The
  * pill reports the age of the DATA (snap.now), not of the last poll: a poll can
  * succeed while the worker has stopped pushing, and the board must say so.
  *
@@ -35,11 +40,16 @@ export function OpsBoard({
   initial,
   pollUrl,
   nav,
+  brand,
 }: {
   initial: OpsSnapshot
   pollUrl: string
   nav?: React.ReactNode
+  /** NUMBERS: replaces the logo + wordmark (the board's play/pause). */
+  brand?: React.ReactNode
 }) {
+  // NUMBERS: false on the first load, true when the loop brought this tab in.
+  const entered = useEntered()
   const [snap, setSnap] = useState(initial)
   const [failed, setFailed] = useState(false)
   const [hidden, setHidden] = useState(false)
@@ -104,14 +114,17 @@ export function OpsBoard({
   const stale = ageMs > STALE_MS
 
   return (
-    <div className="ob-root" data-night={snap.night || undefined}>
+    // NUMBERS: data-enter instead of data-night — the theme is the system's (ops-board.css).
+    <div className="ob-root" data-enter={entered || undefined}>
       <main className="ob">
         <header className="ob-head">
           <div className="ob-brandrow">
-            <div className="ob-brand">
-              <ClerkrLogo title="Clerkr" />
-              Clerkr
-            </div>
+            {brand ?? (
+              <div className="ob-brand">
+                <ClerkrLogo title="Clerkr" />
+                Clerkr
+              </div>
+            )}
             {nav}
           </div>
           <span

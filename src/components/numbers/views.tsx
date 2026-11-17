@@ -5,6 +5,8 @@ import { analyticsConfigured, loadWebsiteNumbers, type WebsiteNumbers } from "@/
 import { loadRevenue, mrrAtStartOfMonth, revenueHistory, type RevenueRow } from "@/lib/numbers/revenue";
 import { latestOps } from "@/lib/numbers/snapshot";
 
+import { BoardRoot } from "./BoardRoot";
+import { LoopToggle } from "./LoopToggle";
 import { NumbersTabs } from "./NumbersTabs";
 import { ObCell, ObFrame, ObLine, ObPanel, ObRank, fmtInt, fmtKr, pctDelta } from "./ObFrame";
 import { OpsBoard } from "./ops/OpsBoard";
@@ -14,7 +16,7 @@ import "./ops/ops-board.css";
 import "./ops/tokens.css";
 
 /**
- * The board's three tabs, rendered the same wherever the board is mounted:
+ * The board's tabs, rendered the same wherever the board is mounted:
  * /numbers (src/app/numbers, a signed-in superadmin) and /n/<token>
  * (src/app/n/[token], the share link's token in the path). The pages only decide who
  * gets in; everything a viewer sees is here. `base` is the mount point
@@ -51,9 +53,27 @@ export async function DriftView({ scopes, base }: BoardProps) {
       <OpsBoard
         initial={latest.payload as unknown as OpsSnapshot}
         pollUrl={`${base}/live`}
+        brand={<LoopToggle />}
         nav={<NumbersTabs scopes={scopes} active="product" base={base} />}
       />
     </>
+  );
+}
+
+/**
+ * The logo slide: the mark alone, large and centred, between the loop's last
+ * tab and its first. No numbers, so every viewer gets it whatever their link's
+ * scopes. The mark is still the play/pause, and the loop runs underneath with
+ * its tabs undrawn.
+ */
+export function LogoView({ scopes, base }: BoardProps) {
+  return (
+    <BoardRoot>
+      <main className="ob-logo-slide">
+        <LoopToggle hero />
+        <NumbersTabs scopes={scopes} active="logo" base={base} chrome={false} />
+      </main>
+    </BoardRoot>
   );
 }
 
