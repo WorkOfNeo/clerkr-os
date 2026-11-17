@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useEntered } from '../loop'
 
 /**
  * A number that rolls. Each digit is a 0–9 column translated to its place, so
@@ -15,17 +16,22 @@ import { useEffect, useState } from 'react'
  *
  * Ported from NEO Ledger's /live board (wiki: "Live dashboard recipe").
  *
- * NUMBERS: rolls IN on mount — first render shows every digit as 0 (server and
- * client agree, so no hydration mismatch), then the real value one frame later,
- * so each tab of the looping board animates its numbers in like a poll does.
+ * NUMBERS: rolls IN when the loop brings its tab in — first render shows every
+ * digit as 0, then the real value one frame later, so each tab animates its
+ * numbers in like a poll does. NOT on the page's first load (`useEntered`,
+ * ../loop.ts): there it paints the real value straight away, because rolling
+ * every digit on the board while a TV is still hydrating is what made it lag.
  */
 export function Odometer({ value }: { value: string | number }) {
   const real = String(value)
-  const [text, setText] = useState(() => real.replace(/\d/g, '0'))
+  const entered = useEntered()
+  const [text, setText] = useState(() => (entered ? real.replace(/\d/g, '0') : real))
   useEffect(() => {
+    if (text === real) return
     const raf = requestAnimationFrame(() => setText(real))
     return () => cancelAnimationFrame(raf)
-  }, [real])
+    // `text` is left out on purpose: this reacts to a new value, not to its own roll.
+  }, [real]) // eslint-disable-line react-hooks/exhaustive-deps
   const chars = [...text]
   return (
     <span className="ob-odo">

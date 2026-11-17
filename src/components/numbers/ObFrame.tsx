@@ -1,9 +1,11 @@
 import type { NumbersScope } from "@/lib/numbers/access";
 
+import { BoardRoot } from "./BoardRoot";
+import { LoopToggle } from "./LoopToggle";
 import { NumbersTabs } from "./NumbersTabs";
 import { Clock } from "./ops/Clock";
 import { Odometer } from "./ops/Odometer";
-import { ClerkrLogo } from "./ops/ClerkrLogo";
+import type { TabId } from "./tabs";
 import "./ops/ops-board.css";
 import "./ops/tokens.css";
 
@@ -21,21 +23,18 @@ export function ObFrame({
   children,
 }: {
   scopes: NumbersScope[];
-  active: NumbersScope;
+  active: TabId;
   /** Where the board is mounted — /numbers, or a share link's /n/<token> (./tabs.ts). */
   base: string;
   status: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <div className="ob-root" data-flow>
+    <BoardRoot flow>
       <main className="ob">
         <header className="ob-head">
           <div className="ob-brandrow">
-            <div className="ob-brand">
-              <ClerkrLogo title="Clerkr" />
-              Clerkr
-            </div>
+            <LoopToggle />
             <NumbersTabs scopes={scopes} active={active} base={base} />
           </div>
           <span className="ob-pill" role="status">
@@ -46,7 +45,7 @@ export function ObFrame({
         </header>
         {children}
       </main>
-    </div>
+    </BoardRoot>
   );
 }
 
