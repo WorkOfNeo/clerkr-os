@@ -15,13 +15,16 @@ import { TABS } from "./tabs";
  * (Odometer, ops-board.css enter motion). The hairline under the active tab
  * fills toward the switch. A hidden browser tab pauses the loop; clicking a
  * tab simply starts that tab's 30 s.
+ *
+ * `base` is where the board is mounted (./tabs.ts): /numbers, or a share
+ * link's /n/<token> — which is how the loop stays on the link.
  */
 
 export const DWELL_MS = 30_000;
 
-export function NumbersTabs({ scopes, active }: { scopes: NumbersScope[]; active: NumbersScope }) {
+export function NumbersTabs({ scopes, active, base }: { scopes: NumbersScope[]; active: NumbersScope; base: string }) {
   const router = useRouter();
-  const tabs = TABS.filter((t) => scopes.includes(t.scope));
+  const tabs = TABS.filter((t) => scopes.includes(t.scope)).map((t) => ({ ...t, href: base + t.path }));
   const idx = tabs.findIndex((t) => t.scope === active);
   const next = tabs.length > 1 ? tabs[(idx + 1) % tabs.length] : null;
 

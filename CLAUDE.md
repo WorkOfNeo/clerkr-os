@@ -465,9 +465,26 @@ loop on their own, 30 s each (NumbersTabs), and numbers roll in on every tab.
   only; `lastUsedAt` is the one local column). A revoke reaches the board
   within 30 s.
 - **Access** (`src/lib/numbers/access.ts`): a live mirrored link, or a
-  signed-in SUPERADMIN of this app. `/n/<token>` swaps the token for an
-  httpOnly cookie scoped to `/numbers`; every page load and `/numbers/live` poll
-  re-checks it. A MEMBER without a link is refused.
+  signed-in SUPERADMIN of this app. A MEMBER without a link is refused.
+- **The link IS the board.** `/n/<token>` shows Drift, `/n/<token>/website`
+  and `/n/<token>/revenue` the other tabs, `/n/<token>/live` is the poll —
+  the token stays in the path as the credential (`src/app/n/[token]/gate.ts`)
+  and is re-checked on every load and poll. No cookie, no redirect, no
+  sign-in: open it on any device, in a private window, on a TV, and it works.
+  A dead link draws "Linket virker ikke længere" at its own address.
+  - It used to swap the token for a cookie and redirect to `/numbers`. Every
+    way that cookie went missing — another device, a private window, a
+    bookmark of `/numbers`, a redirect to a different host than the link was
+    opened on — ended on sign-in. Don't bring the hop back.
+  - `/numbers` is the superadmins' copy, behind the session.
+  - Every href on the board is built from a `base`
+    (`src/components/numbers/tabs.ts`) so the tabs, the 30 s loop and the
+    Drift poll stay on the link. The tabs render from
+    `src/components/numbers/views.tsx`; the pages under `/numbers` and
+    `/n/[token]` only decide who gets in.
+  - The token is in the address bar, so the URL is the key: share it like a
+    password, and revoke it in Clerkr if it goes somewhere it shouldn't.
+    `next.config.ts` sends `no-referrer` under `/n/` so it isn't passed on.
 - **Nothing on `/numbers` may link into the rest of clerkr-internal.** The
   proxy opens `/n/`, `/numbers*` and the ingest path only.
 - **The Drift tab is a copy** of Clerkr-V2 `apps/web/app/ops-board/` in
