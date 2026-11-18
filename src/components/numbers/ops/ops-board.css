@@ -16,37 +16,12 @@
  */
 
 .ob-root {
-  --ob-spring: linear(
-    0,
-    0.0438 3.6%,
-    0.1419 7.1%,
-    0.2604 10.7%,
-    0.3801 14.3%,
-    0.4909 17.9%,
-    0.5883 21.4%,
-    0.6712 25%,
-    0.74 28.6%,
-    0.7961 32.1%,
-    0.8412 35.7%,
-    0.8771 39.3%,
-    0.9053 42.9%,
-    0.9274 46.4%,
-    0.9445 50%,
-    0.9578 53.6%,
-    0.968 57.1%,
-    0.9758 60.7%,
-    0.9817 64.3%,
-    0.9862 67.9%,
-    0.9896 71.4%,
-    0.9922 75%,
-    0.9942 78.6%,
-    0.9956 82.1%,
-    0.9967 85.7%,
-    0.9976 89.3%,
-    0.9982 92.9%,
-    0.9987 96.4%,
-    1
-  );
+  /* NUMBERS: linear() (the sampled spring below) is Chrome 113+. Older
+     engines — the office TV is Chromium 79 — read it as invalid and drop
+     every transition and animation that uses it, so the numbers jumped
+     instead of rolling. This ease-out is the spring's shape near enough;
+     the @supports block after this rule swaps the real curve in. */
+  --ob-spring: cubic-bezier(0.25, 1, 0.5, 1);
   --ob-dur: 588ms;
 
   --ob-bg: var(--background);
@@ -87,6 +62,42 @@
   transition:
     background-color 2s ease,
     color 2s ease;
+}
+
+@supports (transition-timing-function: linear(0, 1)) {
+  .ob-root {
+    --ob-spring: linear(
+      0,
+      0.0438 3.6%,
+      0.1419 7.1%,
+      0.2604 10.7%,
+      0.3801 14.3%,
+      0.4909 17.9%,
+      0.5883 21.4%,
+      0.6712 25%,
+      0.74 28.6%,
+      0.7961 32.1%,
+      0.8412 35.7%,
+      0.8771 39.3%,
+      0.9053 42.9%,
+      0.9274 46.4%,
+      0.9445 50%,
+      0.9578 53.6%,
+      0.968 57.1%,
+      0.9758 60.7%,
+      0.9817 64.3%,
+      0.9862 67.9%,
+      0.9896 71.4%,
+      0.9922 75%,
+      0.9942 78.6%,
+      0.9956 82.1%,
+      0.9967 85.7%,
+      0.9976 89.3%,
+      0.9982 92.9%,
+      0.9987 96.4%,
+      1
+    );
+  }
 }
 
 /* NUMBERS: was `.ob-root[data-night]`, switched by Clerkr's clock. */

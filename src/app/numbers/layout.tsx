@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
+import { FLEX_GAP_CHECK } from "@/components/numbers/old-engines";
+
 export const metadata: Metadata = {
   title: "Tal",
   robots: { index: false, follow: false, nocache: true },
@@ -19,7 +21,13 @@ export const viewport: Viewport = {
  * reaches this board and nothing else, so nothing here may point at the rest
  * of clerkr-internal. Access is checked per page and per poll (./gate.ts),
  * because a layout is not re-rendered when moving between its pages.
+ * FLEX_GAP_CHECK runs before the board paints (old-engines.ts).
  */
 export default function NumbersLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return (
+    <>
+      <script dangerouslySetInnerHTML={{ __html: FLEX_GAP_CHECK }} />
+      {children}
+    </>
+  );
 }

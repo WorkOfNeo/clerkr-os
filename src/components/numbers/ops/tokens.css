@@ -125,15 +125,25 @@
 @keyframes ob-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes ob-grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes ob-grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
-.ob-root[data-enter] :is(.ob > .ob-sentence, .ob > .ob-panel, .ob > .ob-two > .ob-panel, .ob-grid > .ob-panel) {
+/* Plain selector lists, not :is() — the office TV's engine (Chromium 79)
+   predates :is() and drops a whole rule that uses it. */
+.ob-root[data-enter] .ob > .ob-sentence,
+.ob-root[data-enter] .ob > .ob-panel,
+.ob-root[data-enter] .ob > .ob-two > .ob-panel,
+.ob-root[data-enter] .ob-grid > .ob-panel {
   animation: ob-rise 700ms var(--ob-spring) both;
 }
 .ob-root[data-enter] .ob > :nth-child(3) { animation-delay: 60ms; }
-.ob-root[data-enter] :is(.ob > :nth-child(4), .ob-grid > :nth-child(2), .ob-two > :nth-child(2)) { animation-delay: 120ms; }
-.ob-root[data-enter] :is(.ob > :nth-child(5), .ob-grid > :nth-child(3)) { animation-delay: 180ms; }
+.ob-root[data-enter] .ob > :nth-child(4),
+.ob-root[data-enter] .ob-grid > :nth-child(2),
+.ob-root[data-enter] .ob-two > :nth-child(2) { animation-delay: 120ms; }
+.ob-root[data-enter] .ob > :nth-child(5),
+.ob-root[data-enter] .ob-grid > :nth-child(3) { animation-delay: 180ms; }
 .ob-root[data-enter] .ob-grid > :nth-child(4) { animation-delay: 240ms; }
-.ob-root[data-enter] :is(.ob-cbar i, .ob-fl-track i) { transform-origin: left; animation: ob-grow-x 900ms var(--ob-spring) 150ms both; }
-.ob-root[data-enter] :is(.ob-mbars i, .ob-ch-24 i) { transform-origin: bottom; animation: ob-grow-y 900ms var(--ob-spring) 150ms both; }
+.ob-root[data-enter] .ob-cbar i,
+.ob-root[data-enter] .ob-fl-track i { transform-origin: left; animation: ob-grow-x 900ms var(--ob-spring) 150ms both; }
+.ob-root[data-enter] .ob-mbars i,
+.ob-root[data-enter] .ob-ch-24 i { transform-origin: bottom; animation: ob-grow-y 900ms var(--ob-spring) 150ms both; }
 .ob-root[data-enter] .ob-line-chart path { animation: ob-rise 900ms var(--ob-spring) 200ms both; }
 
 /* The logo is the loop's play/pause (LoopToggle). */
@@ -169,4 +179,48 @@
 @media (max-width: 720px) {
   .ob-brandrow { flex-wrap: wrap; row-gap: 10px; }
   .ob-brandrow .ob-tabs { order: 3; flex-basis: 100%; width: fit-content; max-width: 100%; }
+}
+
+/* ─── old engines (the office TV: LG webOS, Chromium 79) ────────────────────
+   Next compiles the JavaScript down for it (package.json browserslist);
+   these are the CSS gaps the build can't close by itself. */
+
+/* `gap` in a FLEX container is Chromium 84+. On 79 every flex gap on the board
+   is zero, so the board's inline check (src/components/numbers/old-engines.ts)
+   puts .ob-nfg on <html>, and these margins stand in. Nothing here applies
+   where flex gap works. Grid gaps are fine on 79 and aren't repeated. */
+.ob-nfg .ob > * + * { margin-top: 16px; }
+.ob-nfg .ob-cell > * + * { margin-top: 3px; }
+.ob-nfg .ob-flow > * + * { margin-top: 9px; }
+.ob-nfg .ob-rank > * + * { margin-top: 10px; }
+.ob-nfg .ob-dead > * + * { margin-top: 10px; }
+.ob-nfg .ob-brandrow > * + * { margin-left: 18px; }
+.ob-nfg .ob-brand > * + * { margin-left: 10px; }
+.ob-nfg .ob-loop[data-hero] > * + * { margin-left: 0; margin-top: 28px; }
+.ob-nfg .ob-loop-paused svg { margin-right: 6px; }
+.ob-nfg .ob-tabs > * + * { margin-left: 2px; }
+.ob-nfg .ob-pill > * + *:not(.ob-pill-next) { margin-left: 8px; }
+.ob-nfg .ob-ph > * + * { margin-left: 10px; }
+.ob-nfg .ob-ph-right > * + * { margin-left: 14px; }
+.ob-nfg .ob-big > * + * { margin-left: 8px; }
+.ob-nfg .ob-mbars > * + * { margin-left: 3px; }
+.ob-nfg .ob-ringrow > * + * { margin-left: 12px; }
+.ob-nfg .ob-ch-name > * + * { margin-left: 9px; }
+.ob-nfg .ob-ch-24 > * + * { margin-left: 2px; }
+.ob-nfg .ob-heat-top > * + * { margin-left: 8px; }
+/* The legend's words are bare text, which takes no margin — so the squares carry it on both ends. */
+.ob-nfg .ob-key > i { margin-left: 3px; }
+.ob-nfg .ob-key > i:last-of-type { margin-right: 3px; }
+.ob-nfg .ob-chip > * + * { margin-left: 6px; }
+/* These two wrap, so every item keeps a right and bottom margin instead. */
+.ob-nfg .ob-chips > * { margin: 0 8px 8px 0; }
+.ob-nfg .ob-avs > * { margin: 0 7px 7px 0; }
+
+/* color-mix() is Chromium 111+; without it the heat-map cells (ops-board.css)
+   would be transparent. The full green at the same strength reads the same
+   on the card behind it. */
+@supports not (background: color-mix(in srgb, red 50%, blue)) {
+  .ob-heat i[data-l='1'], .ob-key i[data-l='1'] { background: var(--ob-ok); opacity: 0.28; }
+  .ob-heat i[data-l='2'], .ob-key i[data-l='2'] { background: var(--ob-ok); opacity: 0.52; }
+  .ob-heat i[data-l='3'], .ob-key i[data-l='3'] { background: var(--ob-ok); opacity: 0.78; }
 }

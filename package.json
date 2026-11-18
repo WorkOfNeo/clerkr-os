@@ -19,6 +19,12 @@
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
+  "browserslist": [
+    "chrome 79",
+    "edge 111",
+    "firefox 111",
+    "safari 16.4"
+  ],
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
     "@dnd-kit/core": "^6.3.1",

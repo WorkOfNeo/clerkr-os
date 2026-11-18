@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
+import { FLEX_GAP_CHECK } from "@/components/numbers/old-engines";
+
 export const metadata: Metadata = {
   title: "Tal",
   robots: { index: false, follow: false, nocache: true },
@@ -20,7 +22,14 @@ export const viewport: Viewport = {
  * /n/<token>/revenue, /n/<token>/logo. Same tabs and loop as /numbers; the token stays in the
  * path as the credential (./gate.ts). next.config.ts gives everything under
  * /n/ the board's headers — no Referer, no caching, no indexing, no framing.
+ * FLEX_GAP_CHECK runs before the board paints (old-engines.ts) — the office
+ * TV is Chromium 79.
  */
 export default function NumbersLinkLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return (
+    <>
+      <script dangerouslySetInnerHTML={{ __html: FLEX_GAP_CHECK }} />
+      {children}
+    </>
+  );
 }
