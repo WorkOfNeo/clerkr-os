@@ -455,6 +455,23 @@ fields a superadmin sets on each firm in Clerkr /admin/orgs/[id]) and **Logo**
 own (NumbersTabs; dwell per tab in `src/components/numbers/tabs.ts`, 30 s,
 the logo 10 s).
 
+- **The office TV is an OLD browser — Chromium 79.** It's an LG webOS set
+  whose browser reports `Chrome/87.0.3945.79`, but `3945.79` is Chromium 79's
+  build. Next 16 targets Chrome 111+ by default, and on that engine its
+  router chunk (a class `static {}` block) failed to parse: the board's
+  JavaScript never started, so the hairlines filled once and stopped, nothing
+  polled, nothing rolled. Hence, app-wide:
+  - `package.json` `browserslist` lists `chrome 79`, so the build compiles
+    everything, Next's own runtime included, down to it. Next's polyfill
+    chunk covers `.at()`, `Object.hasOwn`, `URL.canParse`. **Don't raise that
+    floor while the TV is on the wall** — check the TV's user agent in
+    Railway's HTTP logs (`railway logs --http`) before you do.
+  - CSS the build can't lower is at the end of `ops/tokens.css`: margins for
+    flex `gap` (Chromium 84+), switched on by `FLEX_GAP_CHECK`
+    (`src/components/numbers/old-engines.ts`) only where it's missing; a
+    `color-mix()` fallback. The spring's `linear()` easing has a
+    `cubic-bezier` stand-in in `ops/ops-board.css`. No `:is()`, `:where()`,
+    `:has()` or `color-mix()` without a fallback in board CSS.
 - **The logo is the loop's play/pause** (`LoopToggle`, store in
   `src/components/numbers/loop.ts`). Pausing keeps the time left and freezes
   the tab's hairline mid-fill; resuming carries on from that exact spot, not
