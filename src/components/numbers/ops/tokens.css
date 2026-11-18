@@ -108,14 +108,24 @@
   .ob-root[data-flow] .ob { width: auto; height: auto; max-width: 1480px; margin: 0 auto; overflow: visible; zoom: 1; }
 }
 
-/* The tab's hairline fills toward the loop's next switch (NumbersTabs). */
-.ob-tab { position: relative; overflow: hidden; }
-.ob-tab-next {
-  position: absolute; left: 12px; right: 12px; bottom: 2px; height: 2px; border-radius: 1px;
-  background: var(--ob-ink); opacity: 0.35; transform-origin: left; transform: scaleX(0);
-  animation-name: ob-tab-fill; animation-timing-function: linear; animation-fill-mode: forwards;
+/* The loop's countdown (NumbersTabs): a small ring in the board's top-right
+   corner that fills toward the next switch. Paused — the logo, or a hidden
+   browser tab — it just stands still. Its containing block is .ob-root (fixed,
+   full screen; nothing between is positioned), so it lands in the same corner
+   on every slide. r=6 → circumference 37.7, the dash length. */
+.ob-countdown {
+  position: absolute; top: 7px; right: 7px; width: 12px; height: 12px;
+  transform: rotate(-90deg); pointer-events: none;
 }
-@keyframes ob-tab-fill { to { transform: scaleX(1); } }
+.ob-countdown circle { fill: none; stroke-width: 2.5; }
+.ob-countdown-track { stroke: var(--ob-line); }
+.ob-countdown-arc {
+  stroke: var(--ob-ink); stroke-opacity: 0.45; stroke-dasharray: 37.7; stroke-dashoffset: 37.7;
+  animation-name: ob-countdown; animation-timing-function: linear; animation-fill-mode: forwards;
+}
+@keyframes ob-countdown { to { stroke-dashoffset: 0; } }
+/* Narrow screens pad the board 14px, not 20px — tuck the ring in so it clears the clock. */
+@media (max-width: 760px) { .ob-countdown { top: 4px; right: 4px; width: 10px; height: 10px; } }
 
 /* Entering a tab: panels rise in, staggered; bars grow from their base — on
    the ops-board's own spring. Only when the LOOP brings the tab in
@@ -146,33 +156,34 @@
 .ob-root[data-enter] .ob-ch-24 i { transform-origin: bottom; animation: ob-grow-y 900ms var(--ob-spring) 150ms both; }
 .ob-root[data-enter] .ob-line-chart path { animation: ob-rise 900ms var(--ob-spring) 200ms both; }
 
-/* The logo is the loop's play/pause (LoopToggle). */
+/* The logo is the loop's play/pause (LoopToggle): the mark, and the CLERK'R
+   wordmark to its right. Both sizes are set explicitly — see ClerkrWordmark. */
 .ob-loop {
   appearance: none; border: 0; background: none; color: inherit; font: inherit; cursor: pointer;
   padding: 4px 8px; margin: -4px -8px; border-radius: 12px; -webkit-tap-highlight-color: transparent;
+  transition: transform 0.3s var(--ob-spring);
 }
-.ob-loop .ob-loop-mark { transition: opacity 0.15s ease, transform 0.3s var(--ob-spring); }
-.ob-loop:hover .ob-loop-mark { opacity: 0.72; }
-.ob-loop:active .ob-loop-mark { transform: scale(0.94); }
+.ob-brand .ob-loop-word { width: 110px; height: 14px; }
+.ob-loop > svg { transition: opacity 0.15s ease; }
+.ob-loop:hover > svg { opacity: 0.72; }
+.ob-loop:active { transform: scale(0.96); }
 .ob-loop:focus-visible { outline: 2px solid var(--ob-ink); outline-offset: 2px; }
-.ob-brand .ob-loop-paused {
-  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 999px;
-  font-size: 12px; font-weight: 600; letter-spacing: 0; background: var(--ob-veil2); color: var(--ob-body);
-}
-.ob-brand .ob-loop-paused svg { width: 9px; height: 9px; }
 
-/* The logo slide: the mark alone, centred, and still the play/pause. */
+/* The logo slide: the same lockup, large and centred, and still the
+   play/pause. --ob-hero is the mark's size; the wordmark is 0.6 of it tall,
+   and the 13vw cap keeps the whole lockup inside a portrait phone. */
 .ob-logo-slide { width: 100%; height: 100%; display: grid; place-items: center; }
-.ob-loop[data-hero] { flex-direction: column; gap: 28px; padding: 32px; margin: 0; border-radius: 32px; }
-.ob-brand.ob-loop[data-hero] .ob-loop-mark { width: min(28vmin, 320px); height: auto; }
-.ob-brand.ob-loop[data-hero] .ob-loop-paused { font-size: 15px; padding: 5px 14px 5px 11px; }
-.ob-brand.ob-loop[data-hero] .ob-loop-paused svg { width: 11px; height: 11px; }
+.ob-loop[data-hero] {
+  --ob-hero: min(16vmin, 13vw, 180px);
+  gap: calc(var(--ob-hero) * 0.32); padding: 32px; margin: 0; border-radius: 32px;
+}
+.ob-brand.ob-loop[data-hero] .ob-loop-mark { width: var(--ob-hero); height: var(--ob-hero); }
+.ob-brand.ob-loop[data-hero] .ob-loop-word { width: calc(var(--ob-hero) * 4.705); height: calc(var(--ob-hero) * 0.6); }
 @keyframes ob-logo-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
-.ob-root[data-enter] .ob-logo-slide .ob-loop-mark { animation: ob-logo-in 900ms var(--ob-spring) both; }
+.ob-root[data-enter] .ob-logo-slide .ob-loop { animation: ob-logo-in 900ms var(--ob-spring) both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .ob > *, .ob-grid > *, .ob-two > *, .ob-cbar i, .ob-fl-track i, .ob-mbars i, .ob-ch-24 i, .ob-line-chart path, .ob-tab-next, .ob-loop-mark { animation: none !important; }
-  .ob-tab-next { display: none; }
+  .ob > *, .ob-grid > *, .ob-two > *, .ob-cbar i, .ob-fl-track i, .ob-mbars i, .ob-ch-24 i, .ob-line-chart path, .ob-loop { animation: none !important; }
 }
 
 /* Phones: the tabs get their own row under the brand, so they never run into the clock. */
@@ -196,8 +207,7 @@
 .ob-nfg .ob-dead > * + * { margin-top: 10px; }
 .ob-nfg .ob-brandrow > * + * { margin-left: 18px; }
 .ob-nfg .ob-brand > * + * { margin-left: 10px; }
-.ob-nfg .ob-loop[data-hero] > * + * { margin-left: 0; margin-top: 28px; }
-.ob-nfg .ob-loop-paused svg { margin-right: 6px; }
+.ob-nfg .ob-loop[data-hero] > * + * { margin-left: calc(var(--ob-hero) * 0.32); }
 .ob-nfg .ob-tabs > * + * { margin-left: 2px; }
 .ob-nfg .ob-pill > * + *:not(.ob-pill-next) { margin-left: 8px; }
 .ob-nfg .ob-ph > * + * { margin-left: 10px; }

@@ -474,9 +474,14 @@ the logo 10 s).
     `:has()` or `color-mix()` without a fallback in board CSS.
 - **The logo is the loop's play/pause** (`LoopToggle`, store in
   `src/components/numbers/loop.ts`). Pausing keeps the time left and freezes
-  the tab's hairline mid-fill; resuming carries on from that exact spot, not
-  from the start of the tab. A hidden browser tab pauses the same way. The
-  pause is module state so it survives clicking another tab; a reload plays.
+  the countdown ring (top-right corner, every slide) mid-fill; resuming
+  carries on from that exact spot, not from the start of the tab. A hidden
+  browser tab pauses the same way. The pause is module state so it survives
+  clicking another tab; a reload plays. **Nothing says "paused" in words**
+  (asked for 2026-11-18: no badge, no tooltip) — the still ring is the cue.
+- **The logo is the mark plus the CLERK'R wordmark** (`ClerkrWordmark`, a
+  vector traced from the supplied PNG so it follows light/dark), in the header
+  and, larger, on the logo slide.
 - **Nothing animates on the first load.** Numbers roll in and panels rise only
   when the LOOP brings a tab in (`useEntered` → `data-enter`). Animating the
   whole board while a TV was still hydrating it is what made the first load
