@@ -13,13 +13,15 @@ import { tabsFor, type TabId } from "./tabs";
  * The tabs, and the TV loop: every tab stays up its dwell (./tabs.ts — 30 s,
  * the logo 10 s), then the board moves on to the next tab the viewer may see
  * (Drift → Website → Omsætning → Logo → …). Navigation is client-side, so
- * each page's numbers are read fresh and roll in. The hairline under the
- * active tab fills toward the switch.
+ * each page's numbers are read fresh and roll in. A small ring in the board's
+ * top-right corner fills toward the switch — on every slide, the logo slide
+ * included, since it is the only thing that shows the loop is paused.
  *
  * Pausing — the logo (LoopToggle), or the TV hiding the browser tab — stops
- * the loop exactly where it is: the time left is kept, the hairline freezes
+ * the loop exactly where it is: the time left is kept, the ring stands still
  * mid-fill, and resuming carries on from that spot rather than restarting the
- * tab. Clicking a tab starts that tab's own dwell, paused or not.
+ * tab. Nothing on the board says "paused" in words. Clicking a tab starts that
+ * tab's own dwell, paused or not.
  *
  * The next tab is prefetched PREFETCH_LEAD_MS before the switch, not on
  * mount: on a TV the first seconds belong to hydrating the page it just got.
@@ -77,27 +79,38 @@ export function NumbersTabs({
     };
   }, [running, nextHref, router]);
 
-  if (!chrome || tabs.length < 2) return null;
+  // The countdown ring. Absolutely positioned against .ob-root, so it sits in
+  // the same corner whichever slide drew it. No loop (a single tab), no ring.
+  const ring = nextHref ? (
+    <svg className="ob-countdown" viewBox="0 0 16 16" aria-hidden focusable="false">
+      <circle className="ob-countdown-track" cx="8" cy="8" r="6" />
+      <circle
+        className="ob-countdown-arc"
+        cx="8"
+        cy="8"
+        r="6"
+        style={{ animationDuration: `${dwellMs}ms`, animationPlayState: running ? "running" : "paused" }}
+      />
+    </svg>
+  ) : null;
+
+  if (!chrome || tabs.length < 2) return ring;
   return (
-    <nav className="ob-tabs" aria-label="Tal">
-      {tabs.map((t) => (
-        <Link
-          key={t.id}
-          href={t.href}
-          prefetch={false}
-          className="ob-tab"
-          aria-current={t.id === active ? "page" : undefined}
-        >
-          {t.label}
-          {t.id === active ? (
-            <i
-              className="ob-tab-next"
-              aria-hidden
-              style={{ animationDuration: `${dwellMs}ms`, animationPlayState: running ? "running" : "paused" }}
-            />
-          ) : null}
-        </Link>
-      ))}
-    </nav>
+    <>
+      <nav className="ob-tabs" aria-label="Tal">
+        {tabs.map((t) => (
+          <Link
+            key={t.id}
+            href={t.href}
+            prefetch={false}
+            className="ob-tab"
+            aria-current={t.id === active ? "page" : undefined}
+          >
+            {t.label}
+          </Link>
+        ))}
+      </nav>
+      {ring}
+    </>
   );
 }
